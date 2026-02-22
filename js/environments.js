@@ -769,7 +769,7 @@ LIFE.buildExecution = function() {
         var c = LIFE.createCharacter(1.77,
             LIFE.SKIN_COLORS[Math.floor(Math.random() * LIFE.SKIN_COLORS.length)],
             LIFE.CLOTHES_COLORS[Math.floor(Math.random() * LIFE.CLOTHES_COLORS.length)],
-            false
+            false, { female: Math.random() < 0.5 }
         );
         c.group.position.set(cp[0], 0, cp[1]);
         c.group.rotation.y = Math.PI; // face gallows

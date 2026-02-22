@@ -634,7 +634,12 @@ LIFE.FLIRT_DIALOGUES = [
     { text: "Do you come here often? Because I'd remember someone like you.", success: 0.5 },
     { text: "I have to say, you're really easy to talk to.", success: 0.7 },
     { text: "Would you like to grab coffee sometime?", success: 0.65 },
-    { text: "I can't help but notice how great you look today.", success: 0.55 }
+    { text: "I can't help but notice how great you look today.", success: 0.55 },
+    { text: "Has anyone ever told you that you have amazing eyes?", success: 0.6 },
+    { text: "I'd love to get to know you better.", success: 0.65 },
+    { text: "You're the most interesting person here.", success: 0.55 },
+    { text: "I keep finding excuses to come talk to you.", success: 0.6 },
+    { text: "Something about you just makes me smile.", success: 0.7 }
 ];
 
 LIFE.ROMANCE_DIALOGUES = [
@@ -644,6 +649,20 @@ LIFE.ROMANCE_DIALOGUES = [
     { text: "You mean the world to me.", romance: 18 },
     { text: "I can't imagine my life without you.", romance: 20 }
 ];
+
+// Pick 2 random flirt line options for dialogue
+LIFE.getFlirtOptions = function(targetName) {
+    var lines = LIFE.FLIRT_DIALOGUES.slice();
+    // shuffle and pick 2
+    for (var i = lines.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = lines[i]; lines[i] = lines[j]; lines[j] = tmp;
+    }
+    var picked = lines.slice(0, 2);
+    return picked.map(function(line) {
+        return { text: '"' + line.text + '"', effects: { charisma: 1 }, rep: 1, flirt: true, flirtTarget: targetName };
+    });
+};
 
 // Check if NPC is flirtable
 LIFE.canFlirtWith = function(npc) {
@@ -759,10 +778,10 @@ LIFE.dialogue.talkToNPC = function(npc) {
     if (relLevel >= 15 && LIFE.NPC_FRIEND_DIALOGUES[type]) {
         var friendDlgs = LIFE.NPC_FRIEND_DIALOGUES[type];
         var fdlg = friendDlgs[Math.floor(Math.random() * friendDlgs.length)];
-        // add flirt option to friend dialogues too
+        // add flirt options to friend dialogues too
         if (LIFE.canFlirtWith(npc)) {
             var fOpts = fdlg.options.slice();
-            fOpts.push({ text: "Flirt...", effects: { charisma: 1 }, rep: 1, flirt: true, flirtTarget: npc.name });
+            LIFE.getFlirtOptions(npc.name).forEach(function(fo) { fOpts.push(fo); });
             LIFE.dialogue.open(speakerName, fdlg.text, fOpts, false);
         } else {
             LIFE.dialogue.open(speakerName, fdlg.text, fdlg.options, false);
@@ -778,10 +797,10 @@ LIFE.dialogue.talkToNPC = function(npc) {
 
     var dlg = dialogues[Math.floor(Math.random() * dialogues.length)];
 
-    // add flirt option to eligible NPCs
+    // add flirt options to eligible NPCs
     if (LIFE.canFlirtWith(npc)) {
         var modOptions = dlg.options.slice();
-        modOptions.push({ text: "Flirt...", effects: { charisma: 1 }, rep: 1, flirt: true, flirtTarget: npc.name });
+        LIFE.getFlirtOptions(npc.name).forEach(function(fo) { modOptions.push(fo); });
         LIFE.dialogue.open(speakerName, dlg.text, modOptions, false);
         return;
     }

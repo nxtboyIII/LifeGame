@@ -107,7 +107,20 @@ LIFE.createNPC = function(type, x, z, npcName) {
         : isHiring ? 0x1565c0
         : isInmate ? 0xff6f00
         : LIFE.CLOTHES_COLORS[Math.floor(Math.random() * LIFE.CLOTHES_COLORS.length)];
-    var ch = LIFE.createCharacter(h, skin, clothes, false);
+    // determine gender for hair
+    var isFemale = false;
+    if (type === 'Mom' || type === 'Spouse' || type === 'Your Child') {
+        // Mom is always female; Spouse gender opposite to player; children 50/50
+        if (type === 'Mom') isFemale = true;
+        else if (type === 'Spouse') isFemale = LIFE.state.playerGender !== 'F';
+        else isFemale = Math.random() < 0.5;
+    } else if (type === 'Dad') {
+        isFemale = false;
+    } else {
+        // random 50/50 for generic NPCs (except police/dealer/inmate)
+        if (!isPolice && !isDealer && !isInmate) isFemale = Math.random() < 0.5;
+    }
+    var ch = LIFE.createCharacter(h, skin, clothes, false, { female: isFemale && h > 0.5 });
     ch.group.position.set(x, 0, z);
     ch.group.rotation.y = Math.random() * Math.PI * 2;
     LIFE.scene.add(ch.group);

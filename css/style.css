@@ -126,7 +126,7 @@ body.unlocked { cursor: default; }
     border-radius: 6px; transition: width 0.3s;
 }
 #skipHint {
-    position: absolute; top: 40px; left: 50%; transform: translateX(-50%);
+    position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
     font-size: 13px; opacity: 0.6; margin-top: 4px;
 }
 
@@ -450,10 +450,12 @@ body.unlocked { cursor: default; }
 
 /* ===== Date/Time display ===== */
 #dateTime {
-    position: absolute; top: 36px; left: 50%; transform: translateX(-50%);
-    font-size: 12px; color: rgba(255,255,255,0.65);
-    background: rgba(0,0,0,0.35); padding: 3px 12px; border-radius: 4px;
-    display: none; white-space: nowrap;
+    position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+    font-size: 22px; font-weight: bold; color: rgba(255,255,255,0.9);
+    background: rgba(0,0,0,0.55); padding: 8px 24px; border-radius: 8px;
+    display: none; white-space: nowrap; letter-spacing: 0.5px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.15);
 }
 
 /* ===== Day Phase indicator ===== */

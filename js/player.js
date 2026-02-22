@@ -7,7 +7,8 @@ LIFE.createPlayer = function() {
     if (LIFE.player) LIFE.scene.remove(LIFE.player.group);
     var h = LIFE.getHeightForAge(Math.max(0, LIFE.state.age));
     var clothesColor = LIFE.state.age < 0 ? 0xffdbac : 0x2196f3; // naked in womb
-    LIFE.player = LIFE.createCharacter(h, 0xffdbac, clothesColor, true);
+    var isFemale = LIFE.state.playerGender === 'F' && LIFE.state.age > 2;
+    LIFE.player = LIFE.createCharacter(h, 0xffdbac, clothesColor, true, { female: isFemale });
     LIFE.player.group.position.set(0, 0, 0);
     LIFE.scene.add(LIFE.player.group);
 };
@@ -20,7 +21,8 @@ LIFE.updatePlayerSize = function() {
         var rot = LIFE.player.group.rotation.y;
         LIFE.scene.remove(LIFE.player.group);
         var clothesColor = LIFE.state.age < 0 ? 0xffdbac : 0x2196f3;
-        LIFE.player = LIFE.createCharacter(h, 0xffdbac, clothesColor, true);
+        var isFemale = LIFE.state.playerGender === 'F' && LIFE.state.age > 2;
+        LIFE.player = LIFE.createCharacter(h, 0xffdbac, clothesColor, true, { female: isFemale });
         LIFE.player.group.position.copy(pos);
         LIFE.player.group.rotation.y = rot;
         LIFE.scene.add(LIFE.player.group);

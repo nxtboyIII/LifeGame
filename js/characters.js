@@ -1,7 +1,8 @@
 // ============================================================
 // CHARACTER CREATION
 // ============================================================
-LIFE.createCharacter = function(height, skinColor, clothesColor, isPlayer) {
+LIFE.createCharacter = function(height, skinColor, clothesColor, isPlayer, opts) {
+    opts = opts || {};
     var ch = { group: new THREE.Group(), height: height, parts: {} };
 
     // babies have much bigger heads, stubbier limbs
@@ -49,6 +50,33 @@ LIFE.createCharacter = function(height, skinColor, clothesColor, isPlayer) {
     head.castShadow = true;
     ch.group.add(head);
     ch.parts.head = head;
+
+    // Long hair for female characters (above toddler size)
+    if (opts.female && !isBaby && !isToddler) {
+        var hairColor = opts.hairColor || new THREE.Color(skinColor).multiplyScalar(0.3).getHex();
+        var hairMat = new THREE.MeshPhongMaterial({ color: hairColor });
+        var headY = legH + bodyH + headR;
+
+        // hair cap on top of head
+        var cap = new THREE.Mesh(new THREE.SphereGeometry(headR * 1.08, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.6), hairMat);
+        cap.position.set(0, headY + headR * 0.05, -headR * 0.05);
+        ch.group.add(cap);
+
+        // long hair flowing down back
+        var hairLen = height * 0.22;
+        var backHair = new THREE.Mesh(new THREE.BoxGeometry(headR * 1.6, hairLen, headR * 0.5), hairMat);
+        backHair.position.set(0, headY - hairLen * 0.35, -headR * 0.65);
+        ch.group.add(backHair);
+
+        // side strands (left and right)
+        var sideLen = height * 0.15;
+        var leftStrand = new THREE.Mesh(new THREE.BoxGeometry(headR * 0.35, sideLen, headR * 0.3), hairMat);
+        leftStrand.position.set(-headR * 0.85, headY - sideLen * 0.2, 0);
+        ch.group.add(leftStrand);
+        var rightStrand = new THREE.Mesh(new THREE.BoxGeometry(headR * 0.35, sideLen, headR * 0.3), hairMat);
+        rightStrand.position.set(headR * 0.85, headY - sideLen * 0.2, 0);
+        ch.group.add(rightStrand);
+    }
 
     // Eyes
     var eyeMat = new THREE.MeshPhongMaterial({ color: 0x222222 });

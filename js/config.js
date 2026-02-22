@@ -3,7 +3,8 @@
 // ============================================================
 const LIFE = {};
 
-LIFE.YEAR_DURATION = 60;
+LIFE.YEAR_DURATION = 438000; // 365 days * 20 min * 60 sec
+LIFE.DAY_DURATION = 1200;    // 20 real minutes per in-game day
 LIFE.MAX_AGE = 80;
 LIFE.GRAVITY = -25;
 
