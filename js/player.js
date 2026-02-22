@@ -112,13 +112,37 @@ LIFE.updatePlayer = function(dt) {
         if (mom) {
             var mp = mom.char.group.position;
             var mh = mom.char.height || 1.2;
-            player.group.position.set(mp.x, mh * 0.6, mp.z + 0.25);
-            player.group.rotation.y = mom.char.group.rotation.y;
+            var mRot = mom.char.group.rotation.y;
+            // position baby in Mom's arms (offset to front-left of body)
+            var offsetX = Math.sin(mRot) * 0.15 - Math.cos(mRot) * 0.2;
+            var offsetZ = Math.cos(mRot) * 0.15 + Math.sin(mRot) * 0.2;
+            player.group.position.set(mp.x + offsetX, mh * 0.45, mp.z + offsetZ);
+            player.group.rotation.y = mRot;
+            // Mom cradle arms - fold inward like holding a baby
+            if (mom.char.parts.leftArm) {
+                mom.char.parts.leftArm.rotation.x = -1.2;
+                mom.char.parts.leftArm.rotation.z = 0.5;
+            }
+            if (mom.char.parts.rightArm) {
+                mom.char.parts.rightArm.rotation.x = -1.0;
+                mom.char.parts.rightArm.rotation.z = -0.5;
+            }
         }
         // stop being held once age advances past 0
         return;
     }
-    if (state.heldByParent && state.age > 0) state.heldByParent = false;
+    if (state.heldByParent && state.age > 0) {
+        state.heldByParent = false;
+        player.group.position.y = 0;
+        // reset Mom's arms
+        for (var ni2 = 0; ni2 < LIFE.npcs.length; ni2++) {
+            if (LIFE.npcs[ni2].type === 'Mom' && LIFE.npcs[ni2].alive) {
+                LIFE.npcs[ni2].char.parts.leftArm.rotation.set(0, 0, 0);
+                LIFE.npcs[ni2].char.parts.rightArm.rotation.set(0, 0, 0);
+                break;
+            }
+        }
+    }
 
     var moveX = 0, moveZ = 0;
 

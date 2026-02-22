@@ -36,6 +36,7 @@ body.unlocked { cursor: default; }
 .statFill.hap { background: #fff176; }
 .statFill.cha { background: #ce93d8; }
 .statFill.hp  { background: #ef5350; }
+.statFill.bty { background: #e91e63; }
 .statVal { font-size: 11px; width: 22px; }
 
 /* Reputation bar - centered at 0, goes left (red) or right (green) */
@@ -114,9 +115,19 @@ body.unlocked { cursor: default; }
     transition: opacity 0.15s; pointer-events: none; z-index: 90;
 }
 
+/* ===== Speed display ===== */
+#speedDisplay {
+    position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+    font-size: 26px; font-weight: bold; color: #ffeb3b;
+    text-shadow: 0 0 10px rgba(255,235,59,0.3);
+    cursor: pointer; pointer-events: auto;
+    display: none;
+}
+#speedDisplay:hover { color: #fff176; }
+
 /* ===== Timer bar ===== */
 #timerWrap {
-    position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+    position: absolute; top: 36px; left: 50%; transform: translateX(-50%);
     width: 300px; height: 12px; background: rgba(255,255,255,0.2);
     border-radius: 6px; overflow: hidden;
 }
@@ -450,7 +461,7 @@ body.unlocked { cursor: default; }
 
 /* ===== Date/Time display ===== */
 #dateTime {
-    position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+    position: absolute; top: 54px; left: 50%; transform: translateX(-50%);
     font-size: 22px; font-weight: bold; color: rgba(255,255,255,0.9);
     background: rgba(0,0,0,0.55); padding: 8px 24px; border-radius: 8px;
     display: none; white-space: nowrap; letter-spacing: 0.5px;
@@ -498,3 +509,25 @@ body.unlocked { cursor: default; }
     border: 1px solid rgba(255,255,255,0.05);
 }
 #timeSkip .skipClose:hover { background: rgba(255,255,255,0.05); }
+
+/* Speed control in time skip panel */
+#speedControlWrap {
+    margin-bottom: 14px; padding: 10px 12px;
+    background: rgba(255,235,59,0.06); border: 1px solid rgba(255,235,59,0.2);
+    border-radius: 8px;
+}
+.speedSectionLabel {
+    font-size: 11px; font-weight: bold; letter-spacing: 1.5px;
+    text-transform: uppercase; color: #ffeb3b; margin-bottom: 8px;
+    text-align: center;
+}
+.speedSliderRow {
+    display: flex; align-items: center; gap: 10px;
+}
+.speedSliderRow input[type="range"] {
+    flex: 1; accent-color: #ffeb3b; height: 6px;
+}
+#speedSliderValue {
+    font-size: 18px; font-weight: bold; color: #ffeb3b;
+    min-width: 65px; text-align: center;
+}

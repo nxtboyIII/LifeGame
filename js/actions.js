@@ -129,17 +129,19 @@ LIFE.performAction = function(idx) {
                     LIFE.addWanted(isChild && !hasWeapon ? 0 : 1);
                 }
 
-                // reputation - kids fighting is normal, weapons/family violence is serious
+                // reputation - babies/toddlers can't really hurt anyone
                 var repLoss = -5;
-                if (isChild && !hasWeapon) {
+                if (state.age < 5 && !hasWeapon) {
+                    // baby/toddler punching is harmless, no rep loss at all
+                    repLoss = 0;
+                } else if (isChild && !hasWeapon) {
                     // kids fighting kids/others without weapons - minor rep hit
                     repLoss = -1;
                     if (isFamily) {
-                        repLoss = -5;
-                        state.stats.happiness = Math.max(0, state.stats.happiness - 3);
-                        if (!state.familyAbuser) state.familyAbuser = true;
-                    } else if (isVulnerable) {
                         repLoss = -2;
+                        state.stats.happiness = Math.max(0, state.stats.happiness - 1);
+                    } else if (isVulnerable) {
+                        repLoss = -1;
                     }
                 } else {
                     // adults or anyone with weapons

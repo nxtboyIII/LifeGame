@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(node -e \"var fs=require\\(''fs''\\); new Function\\(fs.readFileSync\\(''F:/SmallGames/LifeGame/js/characters.js'',''utf8''\\)\\); console.log\\(''characters.js OK''\\);\")",
+      "Bash(node -e \"var fs=require\\(''fs''\\); new Function\\(fs.readFileSync\\(''F:/SmallGames/LifeGame/js/game.js'',''utf8''\\)\\); console.log\\(''game.js OK''\\);\")",
+      "Bash(node -e \"var fs=require\\(''fs''\\); new Function\\(fs.readFileSync\\(''F:/SmallGames/LifeGame/js/ui.js'',''utf8''\\)\\); console.log\\(''ui.js OK''\\);\")",
+      "Bash(node -e \"var fs=require\\(''fs''\\); new Function\\(fs.readFileSync\\(''F:/SmallGames/LifeGame/js/player.js'',''utf8''\\)\\); console.log\\(''player.js OK''\\);\")",
+      "Bash(node -e \"var fs=require\\(''fs''\\); new Function\\(fs.readFileSync\\(''F:/SmallGames/LifeGame/js/dialogue.js'',''utf8''\\)\\); console.log\\(''dialogue.js OK''\\);\")",
+      "Bash(node -e \"new Function\\(require\\(''fs''\\).readFileSync\\(''js/game.js'',''utf8''\\)\\)\")"
+    ]
+  }
+}

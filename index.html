@@ -35,10 +35,12 @@
         <div class="statRow"><span class="statLabel">Happiness</span><div class="statBar"><div class="statFill hap" id="statHap" style="width:50%"></div></div><span class="statVal" id="statHapVal">50</span></div>
         <div class="statRow"><span class="statLabel">Charisma</span><div class="statBar"><div class="statFill cha" id="statCha" style="width:5%"></div></div><span class="statVal" id="statChaVal">5</span></div>
         <div class="statRow"><span class="statLabel">Health</span><div class="statBar"><div class="statFill hp" id="statHp" style="width:80%"></div></div><span class="statVal" id="statHpVal">80</span></div>
+        <div class="statRow"><span class="statLabel">Beauty</span><div class="statBar"><div class="statFill bty" id="statBty" style="width:50%"></div></div><span class="statVal" id="statBtyVal">50</span></div>
         <div class="statRow repRow"><span class="statLabel">Reputation</span><div class="repBar"><div class="repCenter"></div><div class="repFill" id="repFill"></div></div><span class="statVal repVal" id="repVal">0</span></div>
         <div id="repTitle"></div>
     </div>
 
+    <div id="speedDisplay">72x</div>
     <div id="timerWrap"><div id="timerFill"></div></div>
     <div id="dateTime"></div>
     <div id="skipHint">E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info</div>
@@ -78,6 +80,13 @@
     <!-- Time Skip panel -->
     <div id="timeSkip">
         <h3>TIME SKIP</h3>
+        <div id="speedControlWrap">
+            <div class="speedSectionLabel">GAME SPEED</div>
+            <div class="speedSliderRow">
+                <input type="range" id="speedSlider" min="0" max="1000" value="502">
+                <span id="speedSliderValue">72x</span>
+            </div>
+        </div>
         <div id="timeSkipOptions"></div>
         <div id="timeSkipSliderWrap">
             <input type="range" id="skipSlider" min="1" max="180" value="1">

@@ -28,6 +28,8 @@ LIFE.ui.$ = {
     statHapVal: document.getElementById('statHapVal'),
     statChaVal: document.getElementById('statChaVal'),
     statHpVal:  document.getElementById('statHpVal'),
+    statBty:   document.getElementById('statBty'),
+    statBtyVal: document.getElementById('statBtyVal'),
     repFill:   document.getElementById('repFill'),
     repVal:    document.getElementById('repVal'),
     repTitle:  document.getElementById('repTitle'),
@@ -127,6 +129,8 @@ LIFE.ui.hideGameUI = function() {
     if ($.inventoryBar) $.inventoryBar.style.display = 'none';
     var dt = document.getElementById('dateTime');
     if (dt) dt.style.display = 'none';
+    var spd = document.getElementById('speedDisplay');
+    if (spd) spd.style.display = 'none';
 };
 
 LIFE.ui.showGameUI = function() {
@@ -150,10 +154,12 @@ LIFE.ui.updateStats = function() {
     LIFE.ui.$.statHap.style.width = Math.floor(s.happiness) + '%';
     LIFE.ui.$.statCha.style.width = Math.floor(s.charisma) + '%';
     LIFE.ui.$.statHp.style.width  = Math.floor(s.health) + '%';
+    if (LIFE.ui.$.statBty) LIFE.ui.$.statBty.style.width = Math.floor(s.beauty || 50) + '%';
     LIFE.ui.$.statIntVal.textContent = Math.floor(s.intelligence);
     LIFE.ui.$.statHapVal.textContent = Math.floor(s.happiness);
     LIFE.ui.$.statChaVal.textContent = Math.floor(s.charisma);
     LIFE.ui.$.statHpVal.textContent  = Math.floor(s.health);
+    if (LIFE.ui.$.statBtyVal) LIFE.ui.$.statBtyVal.textContent = Math.floor(s.beauty || 50);
 
     var rep = LIFE.state.reputation;
     var repFill = LIFE.ui.$.repFill;
@@ -187,7 +193,7 @@ LIFE.ui.updateStats = function() {
 
 LIFE.ui.updateNPCHint = function() {
     var hint = LIFE.ui.$.npcHint;
-    if (LIFE.state.nearestNPC && !LIFE.dialogue.active && !LIFE.state.shopOpen) {
+    if (LIFE.state.nearestNPC && !LIFE.dialogue.active && !LIFE.state.shopOpen && !LIFE.state.heldByParent) {
         hint.style.display = 'block';
         var npc = LIFE.state.nearestNPC;
         var rel = LIFE.state.relationships[npc.name];
@@ -618,15 +624,26 @@ LIFE.ui.closeFriends = function() {
 LIFE.ui.updateDateTime = function() {
     var el = document.getElementById('dateTime');
     if (!el) return;
-    if (LIFE.state.gamePhase !== 'playing') { el.style.display = 'none'; return; }
+    if (LIFE.state.gamePhase !== 'playing' && LIFE.state.gamePhase !== 'jail') { el.style.display = 'none'; return; }
     el.style.display = 'block';
     var sim = LIFE.getSimDate();
-    var dayOfYear = sim.dayOfYear;
     var phaseLabel = '';
     if (LIFE.state.dayPhase === 'classroom') phaseLabel = ' | In Class';
     else if (LIFE.state.dayPhase === 'schoolyard') phaseLabel = ' | Recess';
     else if (LIFE.state.dayPhase === 'home') phaseLabel = ' | At Home';
-    el.textContent = sim.text + ' | Day ' + dayOfYear + '/365' + phaseLabel;
+    el.textContent = sim.text + phaseLabel;
+
+    // update speed display
+    var speedEl = document.getElementById('speedDisplay');
+    if (speedEl) {
+        if (LIFE.state.gamePhase === 'playing') {
+            speedEl.style.display = 'block';
+            var spd = LIFE.state.timeSpeed;
+            speedEl.textContent = (spd < 10 ? spd.toFixed(1) : Math.round(spd)) + 'x';
+        } else {
+            speedEl.style.display = 'none';
+        }
+    }
 };
 
 // ============================================================
@@ -637,6 +654,27 @@ LIFE.ui.openTimeSkip = function() {
     LIFE.state.timeSkipOpen = true;
     LIFE.unlockCursor();
 
+    // --- Speed slider setup ---
+    var speedSlider = document.getElementById('speedSlider');
+    var speedLabel = document.getElementById('speedSliderValue');
+    if (speedSlider && speedLabel) {
+        // Set slider to current speed (reverse exponential mapping)
+        var currentSpeed = LIFE.state.timeSpeed;
+        var t = Math.log(currentSpeed) / Math.log(5000); // inverse of pow(5000, t)
+        speedSlider.value = Math.round(t * 1000);
+        speedLabel.textContent = (currentSpeed < 10 ? currentSpeed.toFixed(1) : Math.round(currentSpeed)) + 'x';
+        speedSlider.oninput = function() {
+            var t2 = parseInt(speedSlider.value) / 1000;
+            var spd = Math.pow(5000, t2);
+            LIFE.state.timeSpeed = spd;
+            speedLabel.textContent = (spd < 10 ? spd.toFixed(1) : Math.round(spd)) + 'x';
+            // update top speed display too
+            var speedEl = document.getElementById('speedDisplay');
+            if (speedEl) speedEl.textContent = (spd < 10 ? spd.toFixed(1) : Math.round(spd)) + 'x';
+        };
+    }
+
+    // --- Time skip presets ---
     var opts = document.getElementById('timeSkipOptions');
     opts.innerHTML = '';
 
@@ -658,7 +696,7 @@ LIFE.ui.openTimeSkip = function() {
                 LIFE.ui.closeTimeSkip();
                 LIFE.advanceYear();
             } else {
-                LIFE.skipTime(p.hours / 24); // convert hours to days
+                LIFE.skipTime(p.hours);
             }
         };
         opts.appendChild(btn);
@@ -691,7 +729,7 @@ LIFE.ui.openTimeSkip = function() {
         }
     };
     skipBtn.onclick = function() {
-        LIFE.skipTime(parseInt(slider.value) / 24); // convert hours to days
+        LIFE.skipTime(parseInt(slider.value));
     };
 
     // close button

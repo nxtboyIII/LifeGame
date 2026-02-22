@@ -241,27 +241,27 @@ LIFE.RANDOM_EVENTS = [
     { text: "Someone offered you a cigarette at a party.", minAge: 13, maxAge: 19, chance: 0.2,
       options: [
         { text: "No thanks, I'm good", effects: { health: 2 }, rep: 3 },
-        { text: "Sure, why not?", effects: { happiness: 2, health: -5 }, rep: -5 },
+        { text: "Sure, why not?", effects: { happiness: 2, health: -5 }, rep: -1 },
         { text: "That stuff will kill you!", effects: { charisma: 2 }, rep: 5 }
       ]},
     { text: "You got caught cheating on a test!", minAge: 12, maxAge: 22, chance: 0.12,
       options: [
         { text: "Apologize and accept the consequences", effects: { intelligence: -3, happiness: -5 }, rep: 3 },
-        { text: "Deny everything", effects: { charisma: 2 }, rep: -10 },
-        { text: "Blame someone else", effects: {}, rep: -15, enemy: true }
+        { text: "Deny everything", effects: { charisma: 2 }, rep: -5 },
+        { text: "Blame someone else", effects: {}, rep: -8, enemy: true }
       ]},
     { text: "Your friend is in trouble and needs $100.", minAge: 14, maxAge: 70, chance: 0.15,
       options: [
         { text: "Of course! Here's the money.", effects: { happiness: 3 }, rep: 10, cost: 100, friend: true },
         { text: "Sorry, I can't afford it", effects: {}, rep: -3 },
-        { text: "Only if you pay me back double", effects: { charisma: -2 }, rep: -8 }
+        { text: "Only if you pay me back double", effects: { charisma: -2 }, rep: -3 }
       ]},
     // YOUNG ADULT (18-30)
     { text: "A stranger just collapsed on the street! They need help!", minAge: 16, maxAge: 80, chance: 0.12,
       options: [
         { text: "Rush over and help immediately!", effects: { happiness: 5 }, rep: 20 },
         { text: "Call 911 and stay with them", effects: { happiness: 3 }, rep: 12 },
-        { text: "Someone else will help them", effects: {}, rep: -10 }
+        { text: "Someone else will help them", effects: {}, rep: -5 }
       ]},
     { text: "You've been offered a promotion at work!", minAge: 25, maxAge: 60, chance: 0.15,
       options: [
@@ -278,14 +278,14 @@ LIFE.RANDOM_EVENTS = [
     { text: "You found a wallet on the ground with $500 inside!", minAge: 8, maxAge: 80, chance: 0.12,
       options: [
         { text: "Return it to the owner", effects: { happiness: 5 }, rep: 15 },
-        { text: "Keep the cash", effects: {}, money: 500, rep: -8 },
+        { text: "Keep the cash", effects: {}, money: 500, rep: -3 },
         { text: "Turn it into the police", effects: { happiness: 2 }, rep: 10 }
       ]},
     // ADULT (30-60)
     { text: "A coworker is spreading rumors about you.", minAge: 23, maxAge: 60, chance: 0.12,
       options: [
         { text: "Confront them calmly", effects: { charisma: 3 }, rep: 5 },
-        { text: "Spread rumors back", effects: { charisma: -3 }, rep: -10, enemy: true },
+        { text: "Spread rumors back", effects: { charisma: -3 }, rep: -5, enemy: true },
         { text: "Report to HR", effects: { intelligence: 2 }, rep: 3 },
         { text: "Let it go", effects: { happiness: -3 }, rep: 0 }
       ]},
@@ -416,7 +416,7 @@ LIFE.RANDOM_EVENTS = [
       options: [
         { text: "Sure, I'll help sell! ($8 cut)", effects: { charisma: 3, happiness: 2 }, money: 8, rep: 5, friend: true },
         { text: "I'll buy one! ($3)", effects: { happiness: 2 }, cost: 3, rep: 3 },
-        { text: "That's dumb", effects: {}, rep: -5 }
+        { text: "That's dumb", effects: {}, rep: -2 }
       ]},
     // KID SWITCHBLADE EVENTS
     { text: "While snooping around your parents' closet, you found something hidden in a box... it's a switchblade!", minAge: 7, maxAge: 14, chance: 0.06,

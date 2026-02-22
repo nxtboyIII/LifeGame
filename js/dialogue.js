@@ -46,7 +46,7 @@ LIFE.DECISIONS = {
             { text: "Study for top grades", effects: { intelligence: 10 }, rep: 3, tag: 'scholar', career: null },
             { text: "Get a part-time job ($)", effects: { charisma: 5 }, rep: 2, tag: 'worker', career: 'parttime', money: 200 },
             { text: "Be the popular kid", effects: { charisma: 10, happiness: 5 }, rep: 5, tag: 'popular' },
-            { text: "Cause trouble and skip class", effects: { happiness: 3 }, rep: -15, tag: 'rebel' }
+            { text: "Cause trouble and skip class", effects: { happiness: 3 }, rep: -5, tag: 'rebel' }
         ]
     },
     18: {
@@ -57,7 +57,7 @@ LIFE.DECISIONS = {
             { text: "Study Science in college", effects: { intelligence: 15 }, rep: 5, tag: 'science', career: 'scientist' },
             { text: "Study Business in college", effects: { charisma: 10, intelligence: 5 }, rep: 3, tag: 'business', career: 'business' },
             { text: "Pursue the Arts", effects: { happiness: 12, charisma: 5 }, rep: 4, tag: 'arts', career: 'artist' },
-            { text: "Skip college, start working", effects: { charisma: 3 }, rep: -2, tag: 'nocollege', career: 'worker', money: 500 }
+            { text: "Skip college, start working", effects: { charisma: 3 }, rep: 0, tag: 'nocollege', career: 'worker', money: 500 }
         ]
     },
     25: {
@@ -67,7 +67,7 @@ LIFE.DECISIONS = {
         options: [
             { text: "I'm ready to settle down (meet someone)", effects: { happiness: 8, charisma: 5 }, rep: 5, tag: 'lookforlove' },
             { text: "I'm dating around, nothing serious", effects: { happiness: 5, charisma: 3 }, rep: 0, tag: 'dating' },
-            { text: "I prefer being independent", effects: { charisma: 5, intelligence: 3 }, rep: -3, tag: 'single' }
+            { text: "I prefer being independent", effects: { charisma: 5, intelligence: 3 }, rep: 0, tag: 'single' }
         ]
     },
     30: {
@@ -88,7 +88,7 @@ LIFE.DECISIONS = {
             { text: "I'm grateful for what I have", effects: { happiness: 10 }, rep: 5, tag: 'content' },
             { text: "Time for a career change!", effects: { happiness: 5, charisma: 5 }, rep: 3, tag: 'change', careerChange: true },
             { text: "I need to focus on health", effects: { health: 12 }, rep: 2, tag: 'health' },
-            { text: "Buy something expensive!", effects: { happiness: 8 }, rep: -3, tag: 'splurge', cost: 5000 }
+            { text: "Buy something expensive!", effects: { happiness: 8 }, rep: 0, tag: 'splurge', cost: 5000 }
         ]
     },
     50: {
@@ -223,10 +223,10 @@ LIFE.NPC_DIALOGUES = {
                     { text: "Yeah, yeah...", effects: {}, rep: -2 }
                 ]
             }},
-            { text: "Homework is pointless!", effects: { intelligence: -1 }, rep: -5, response: {
+            { text: "Homework is pointless!", effects: { intelligence: -1 }, rep: -1, response: {
                 text: "Excuse me? That attitude won't get you far. See me after class.", options: [
                     { text: "Sorry, I didn't mean it...", effects: { charisma: 1 }, rep: 3 },
-                    { text: "Make me.", effects: {}, rep: -5 }
+                    { text: "Make me.", effects: {}, rep: -2 }
                 ]
             }}
         ]},
@@ -253,7 +253,7 @@ LIFE.NPC_DIALOGUES = {
                     { text: "Sure, what should we play?", effects: { happiness: 1 }, rep: 1 }
                 ]
             }},
-            { text: "No, you're weird.", effects: { charisma: -2 }, rep: -8, enemy: true, response: {
+            { text: "No, you're weird.", effects: { charisma: -2 }, rep: -2, enemy: true, response: {
                 text: "...fine. You're mean anyway!", options: [
                     { text: "Good, get lost.", effects: {}, rep: -3 },
                     { text: "Wait, I'm sorry...", effects: { charisma: 1 }, rep: 3 }
@@ -273,7 +273,7 @@ LIFE.NPC_DIALOGUES = {
                     { text: "Okay okay, you win!", effects: { happiness: 1 }, rep: 2 }
                 ]
             }},
-            { text: "I don't play stupid games", effects: {}, rep: -5, response: {
+            { text: "I don't play stupid games", effects: {}, rep: -1, response: {
                 text: "Jeez, you're no fun! Fine, I'll find someone else.", options: [
                     { text: "Good.", effects: {}, rep: -1 },
                     { text: "Wait... okay fine, let's play.", effects: { happiness: 1 }, rep: 3 }
@@ -309,7 +309,7 @@ LIFE.NPC_DIALOGUES = {
                     { text: "At least I'll pass the test.", effects: { charisma: 1 }, rep: 0 }
                 ]
             }},
-            { text: "Yeah, let's skip!", effects: { charisma: 2, intelligence: -1 }, rep: -4, response: {
+            { text: "Yeah, let's skip!", effects: { charisma: 2, intelligence: -1 }, rep: -1, response: {
                 text: "For real? Alright, meet me by the back door at lunch!", options: [
                     { text: "I'll be there!", effects: { happiness: 2, charisma: 1 }, rep: -2 },
                     { text: "Actually, never mind. Too risky.", effects: { intelligence: 1 }, rep: 2 }
@@ -330,7 +330,7 @@ LIFE.NPC_DIALOGUES = {
                     { text: "Yeah I might regret this.", effects: { happiness: -1 }, rep: 1 }
                 ]
             }},
-            { text: "Study by yourself, loser", effects: {}, rep: -10, enemy: true }
+            { text: "Study by yourself, loser", effects: {}, rep: -2, enemy: true }
         ]},
         { text: "There's a party this weekend!", options: [
             { text: "I'll be there!", effects: { happiness: 3, charisma: 2 }, rep: 3, cost: 20, response: {
@@ -345,7 +345,7 @@ LIFE.NPC_DIALOGUES = {
                     { text: "Whatever.", effects: {}, rep: -1 }
                 ]
             }},
-            { text: "Parties are lame", effects: {}, rep: -4, response: {
+            { text: "Parties are lame", effects: {}, rep: -1, response: {
                 text: "Wow okay... suit yourself. More fun for the rest of us.", options: [
                     { text: "Fine, maybe I'll show up.", effects: { happiness: 1 }, rep: 2 },
                     { text: "I said what I said.", effects: {}, rep: -1 }
@@ -403,7 +403,7 @@ LIFE.NPC_DIALOGUES = {
                     { text: "We'll see about that.", effects: { charisma: 1 }, rep: -1 }
                 ]
             }},
-            { text: "Go away, I'm busy", effects: { intelligence: 1 }, rep: -6, response: {
+            { text: "Go away, I'm busy", effects: { intelligence: 1 }, rep: -1, response: {
                 text: "Jeez, someone woke up on the wrong side of the bed...", options: [
                     { text: "Sorry, I'm just stressed.", effects: { charisma: 1 }, rep: 3 },
                     { text: "You heard me.", effects: {}, rep: -3 }
@@ -417,7 +417,7 @@ LIFE.NPC_DIALOGUES = {
                     { text: "Sure... but I'm getting it.", effects: { charisma: 1 }, rep: -1 }
                 ]
             }},
-            { text: "It's mine. Back off.", effects: { charisma: -2 }, rep: -10, enemy: true, response: {
+            { text: "It's mine. Back off.", effects: { charisma: -2 }, rep: -3, enemy: true, response: {
                 text: "Wow... okay. We'll see about that.", options: [
                     { text: "Yeah. We will.", effects: {}, rep: -2 },
                     { text: "Sorry, that came out wrong.", effects: { charisma: 1 }, rep: 3 }
@@ -440,10 +440,10 @@ LIFE.NPC_DIALOGUES = {
                     { text: "No promises.", effects: {}, rep: -3 }
                 ]
             }},
-            { text: "Do it yourself!", effects: {}, rep: -15, response: {
+            { text: "Do it yourself!", effects: {}, rep: -3, response: {
                 text: "Excuse me?! We need to have a serious talk about your attitude.", options: [
                     { text: "I'm sorry, I'm just having a bad day.", effects: { charisma: 1 }, rep: 5 },
-                    { text: "I said what I said.", effects: {}, rep: -5 }
+                    { text: "I said what I said.", effects: {}, rep: -2 }
                 ]
             }}
         ]},
@@ -470,7 +470,7 @@ LIFE.NPC_DIALOGUES = {
                     { text: "No problem.", effects: {}, rep: 0 }
                 ]
             }},
-            { text: "Get lost.", effects: {}, rep: -8 },
+            { text: "Get lost.", effects: {}, rep: -2 },
             { text: "Sorry, I'm in a hurry", effects: {}, rep: 0 }
         ]},
         { text: "Nice weather today, huh?", options: [
@@ -480,7 +480,7 @@ LIFE.NPC_DIALOGUES = {
                     { text: "Just passing through.", effects: {}, rep: 0 }
                 ]
             }},
-            { text: "Mind your own business", effects: {}, rep: -5 }
+            { text: "Mind your own business", effects: {}, rep: -1 }
         ]}
     ],
     'Old Friend': [
@@ -508,7 +508,7 @@ LIFE.NPC_DIALOGUES = {
                     { text: "No need, happy to share!", effects: { charisma: 1 }, rep: 2 }
                 ]
             }},
-            { text: "Stay off my lawn!", effects: {}, rep: -10, enemy: true, response: {
+            { text: "Stay off my lawn!", effects: {}, rep: -2, response: {
                 text: "Well! I was just trying to be friendly! Some neighbor you are.", options: [
                     { text: "Sorry, I didn't mean it like that.", effects: { charisma: 1 }, rep: 5 },
                     { text: "And stay off it!", effects: {}, rep: -3 }
@@ -814,22 +814,42 @@ LIFE.dialogue.selectOption = function(idx) {
     }
     if (opt.sound) LIFE.sounds[opt.sound]();
 
-    // FLIRTING
+    // FLIRTING - NPC responds in dialogue instead of popup
     if (opt.flirt && opt.flirtTarget) {
-        var flirtLine = LIFE.FLIRT_DIALOGUES[Math.floor(Math.random() * LIFE.FLIRT_DIALOGUES.length)];
         var charismaBonus = LIFE.state.stats.charisma * 0.005;
-        var success = Math.random() < (flirtLine.success + charismaBonus);
+        var beautyBonus = ((LIFE.state.stats.beauty || 50) - 30) * 0.005;
+        var success = Math.random() < (0.45 + charismaBonus + beautyBonus);
+        var posResp = [
+            "Aww, that's really sweet! I like talking to you.",
+            "Haha, you're such a charmer! Tell me more.",
+            "*blushes* You really know how to make someone smile.",
+            "That's the nicest thing anyone's said to me today!",
+            "You know what? You're pretty cool. We should hang out more."
+        ];
+        var negResp = [
+            "Umm... I'm flattered, but no thanks.",
+            "Yeah... that's not really my thing. Sorry.",
+            "Hah, nice try. Better luck next time.",
+            "*awkward silence* ...I should go.",
+            "That was... a bit much. Let's just be friends."
+        ];
         if (success) {
-            LIFE.ui.showPopup('They liked that!', '#e91e63');
             LIFE.state.romanceLevel = (LIFE.state.romanceLevel || 0) + 10;
             LIFE.state.romanceTarget = opt.flirtTarget;
             LIFE.updateRelationship(opt.flirtTarget, 10);
-            if (LIFE.state.romanceLevel >= 30) {
-                LIFE.ui.showPopup(opt.flirtTarget + ' is interested in you!', '#e91e63');
-            }
+            var pLine = posResp[Math.floor(Math.random() * posResp.length)];
+            if (LIFE.state.romanceLevel >= 30) pLine += " (" + opt.flirtTarget + " is interested in you!)";
+            opt.response = { text: pLine, options: [
+                { text: "You're amazing!", effects: { happiness: 2, charisma: 1 } },
+                { text: "*smile*", effects: { happiness: 1 } }
+            ]};
         } else {
-            LIFE.ui.showPopup("That didn't land well...", '#ef5350');
             LIFE.updateRelationship(opt.flirtTarget, -5);
+            var nLine = negResp[Math.floor(Math.random() * negResp.length)];
+            opt.response = { text: nLine, options: [
+                { text: "Oh well, worth a shot.", effects: {} },
+                { text: "Your loss!", effects: {}, rep: -1 }
+            ]};
         }
     }
 
@@ -1280,7 +1300,7 @@ LIFE.dialogue.talkToNPC = function(npc) {
                         }}
                     ]
                 }},
-                { text: "Actually, I quit.", effects: { happiness: -3 }, rep: -5, career: 'none', response: {
+                { text: "Actually, I quit.", effects: { happiness: -3 }, rep: -1, career: 'none', response: {
                     text: "What?! Are you serious? Well... if that's your decision. Good luck out there.", options: [
                         { text: "Thanks. Time for something new.", effects: { charisma: 1 }, rep: 0 },
                         { text: "See ya.", effects: {}, rep: -2 }
@@ -1307,7 +1327,7 @@ LIFE.dialogue.talkToNPC = function(npc) {
                         { text: "Thanks for your time.", effects: {}, rep: 1 }
                     ]
                 }},
-                { text: "That's unfair!", effects: {}, rep: -3, response: {
+                { text: "That's unfair!", effects: {}, rep: -1, response: {
                     text: "I'm sorry, I don't make the rules. Come back when you meet the requirements.", options: [
                         { text: "Fine.", effects: {}, rep: -1 },
                         { text: "I understand. Thanks anyway.", effects: { charisma: 1 }, rep: 2 }
@@ -1326,7 +1346,7 @@ LIFE.dialogue.talkToNPC = function(npc) {
                     text: "Great question! We offer health insurance, paid time off, and room for advancement. The pay is $" + career.income + " per shift. What do you say?", options: [
                         { text: "I'm in! Sign me up!", effects: { happiness: 5 }, rep: 5, career: npc.careerType },
                         { text: "Let me think about it.", effects: {}, rep: 0 },
-                        { text: "Not worth it.", effects: {}, rep: -3 }
+                        { text: "Not worth it.", effects: {}, rep: -1 }
                     ]
                 }},
                 { text: "No thanks, not for me.", effects: {}, rep: 0 }

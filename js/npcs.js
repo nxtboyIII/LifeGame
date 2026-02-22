@@ -220,10 +220,8 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02;
     ch.group.add(ring);
 
-    // assign gender for romance system
-    var gender = Math.random() < 0.5 ? 'M' : 'F';
-    if (type === 'Mom' || type === 'Spouse') gender = 'F';
-    if (type === 'Dad' || type === 'Boss') gender = 'M';
+    // assign gender for romance system - must match visual appearance
+    var gender = isFemale ? 'F' : 'M';
 
     var maxHp = isPolice ? 200 : 100;
     return {

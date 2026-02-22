@@ -11,7 +11,7 @@ LIFE.state = {
     // economy
     money: 0, career: null, careerLevel: 0, careerXP: 0,
     married: false, hasKids: false,
-    stats: { intelligence: 5, happiness: 50, charisma: 5, health: 80 },
+    stats: { intelligence: 5, happiness: 50, charisma: 5, health: 80, beauty: 50 },
     // properties & investments
     properties: [], investments: [],
     // fame
@@ -33,6 +33,7 @@ LIFE.state = {
     // day cycle (school ages)
     dayPhase: null, // 'classroom', 'schoolyard', 'home' or null
     timeSkipOpen: false,
+    timeSpeed: 72, // game-seconds per real second (72x = default)
     // inventory
     inventory: ['Fists'], equippedIndex: 0,
     // health
@@ -48,7 +49,8 @@ LIFE.state = {
     hospitalTimer: 0,
     // infant
     heldByParent: false,
-    _birthHospital: false
+    _birthHospital: false,
+    _baseBeauty: 50
 };
 
 // ============================================================
@@ -798,13 +800,13 @@ LIFE.getSimDate = function() {
         hour = 16 + Math.floor(totalMin3 / 60);
         minutes = Math.floor(totalMin3 % 60);
     } else {
-        // general: 6 AM - 10 PM (960 minutes) over 1200 seconds
+        // full 24-hour cycle: 0:00 to 23:59
         var dayFrac = dayTimer / dayDur;
-        var totalMin4 = dayFrac * 960;
-        hour = 6 + Math.floor(totalMin4 / 60);
+        var totalMin4 = dayFrac * 1440; // 24 * 60
+        hour = Math.floor(totalMin4 / 60);
         minutes = Math.floor(totalMin4 % 60);
     }
-    hour = Math.max(6, Math.min(22, hour));
+    hour = Math.max(0, Math.min(23, hour));
     minutes = Math.max(0, Math.min(59, minutes));
     var ampm = hour >= 12 ? 'PM' : 'AM';
     var displayHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
@@ -815,8 +817,91 @@ LIFE.getSimDate = function() {
         dayOfYear: dayOfYear,
         month: month,
         day: rem,
-        hour: hour
+        hour: hour,
+        minutes: minutes
     };
+};
+
+// ============================================================
+// DAY / NIGHT CYCLE
+// ============================================================
+LIFE._dayNightTimer = 0;
+LIFE.updateDayNight = function(dt) {
+    var state = LIFE.state;
+    if (state.gamePhase !== 'playing') return;
+    // skip indoor-only / special stages
+    var skip = { hospital: true, jail: true, execution: true, death: true, womb: true };
+    if (skip[state.currentStage]) return;
+
+    LIFE._dayNightTimer += dt;
+    if (LIFE._dayNightTimer < 0.4) return;
+    LIFE._dayNightTimer = 0;
+
+    var sim = LIFE.getSimDate();
+    var h = sim.hour + (sim.minutes || 0) / 60;
+    var c1 = new THREE.Color(), c2 = new THREE.Color(), sky = new THREE.Color();
+    var stg = LIFE.STAGES[state.currentStage];
+    var defaultSky = stg ? stg.bg : 0x87ceeb;
+    var ambInt, dirInt;
+
+    if (h < 5) {
+        // deep night
+        ambInt = 0.08; dirInt = 0.03;
+        LIFE.dirLight.color.setHex(0x334466);
+        sky.setHex(0x050510);
+    } else if (h < 6.5) {
+        // dawn
+        var t = (h - 5) / 1.5;
+        ambInt = 0.08 + t * 0.35; dirInt = 0.03 + t * 0.5;
+        c1.setHex(0x334466); c2.setHex(0xffaa66);
+        LIFE.dirLight.color.copy(c1.clone().lerp(c2, t));
+        c1.setHex(0x050510); c2.setHex(0xff7733);
+        sky.copy(c1.clone().lerp(c2, t));
+    } else if (h < 8) {
+        // sunrise to morning
+        var t2 = (h - 6.5) / 1.5;
+        ambInt = 0.35 + t2 * 0.15; dirInt = 0.4 + t2 * 0.2;
+        c1.setHex(0xffaa66); c2.setHex(0xffeedd);
+        LIFE.dirLight.color.copy(c1.clone().lerp(c2, t2));
+        c1.setHex(0xff7733); c2.setHex(defaultSky);
+        sky.copy(c1.clone().lerp(c2, t2));
+    } else if (h < 17) {
+        // full day - use stage default
+        ambInt = 0.5; dirInt = 0.6;
+        LIFE.dirLight.color.setHex(0xffeedd);
+        sky.setHex(defaultSky);
+    } else if (h < 19) {
+        // sunset
+        var t3 = (h - 17) / 2;
+        ambInt = 0.5 - t3 * 0.3; dirInt = 0.6 - t3 * 0.35;
+        c1.setHex(0xffffff); c2.setHex(0xff6633);
+        LIFE.dirLight.color.copy(c1.clone().lerp(c2, t3));
+        c1.setHex(defaultSky); c2.setHex(0xff4400);
+        sky.copy(c1.clone().lerp(c2, t3));
+    } else if (h < 20.5) {
+        // dusk
+        var t4 = (h - 19) / 1.5;
+        ambInt = 0.2 - t4 * 0.12; dirInt = 0.25 - t4 * 0.22;
+        c1.setHex(0xff6633); c2.setHex(0x334466);
+        LIFE.dirLight.color.copy(c1.clone().lerp(c2, t4));
+        c1.setHex(0xff4400); c2.setHex(0x050510);
+        sky.copy(c1.clone().lerp(c2, t4));
+    } else {
+        // night
+        ambInt = 0.08; dirInt = 0.03;
+        LIFE.dirLight.color.setHex(0x334466);
+        sky.setHex(0x050510);
+    }
+
+    LIFE.ambientLight.intensity = ambInt;
+    LIFE.dirLight.intensity = dirInt;
+    LIFE.scene.background.copy(sky);
+    if (LIFE.scene.fog) LIFE.scene.fog.color.copy(sky);
+
+    // sun position arcs across sky
+    var sunAngle = ((h - 6) / 12) * Math.PI;
+    var sunY = Math.sin(sunAngle) * 20;
+    LIFE.dirLight.position.set(Math.cos(sunAngle) * 20, Math.max(0.5, sunY), 10);
 };
 
 LIFE.transitionDayPhase = function(phase) {
@@ -876,7 +961,7 @@ LIFE.updateSchoolDayCycle = function() {
     }
 };
 
-LIFE.skipTime = function(days) {
+LIFE.skipTime = function(hours) {
     var state = LIFE.state;
     if (state.gamePhase !== 'playing') return;
     if (state.wantedLevel > 0) {
@@ -885,14 +970,24 @@ LIFE.skipTime = function(days) {
     }
     if (LIFE.dialogue.active && LIFE.dialogue.blocking) return;
 
-    var secondsToAdd = days * LIFE.DAY_DURATION;
+    // Convert displayed hours to yearTimer seconds using current phase rate
+    // Phase rates: yearTimer-seconds per displayed-minute
+    var secsPerMin;
+    if (LIFE.isSchoolAge(state.age) && state.dayPhase) {
+        if (state.dayPhase === 'classroom') secsPerMin = 600 / 360;       // 1.667
+        else if (state.dayPhase === 'schoolyard') secsPerMin = 240 / 120; // 2.0
+        else secsPerMin = 360 / 360;                                       // 1.0 (home)
+    } else {
+        secsPerMin = LIFE.DAY_DURATION / 1440; // 0.833
+    }
+    var secondsToAdd = hours * 60 * secsPerMin;
 
     // handle multi-year skips
     while (secondsToAdd > 0) {
         var remaining = LIFE.YEAR_DURATION - state.yearTimer;
         if (secondsToAdd >= remaining) {
             secondsToAdd -= remaining;
-            LIFE.advanceYear(); // resets yearTimer to 0
+            LIFE.advanceYear();
             if (state.gamePhase !== 'playing') return; // died during advance
         } else {
             state.yearTimer += secondsToAdd;
@@ -1072,7 +1167,13 @@ LIFE.advanceYear = function() {
         return;
     }
 
-    state.age++; state.yearTimer = 0;
+    state.age++;
+    // start each year at 9:00 AM displayed time
+    if (LIFE.isSchoolAge(state.age)) {
+        state.yearTimer = 100; // 9AM in classroom phase (100/600 * 360min + 8h = 9AM)
+    } else {
+        state.yearTimer = 450; // 9AM in 24hr cycle (450/1200 * 24h = 9AM)
+    }
 
     if (state.age > LIFE.MAX_AGE) { state.deathCause = 'old age'; LIFE.triggerDeath(); return; }
 
@@ -1219,13 +1320,33 @@ LIFE.advanceYear = function() {
 };
 
 LIFE.startPlaying = function() {
-    LIFE.state.gamePhase = 'playing'; LIFE.state.age = 0; LIFE.state.yearTimer = 0;
+    LIFE.state.gamePhase = 'playing'; LIFE.state.age = 0; LIFE.state.yearTimer = 450; // start at 9:00 AM
+    // randomize beauty at birth (bell curve 15-85, centered ~50)
+    LIFE.state.stats.beauty = Math.floor(Math.random() * 25 + Math.random() * 25 + Math.random() * 25 + 10);
+    LIFE.state._baseBeauty = LIFE.state.stats.beauty;
     // start in hospital birth scene
     LIFE.state.currentStage = 'hospital';
     LIFE.state.bounds = LIFE.getBoundsForStage('hospital');
     LIFE.buildEnvironment('hospital'); LIFE.createPlayer();
-    LIFE.player.group.position.set(2, 0, 0);
-    // no NPCs in birth hospital - just the doctor dialogue
+    // baby starts in Mom's arms
+    LIFE.state.heldByParent = true;
+    // Spawn Mom on hospital bed (reclined) and Doctor for birth scene
+    LIFE.npcs.forEach(function(n) { LIFE.scene.remove(n.char.group); });
+    LIFE.npcs = [];
+    var birthMom = LIFE.createNPC('Mom', -3, -2, 'Mom', true);
+    birthMom.speed = 0;
+    // position Mom on the hospital bed mattress, reclined
+    birthMom.char.group.position.set(-3, 0.5, -2);
+    birthMom.char.group.rotation.y = Math.PI / 2; // face along bed
+    birthMom.char.group.rotation.x = -0.7; // reclined back on bed
+    birthMom.waiting = true; birthMom.waitTimer = 99999;
+    LIFE.npcs.push(birthMom);
+    var birthDoc = LIFE.createNPC('Doctor', -1, -0.5, 'Doctor', false);
+    birthDoc.speed = 0;
+    birthDoc.char.group.position.set(-1, 0, -0.5);
+    birthDoc.char.group.rotation.y = -Math.PI / 2; // facing toward bed
+    birthDoc.waiting = true; birthDoc.waitTimer = 99999;
+    LIFE.npcs.push(birthDoc);
     LIFE.ui.showGameUI(); LIFE.ui.updateActionButtons();
     LIFE.ui.showStageMessage('You are born!'); LIFE.ui.$.age.textContent = '0';
     LIFE.sounds.birth();
@@ -1303,8 +1424,8 @@ LIFE.updateWomb = function(dt) {
     });
     LIFE.camera.position.set(Math.sin(state.wombTimer*0.3)*0.5, 2+Math.sin(state.wombTimer*0.5)*0.3, Math.cos(state.wombTimer*0.3)*0.5);
     LIFE.camera.lookAt(0, 2, 2);
-    if (state.wombTimer > 8) LIFE.ui.showStageMessage('A new life begins...');
-    if (state.wombTimer > 11) { state.gamePhase = 'birth'; state.birthTimer = 0; LIFE.scene.background.set(0xffffff); }
+    if (state.wombTimer > 5) LIFE.ui.showStageMessage('A new life begins...');
+    if (state.wombTimer > 7) { state.gamePhase = 'birth'; state.birthTimer = 0; LIFE.scene.background.set(0xffffff); }
 };
 
 LIFE.updateBirth = function(dt) {
@@ -1534,7 +1655,7 @@ LIFE.animate = function() {
         case 'playing':
             LIFE.dialogue.update(dt);
             if ((!LIFE.dialogue.active || !LIFE.dialogue.blocking) && !state.shopOpen && !state.friendsOpen && !state.timeSkipOpen) {
-                state.yearTimer += dt;
+                state.yearTimer += dt * (state.timeSpeed / 72);
                 // timer bar shows day progress (fills once per 20-min day)
                 var dayProgress = (state.yearTimer % LIFE.DAY_DURATION) / LIFE.DAY_DURATION;
                 LIFE.ui.$.timer.style.width = (dayProgress * 100) + '%';
@@ -1542,6 +1663,8 @@ LIFE.animate = function() {
             }
             // school day phase transitions
             LIFE.updateSchoolDayCycle();
+            // day/night lighting cycle
+            LIFE.updateDayNight(dt);
             // update date/time display
             LIFE.ui.updateDateTime();
             LIFE.economy.passiveIncome(dt);
@@ -1557,6 +1680,12 @@ LIFE.animate = function() {
             if (state.drugUses > 3) {
                 state.stats.happiness = Math.max(0, state.stats.happiness - 0.04 * dt);
                 state.stats.health = Math.max(0, state.stats.health - 0.03 * dt);
+                state.stats.beauty = Math.max(0, state.stats.beauty - 0.01 * dt);
+            }
+            // beauty degrades slowly with old age
+            if (state.age >= 50) {
+                var beautyDecay = (state.age - 50) * 0.0003;
+                state.stats.beauty = Math.max(5, state.stats.beauty - beautyDecay * dt);
             }
             if (state.friends === 0 && state.enemies > 3 && state.age > 10)
                 state.stats.happiness = Math.max(0, state.stats.happiness - 0.02 * dt);
@@ -1638,6 +1767,12 @@ LIFE.animate = function() {
                 }
             }
 
+            // advance yearTimer during jail so date/time display progresses
+            var jailTimeScale = state.jailYears * LIFE.YEAR_DURATION / (state._jailStartTimer || 1);
+            state.yearTimer += dt * jailTimeScale;
+            if (state.yearTimer >= LIFE.YEAR_DURATION) state.yearTimer = state.yearTimer % LIFE.YEAR_DURATION;
+            LIFE.ui.updateDateTime();
+
             // update jail countdown display
             var jailFrac = state.jailTimer / (state._jailStartTimer || 1);
             var yearsLeft = Math.max(1, Math.ceil(jailFrac * state.jailYears));
@@ -1669,6 +1804,10 @@ LIFE.init = function() {
     document.body.classList.add('unlocked');
     LIFE.ui.$.start.addEventListener('click', function() {
         LIFE.sounds.init(); LIFE.sounds.resume(); LIFE.startGame();
+    });
+    var speedEl = document.getElementById('speedDisplay');
+    if (speedEl) speedEl.addEventListener('click', function() {
+        if (LIFE.state.gamePhase === 'playing') LIFE.ui.openTimeSkip();
     });
     LIFE.canvas.addEventListener('click', function() {
         LIFE.sounds.resume();
