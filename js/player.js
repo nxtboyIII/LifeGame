@@ -238,7 +238,8 @@ LIFE.updatePlayer = function(dt) {
     // nearest living NPC (range 6 to match visual proximity expectations)
     state.nearestNPC = null;
     var minDist = 6;
-    LIFE.npcs.forEach(function(npc) {
+    var allNPCs = LIFE.getAllNPCs();
+    allNPCs.forEach(function(npc) {
         if (!npc.alive) return;
         var ndx = npc.char.group.position.x - player.group.position.x;
         var ndz = npc.char.group.position.z - player.group.position.z;

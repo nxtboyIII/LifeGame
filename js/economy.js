@@ -479,7 +479,8 @@ LIFE.economy.buyItem = function(index) {
     if (item.type === 'gun') {
         LIFE.state.hasGun = true;
         if (LIFE.state.inventory.indexOf('Pistol') < 0) LIFE.state.inventory.push('Pistol');
-        LIFE.addWanted(1); // buying a gun illegally
+        LIFE.logCrime('Illegal firearm purchase');
+        LIFE.addWanted(1);
     }
     if (item.type === 'switchblade') {
         LIFE.state.hasSwitchblade = true;
@@ -537,6 +538,7 @@ LIFE.economy.buyDealerItem = function(index) {
     if (item.type === 'gun') {
         LIFE.state.hasGun = true;
         if (LIFE.state.inventory.indexOf('Pistol') < 0) LIFE.state.inventory.push('Pistol');
+        LIFE.logCrime('Illegal firearm purchase');
         LIFE.addWanted(1);
     }
     if (item.type === 'switchblade') {

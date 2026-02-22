@@ -3,6 +3,26 @@
 // ============================================================
 LIFE.npcs = [];
 
+// Get all NPCs including persistent police (so police are interactable like any NPC)
+LIFE.getAllNPCs = function() {
+    var all = LIFE.npcs.slice();
+    if (LIFE.world && LIFE.world.policeCops) {
+        for (var i = 0; i < LIFE.world.policeCops.length; i++) {
+            var cop = LIFE.world.policeCops[i];
+            if (cop.npc && cop.npc.char.group.visible) all.push(cop.npc);
+        }
+    }
+    if (LIFE.swat) {
+        for (var s = 0; s < LIFE.swat.length; s++) {
+            var su = LIFE.swat[s];
+            for (var m = 0; m < su.members.length; m++) {
+                if (su.members[m].char.group.visible) all.push(su.members[m]);
+            }
+        }
+    }
+    return all;
+};
+
 // NPC chat messages
 LIFE.NPC_CHAT = {
     'Mom':       ["Be careful, sweetie!", "I'm so proud of you!", "Did you eat today?", "I love you!", "Come give me a hug!"],
@@ -30,7 +50,8 @@ LIFE.NPC_CHAT = {
     'Boss':      ["Get back to work!", "Good job today.", "Need that report ASAP.", "Let's discuss your performance."],
     'Inmate':    ["Don't mess with me.", "How long you in for?", "Keep your head down.", "First time?"],
     'Doctor':    ["Let me check your vitals.", "How are you feeling?", "Deep breaths now.", "We'll get you sorted out."],
-    'Nurse':     ["Are you comfortable?", "Need anything?", "Rest up!", "Doctor will be with you shortly."]
+    'Nurse':     ["Are you comfortable?", "Need anything?", "Rest up!", "Doctor will be with you shortly."],
+    'Police':    ["Stay out of trouble.", "Everything alright here?", "Move along, citizen.", "Keeping the peace.", "Nice day for a patrol.", "Let me know if you see anything suspicious."]
 };
 
 LIFE.getNPCChatMessage = function(npc) {
@@ -43,9 +64,13 @@ LIFE.getNPCChatMessage = function(npc) {
         var scared = ["Someone call the police!", "Stay away!", "Help! Help!", "Oh no...", "What's happening?!"];
         return scared[Math.floor(Math.random() * scared.length)];
     }
-    if (state.reputation <= -60 && npc.type !== 'Mom' && npc.type !== 'Dad' && npc.type !== 'Dealer') {
+    if (state.reputation <= -60 && npc.type !== 'Mom' && npc.type !== 'Dad' && npc.type !== 'Dealer' && !npc.isPolice) {
         var fear = ["Don't come near me...", "I know who you are.", "Please don't hurt me...", "Stay back!"];
         return fear[Math.floor(Math.random() * fear.length)];
+    }
+    if (state.reputation <= -60 && npc.isPolice) {
+        var copThreat = ["I've got my eye on you.", "Don't try anything funny.", "You look familiar... in a bad way.", "One wrong move, pal."];
+        return copThreat[Math.floor(Math.random() * copThreat.length)];
     }
     if (relLevel >= 50) {
         var friendly = ["Hey, best friend!", "Always good to see you!", "You're the best!"];
@@ -373,15 +398,26 @@ LIFE.killNPC = function(npc) {
 
     var repLoss = -20;
     if (npc.isPolice) {
-        repLoss = -10;
+        repLoss = npc.isSWAT ? -15 : -10;
+        LIFE.logCrime('Murder of a ' + (npc.isSWAT ? 'SWAT officer' : 'police officer'));
         LIFE.addWanted(3);
         var idx = LIFE.police.indexOf(npc);
         if (idx >= 0) LIFE.police.splice(idx, 1);
+        // Mark persistent cop as dead so respawn timer starts
+        if (LIFE.world.policeCops) {
+            for (var pci = 0; pci < LIFE.world.policeCops.length; pci++) {
+                if (LIFE.world.policeCops[pci].npc === npc) {
+                    LIFE.world.policeCops[pci].aiState = 'dead';
+                    break;
+                }
+            }
+        }
     } else if (isFamily) {
         repLoss = -60;
         state.stats.happiness = Math.max(0, state.stats.happiness - 35);
         state.stats.charisma = Math.max(0, state.stats.charisma - 10);
-        LIFE.addWanted(5); // max wanted for killing family
+        LIFE.logCrime('Murder of ' + npc.type);
+        LIFE.addWanted(5);
 
         // permanent trauma
         state.familyKiller = true;
@@ -407,8 +443,10 @@ LIFE.killNPC = function(npc) {
     } else if (npc.type === 'Kid' || npc.type === 'Grandchild') {
         repLoss = -50;
         state.stats.happiness = Math.max(0, state.stats.happiness - 20);
+        LIFE.logCrime('Murder of a child');
         LIFE.addWanted(5);
     } else {
+        LIFE.logCrime('Murder');
         LIFE.addWanted(3);
     }
     state.reputation = Math.max(-100, state.reputation + repLoss);
@@ -590,6 +628,40 @@ LIFE.updateNPCs = function(dt) {
     var bounds = LIFE.state.bounds;
     var nearestNPC = LIFE.state.nearestNPC;
     var player = LIFE.player;
+
+    // Update persistent police visuals (rings, chat bubbles) — movement handled by updatePolice
+    if (LIFE.world && LIFE.world.policeCops) {
+        for (var pi = 0; pi < LIFE.world.policeCops.length; pi++) {
+            var pcop = LIFE.world.policeCops[pi].npc;
+            if (!pcop || !pcop.alive || !pcop.char.group.visible) continue;
+            var isNearest = (pcop === nearestNPC);
+            pcop.ringMat.opacity += ((isNearest ? 0.6 : 0) - pcop.ringMat.opacity) * 0.1;
+            if (isNearest) pcop.ring.rotation.z += dt * 2;
+            // chat bubbles for police
+            if (player && pcop.chatSprite) {
+                var cdx = player.group.position.x - pcop.char.group.position.x;
+                var cdz = player.group.position.z - pcop.char.group.position.z;
+                var cdist = Math.sqrt(cdx * cdx + cdz * cdz);
+                if (cdist < 8 && pcop.alive && LIFE.state.wantedLevel <= 0) {
+                    pcop.chatCooldown -= dt;
+                    if (pcop.chatCooldown <= 0 && !pcop.chatSprite.visible) {
+                        var msg = LIFE.getNPCChatMessage(pcop);
+                        LIFE.drawChatBubble(pcop, msg);
+                        pcop.chatSprite.visible = true;
+                        pcop.chatTimer = 3;
+                        pcop.chatCooldown = 8 + Math.random() * 12;
+                    }
+                    if (pcop.chatSprite.visible) {
+                        pcop.chatTimer -= dt;
+                        if (pcop.chatTimer <= 0) pcop.chatSprite.visible = false;
+                    }
+                } else {
+                    pcop.chatSprite.visible = false;
+                }
+            }
+        }
+    }
+
     LIFE.npcs.forEach(function(npc) {
         if (!npc.alive) return;
         var isNearest = (npc === nearestNPC);

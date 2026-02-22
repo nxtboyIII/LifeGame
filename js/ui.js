@@ -314,13 +314,15 @@ LIFE.ui.updateWanted = function() {
     }
     el.style.display = 'block';
     if (level > 0) {
+        // 5 stars, each represents 2 wanted levels (half-star at odd levels)
         var stars = '';
+        var starCount = Math.ceil(level / 2); // 1-2→1star, 3-4→2stars, 5-6→3, 7-8→4, 9-10→5
         for (var i = 0; i < 5; i++) {
-            if (i < level) stars += '\u2605';
+            if (i < starCount) stars += '\u2605';
             else stars += '\u2606';
         }
         el.innerHTML = stars + (bounty > 0 ? '<br><span style="font-size:13px;letter-spacing:0">Bounty: $' + bounty + '</span>' : '');
-        el.style.color = level >= 4 ? '#ff1744' : (level >= 2 ? '#ff9800' : '#ffeb3b');
+        el.style.color = level >= 7 ? '#ff1744' : (level >= 4 ? '#ff9800' : '#ffeb3b');
     } else {
         // no active chase but have bounty
         el.innerHTML = '<span style="font-size:13px;letter-spacing:0">Bounty: $' + bounty + '</span>';
@@ -761,8 +763,26 @@ LIFE.ui.closeTimeSkip = function() {
 LIFE.ui.showJailScreen = function(years, fine) {
     var el = LIFE.ui.$.jailScreen;
     if (!el) return;
-    LIFE.ui.$.jailText.textContent = 'Sentenced to ' + years + ' year' + (years > 1 ? 's' : '') + ' in prison';
+    var sentenceLabel;
+    if (years >= 50) sentenceLabel = 'multiple life sentences';
+    else if (years >= 25) sentenceLabel = 'life in prison';
+    else sentenceLabel = years + ' year' + (years > 1 ? 's' : '') + ' in prison';
+    LIFE.ui.$.jailText.textContent = 'Sentenced to ' + sentenceLabel;
     var details = '';
+    // Show crime charges
+    var crimes = LIFE.state.crimeLog || [];
+    if (crimes.length > 0) {
+        details += 'CHARGES:\n';
+        // Deduplicate and count crimes
+        var counts = {};
+        for (var i = 0; i < crimes.length; i++) {
+            counts[crimes[i]] = (counts[crimes[i]] || 0) + 1;
+        }
+        for (var crime in counts) {
+            details += '  - ' + crime + (counts[crime] > 1 ? ' (x' + counts[crime] + ')' : '') + '\n';
+        }
+        details += '\n';
+    }
     if (fine > 0) details += 'Fine: $' + fine.toLocaleString() + '\n';
     if (LIFE.state.kills > 0) details += 'Murder charges: ' + LIFE.state.kills + '\n';
     details += 'Criminal record: Permanent\n';

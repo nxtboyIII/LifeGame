@@ -17,7 +17,7 @@ LIFE.performAction = function(idx) {
         LIFE.ui.showPopup(jailDmg > 0 ? 'POW! (-' + jailDmg + ')' : '*flails weakly*', jailDmg > 0 ? '#ef5350' : '#999');
         state.actionCooldown = 0.8;
         state.actionAnim = { type: 'punch', timer: 0.6 };
-        var allTargets = LIFE.npcs.concat(LIFE.police);
+        var allTargets = LIFE.getAllNPCs();
         allTargets.forEach(function(npc) {
             if (!npc.alive) return;
             var dx = npc.char.group.position.x - LIFE.player.group.position.x;
@@ -81,7 +81,7 @@ LIFE.performAction = function(idx) {
     state.actionAnim = { type: actName, timer: 0.6 };
 
     // NPC reactions to actions
-    var allTargets = LIFE.npcs.concat(LIFE.police);
+    var allTargets = LIFE.getAllNPCs();
     allTargets.forEach(function(npc) {
         if (!npc.alive) return;
         var dx = npc.char.group.position.x - LIFE.player.group.position.x;
@@ -120,12 +120,16 @@ LIFE.performAction = function(idx) {
                 var isChild = state.age < 13;
                 var hasWeapon = equipped === 'Switchblade';
                 if (npc.isPolice) {
+                    LIFE.logCrime('Assaulting a police officer');
                     LIFE.addWanted(2);
                 } else if (isFamily) {
+                    LIFE.logCrime('Domestic violence');
                     LIFE.addWanted(isChild && !hasWeapon ? 1 : 2);
                 } else if (isVulnerable) {
+                    LIFE.logCrime('Assault on a minor');
                     LIFE.addWanted(isChild && !hasWeapon ? 0 : 2);
                 } else {
+                    LIFE.logCrime('Assault');
                     LIFE.addWanted(isChild && !hasWeapon ? 0 : 1);
                 }
 
@@ -305,8 +309,8 @@ LIFE.updateBullets = function(dt) {
         // trail follows
         b.trail.position.copy(b.mesh.position);
 
-        // out of bounds
-        if (Math.abs(b.mesh.position.x) > 60 || Math.abs(b.mesh.position.z) > 60 || b.mesh.position.y < -1) {
+        // out of bounds (bullet traveled too far from origin or fell below ground)
+        if (b.mesh.position.y < -1) {
             b.hit = true;
             continue;
         }
@@ -327,7 +331,7 @@ LIFE.updateBullets = function(dt) {
             }
         } else {
             // player bullet hits NPCs
-            var allTargets = LIFE.npcs.concat(LIFE.police);
+            var allTargets = LIFE.getAllNPCs();
             for (var j = 0; j < allTargets.length; j++) {
                 var npc = allTargets[j];
                 if (!npc.alive) continue;
@@ -352,17 +356,19 @@ LIFE.updateBullets = function(dt) {
                     var shotFamily = (npc.type === 'Mom' || npc.type === 'Dad' || npc.type === 'Sibling' ||
                         npc.type === 'Spouse' || npc.type === 'Your Child');
                     var repLoss = -15;
-                    if (npc.isPolice) { LIFE.addWanted(3); repLoss = -8; }
+                    if (npc.isPolice) { LIFE.logCrime('Shooting at a police officer'); LIFE.addWanted(3); repLoss = -8; }
                     else if (shotFamily) {
+                        LIFE.logCrime('Shooting a family member');
                         LIFE.addWanted(4);
                         repLoss = -30;
                         LIFE.state.stats.happiness = Math.max(0, LIFE.state.stats.happiness - 15);
                         LIFE.state.familyAbuser = true;
-                        // silent trauma
                     } else if (npc.type === 'Kid' || npc.type === 'Grandchild') {
+                        LIFE.logCrime('Shooting a minor');
                         LIFE.addWanted(4);
                         repLoss = -25;
                     } else {
+                        LIFE.logCrime('Shooting a civilian');
                         LIFE.addWanted(2);
                     }
                     LIFE.state.reputation = Math.max(-100, LIFE.state.reputation + repLoss);
@@ -434,6 +440,7 @@ LIFE.shootGun = function() {
 
     // firing gun always adds wanted (unless already high)
     if (state.wantedLevel < 1) {
+        LIFE.logCrime('Illegal discharge of a firearm');
         LIFE.addWanted(1);
     }
     state.reputation = Math.max(-100, state.reputation - 3);

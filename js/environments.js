@@ -559,6 +559,23 @@ LIFE.buildClassroom = function() {
     var classLight2 = new THREE.PointLight(0xfff3e0, 0.3, 10);
     classLight2.position.set(-3, 3.3, -2);
     LIFE.addEnv(classLight2);
+    // door
+    LIFE.addEnv(LIFE.makeBox(1.5, 2.8, 0.15, 0x5d4037, 0, 1.4, 4.9));
+    // EXIT sign
+    var exitCanvas = document.createElement('canvas');
+    exitCanvas.width = 256; exitCanvas.height = 48;
+    var exitCtx = exitCanvas.getContext('2d');
+    exitCtx.fillStyle = 'rgba(244,67,54,0.9)';
+    exitCtx.fillRect(0, 0, 256, 48);
+    exitCtx.fillStyle = '#fff';
+    exitCtx.font = 'bold 20px Arial';
+    exitCtx.textAlign = 'center';
+    exitCtx.fillText('Press G to Leave Classroom', 128, 32);
+    var exitTex = new THREE.CanvasTexture(exitCanvas);
+    var exitSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: exitTex, transparent: true, depthTest: false }));
+    exitSprite.position.set(0, 3.2, 4.9);
+    exitSprite.scale.set(2.5, 0.5, 1);
+    LIFE.addEnv(exitSprite);
 };
 
 // ---------- HIGH SCHOOL CLASSROOM ----------
@@ -621,6 +638,23 @@ LIFE.buildHSClassroom = function() {
     var hsLight = new THREE.PointLight(0xf5f5f5, 0.7, 15);
     hsLight.position.set(0, 3.8, 0);
     LIFE.addEnv(hsLight);
+    // door
+    LIFE.addEnv(LIFE.makeBox(1.8, 3, 0.15, 0x5d4037, 0, 1.5, 5.9));
+    // EXIT sign
+    var exitCanvas = document.createElement('canvas');
+    exitCanvas.width = 256; exitCanvas.height = 48;
+    var exitCtx = exitCanvas.getContext('2d');
+    exitCtx.fillStyle = 'rgba(244,67,54,0.9)';
+    exitCtx.fillRect(0, 0, 256, 48);
+    exitCtx.fillStyle = '#fff';
+    exitCtx.font = 'bold 20px Arial';
+    exitCtx.textAlign = 'center';
+    exitCtx.fillText('Press G to Leave Classroom', 128, 32);
+    var exitTex = new THREE.CanvasTexture(exitCanvas);
+    var exitSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: exitTex, transparent: true, depthTest: false }));
+    exitSprite.position.set(0, 3.8, 5.9);
+    exitSprite.scale.set(2.5, 0.5, 1);
+    LIFE.addEnv(exitSprite);
 };
 
 // ---------- JAIL ----------

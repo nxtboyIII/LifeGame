@@ -149,6 +149,50 @@ LIFE.world.buildWorld = function() {
     if (LIFE.state.ownedCar) {
         LIFE.spawnParkedCar();
     }
+
+    // Initialize persistent police officers
+    LIFE.world.initPolice();
+};
+
+// ============================================================
+// PERSISTENT POLICE INITIALIZATION
+// ============================================================
+LIFE.world.policeCops = [];
+
+LIFE.world.initPolice = function() {
+    LIFE.world.policeCops = [];
+    var patrols = [
+        // 2 officers at police station
+        { x: -58, z: -75, zone: 'police_station' },
+        { x: -62, z: -75, zone: 'police_station' },
+        // 2 patrol the city
+        { x: 10, z: 145, zone: 'city' },
+        { x: -15, z: 160, zone: 'city' },
+        // 1 near school area
+        { x: 10, z: -120, zone: 'school' },
+        // 1 near home/retirement
+        { x: 60, z: 10, zone: 'home' }
+    ];
+    for (var i = 0; i < patrols.length; i++) {
+        var p = patrols[i];
+        var npc = LIFE.createNPC('Police', p.x, p.z);
+        npc.speed = 0; // idle, not chasing
+        npc.health = 200; npc.maxHealth = 200;
+        npc.isPolice = true; npc.shootTimer = 0;
+        LIFE.world.policeCops.push({
+            npc: npc,
+            aiState: 'idle', // idle, patrolling, driving, pursuing, returning, dead
+            patrolPos: { x: p.x, z: p.z },
+            patrolZone: p.zone,
+            car: null,
+            _parkedCar: null,
+            carSpeed: 0,
+            patrolTimer: Math.random() * 8,
+            _patrolTarget: null,
+            returnTimer: 0,
+            respawnMonths: 0
+        });
+    }
 };
 
 // ============================================================
@@ -794,6 +838,15 @@ LIFE.world.hideAllZones = function() {
     if (LIFE.world.worldGround) LIFE.world.worldGround.visible = false;
     if (LIFE.world._roadsGroup) LIFE.world._roadsGroup.visible = false;
     if (LIFE.car.parkedModel) LIFE.car.parkedModel.visible = false;
+    // Hide persistent police
+    if (LIFE.world.policeCops) {
+        for (var pi = 0; pi < LIFE.world.policeCops.length; pi++) {
+            var pc = LIFE.world.policeCops[pi];
+            if (pc.npc.char && pc.npc.char.group) pc.npc.char.group.visible = false;
+            if (pc.car) pc.car.visible = false;
+            if (pc._parkedCar) pc._parkedCar.visible = false;
+        }
+    }
 };
 
 LIFE.world.showNearbyZones = function() {
@@ -804,6 +857,14 @@ LIFE.world.showNearbyZones = function() {
         LIFE.world.zones[name].group.visible = true;
     }
     if (LIFE.car.parkedModel) LIFE.car.parkedModel.visible = true;
+    // Show persistent police
+    if (LIFE.world.policeCops) {
+        for (var pi = 0; pi < LIFE.world.policeCops.length; pi++) {
+            var pc = LIFE.world.policeCops[pi];
+            if (pc.npc.alive && pc.npc.char && pc.npc.char.group) pc.npc.char.group.visible = true;
+            if (pc._parkedCar) pc._parkedCar.visible = true;
+        }
+    }
 };
 
 // ============================================================
@@ -1489,11 +1550,12 @@ LIFE.updateCarDriving = function(dt) {
         }
     }
 
-    // Run over NPCs
+    // Run over NPCs and police
     if (Math.abs(car.currentSpeed) > 2) {
         var hitRadius = 1.5;
-        for (var ni = 0; ni < LIFE.npcs.length; ni++) {
-            var npc = LIFE.npcs[ni];
+        var allRunTargets = LIFE.getAllNPCs();
+        for (var ni = 0; ni < allRunTargets.length; ni++) {
+            var npc = allRunTargets[ni];
             if (!npc.alive) continue;
             var ndx = carPos.x - npc.char.group.position.x;
             var ndz = carPos.z - npc.char.group.position.z;
@@ -1503,10 +1565,12 @@ LIFE.updateCarDriving = function(dt) {
                 LIFE.damageNPC(npc, damage);
                 car.currentSpeed *= 0.7; // slow on impact
                 if (npc.alive) {
-                    LIFE.ui.showPopup('You hit ' + npc.name + '!', '#ff9800');
-                    LIFE.addWanted(1);
-                    state.reputation = Math.max(-100, state.reputation - 3);
-                    LIFE.ui.showRepChange(-3);
+                    var hitLabel = npc.isPolice ? 'You hit a police officer!' : 'You hit ' + npc.name + '!';
+                    LIFE.ui.showPopup(hitLabel, '#ff9800');
+                    LIFE.logCrime(npc.isPolice ? 'Vehicular assault on police' : 'Hit and run');
+                    LIFE.addWanted(npc.isPolice ? 3 : 1);
+                    state.reputation = Math.max(-100, state.reputation - (npc.isPolice ? 8 : 3));
+                    LIFE.ui.showRepChange(npc.isPolice ? -8 : -3);
                 }
                 break; // only hit one NPC per frame
             }

@@ -827,6 +827,17 @@ LIFE.dialogue.selectOption = function(idx) {
         var careers = ['teacher', 'artist', 'worker'];
         LIFE.state.career = careers[Math.floor(Math.random() * careers.length)];
     }
+    if (opt.surrender) {
+        // Player surrenders to police
+        LIFE.dialogue.active = false;
+        LIFE.dialogue.blocking = false;
+        LIFE.dialogue.current = null;
+        LIFE.dialogue.elements.box.style.display = 'none';
+        setTimeout(function() {
+            if (LIFE.state.wantedLevel > 0) LIFE.arrestPlayer();
+        }, 500);
+        return;
+    }
     if (opt.married) LIFE.state.married = true;
     if (opt.kids) {
         LIFE.state.hasKids = true;
@@ -1369,6 +1380,123 @@ LIFE.dialogue.talkToNPC = function(npc) {
             { text: "Show me what you've got!", effects: {}, openVendor: npc.vendorType },
             { text: "Just browsing, thanks.", effects: {}, rep: 0 }
         ], true);
+        return;
+    }
+
+    // POLICE - talk to cops like Skyrim guards
+    if (npc.isPolice) {
+        LIFE.dialogue.npc = npc;
+        var wanted = state.wantedLevel || 0;
+        var rep = state.reputation || 0;
+        var isSWAT = npc.isSWAT;
+
+        // SWAT don't chat - they're tactical
+        if (isSWAT) {
+            LIFE.dialogue.open(speakerName, "Move along. This is a restricted operation.", [
+                { text: "Sorry, officer.", effects: {} }
+            ], false);
+            return;
+        }
+
+        // If wanted, cop reacts to criminal
+        if (wanted > 0) {
+            LIFE.dialogue.open(speakerName, "Stop right there! You're under arrest!", [
+                { text: "You'll never take me alive!", effects: {}, rep: -2 },
+                { text: "I surrender...", effects: {}, surrender: true }
+            ], true);
+            return;
+        }
+
+        // Known criminal - suspicious
+        if (rep <= -40) {
+            var suspiciousLines = [
+                "I know who you are. Don't try anything.",
+                "I've got my eye on you, criminal.",
+                "One wrong move and you're done.",
+                "We know what you've been up to."
+            ];
+            LIFE.dialogue.open(speakerName, suspiciousLines[Math.floor(Math.random() * suspiciousLines.length)], [
+                { text: "I haven't done anything, officer.", effects: {}, rep: 0 },
+                { text: "Is that a threat?", effects: {}, rep: -1,
+                  response: { text: "It's a promise. Now move along.", options: [
+                    { text: "Whatever.", effects: {}, rep: -1 },
+                    { text: "Yes, officer.", effects: {}, rep: 1 }
+                  ]}
+                },
+                { text: "I'm trying to turn my life around.", effects: {}, rep: 1,
+                  response: { text: "We'll see about that. Actions speak louder than words.", options: [
+                    { text: "I understand.", effects: {}, rep: 1 }
+                  ]}
+                }
+            ], true);
+            return;
+        }
+
+        // Normal friendly dialogue (various topics)
+        var policeDialogues = [
+            { text: "Everything alright, citizen? Let me know if you need anything.",
+              options: [
+                { text: "Just passing through.", effects: {}, rep: 0 },
+                { text: "Thanks for keeping us safe, officer!", effects: { happiness: 1 }, rep: 2,
+                  response: { text: "Just doing my job. You stay safe out there!", options: [
+                    { text: "Will do!", effects: { happiness: 1 }, rep: 1 }
+                  ]}
+                },
+                { text: "Any trouble around here lately?", effects: {}, rep: 0,
+                  response: { text: "Nothing we can't handle. But keep your eyes open — you never know.", options: [
+                    { text: "I'll be careful.", effects: {}, rep: 1 },
+                    { text: "That's reassuring...", effects: {}, rep: 0 }
+                  ]}
+                }
+              ]
+            },
+            { text: "Stay out of trouble now. I don't want to have to arrest anyone today.",
+              options: [
+                { text: "No trouble here, officer.", effects: {}, rep: 1 },
+                { text: "You couldn't arrest me if you tried.", effects: {}, rep: -3,
+                  response: { text: "Is that so? I'll remember that. Move along.", options: [
+                    { text: "Just kidding, officer.", effects: {}, rep: 0 },
+                    { text: "*walk away*", effects: {}, rep: -1 }
+                  ]}
+                },
+                { text: "Tough day on the beat?", effects: {}, rep: 1,
+                  response: { text: "You have no idea. But someone's got to do it.", options: [
+                    { text: "Respect, officer.", effects: { happiness: 1 }, rep: 2 },
+                    { text: "Ever think about quitting?", effects: {}, rep: 0,
+                      response: { text: "Every day. But then who'd keep this town safe?", options: [
+                        { text: "Good point.", effects: {}, rep: 1 }
+                      ]}
+                    }
+                  ]}
+                }
+              ]
+            },
+            { text: "Nice day for a patrol. What brings you around here?",
+              options: [
+                { text: "Just enjoying the walk.", effects: { happiness: 1 }, rep: 0 },
+                { text: "Do you like being a cop?", effects: {}, rep: 1,
+                  response: { text: "It has its moments. The pay isn't great, but keeping people safe is worth it.", options: [
+                    { text: "That's admirable.", effects: { happiness: 1 }, rep: 2 },
+                    { text: "Sounds boring.", effects: {}, rep: -1 }
+                  ]}
+                },
+                { text: "Mind your own business.", effects: {}, rep: -2 }
+              ]
+            },
+            { text: "Citizen. You need something?",
+              options: [
+                { text: "Nope, just saying hi.", effects: { happiness: 1 }, rep: 1 },
+                { text: "How's crime in this area?", effects: {}, rep: 0,
+                  response: { text: state.kills > 0 ? "We've had some murders recently. Scary times." : "Pretty quiet, actually. Let's keep it that way.", options: [
+                    { text: "Stay safe, officer.", effects: {}, rep: 1 }
+                  ]}
+                },
+                { text: "I don't talk to cops.", effects: {}, rep: -2 }
+              ]
+            }
+        ];
+        var pd = policeDialogues[Math.floor(Math.random() * policeDialogues.length)];
+        LIFE.dialogue.open(speakerName, pd.text, pd.options, true);
         return;
     }
 

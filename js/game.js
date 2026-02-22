@@ -26,7 +26,10 @@ LIFE.state = {
     // combat & crime
     hasGun: false, hasSwitchblade: false, kills: 0, shootCooldown: 0,
     wantedLevel: 0, wantedTimer: 0, wantedCooldown: 0,
+    policeDispatchTimer: 0, policeDispatching: false,
+    swatDispatching: false, swatDispatchTimer: 0, swatDispatched: false,
     criminalRecord: false, timesJailed: 0,
+    crimeLog: [], // tracks crimes for jail sentencing display
     bounty: 0, // Skyrim-style persistent bounty
     // family violence tracking
     familyAbuser: false, familyKiller: false, killedFamily: [],
@@ -288,58 +291,407 @@ LIFE.updateRelationship = function(name, change) {
 // ============================================================
 // WANTED LEVEL / POLICE
 // ============================================================
+// LIFE.police = active pursuing cops (subset of persistent world cops + SWAT)
 LIFE.police = [];
+
+// ---- PERSISTENT POLICE SYSTEM ----
+LIFE.POLICE_MAX = 6; // max regular officers in the world
+LIFE.SWAT_WAVE_SIZE = 4; // SWAT per wave
+LIFE.swat = []; // active SWAT units
+
+LIFE.logCrime = function(crime) {
+    if (!LIFE.state.crimeLog) LIFE.state.crimeLog = [];
+    LIFE.state.crimeLog.push(crime);
+};
 
 LIFE.addWanted = function(amount) {
     if (LIFE.state.age < 10) return;
     var old = LIFE.state.wantedLevel;
-    LIFE.state.wantedLevel = Math.min(5, LIFE.state.wantedLevel + amount);
-    LIFE.state.bounty += amount * 500; // Skyrim-style bounty accumulates
+    LIFE.state.wantedLevel = Math.min(10, LIFE.state.wantedLevel + amount);
+    LIFE.state.bounty += amount * 500;
     LIFE.state.wantedTimer = 0;
     LIFE.state.wantedCooldown = 0;
-    if (LIFE.state.wantedLevel > 0 && old === 0) {
-        LIFE.sounds.siren();
+    // Start dispatch timer (someone calling the police)
+    if (LIFE.state.wantedLevel > 0 && !LIFE.state.policeDispatching) {
+        var alreadyPursuing = 0;
+        if (LIFE.world.policeCops) {
+            for (var i = 0; i < LIFE.world.policeCops.length; i++) {
+                if (LIFE.world.policeCops[i].aiState === 'pursuing' || LIFE.world.policeCops[i].aiState === 'driving') alreadyPursuing++;
+            }
+        }
+        // Scale cops dispatched: 1-2 for minor, 3-4 for moderate, 5-6 for serious
+        var copsNeeded = Math.min(LIFE.POLICE_MAX, Math.ceil(LIFE.state.wantedLevel / 2));
+        if (alreadyPursuing < copsNeeded) {
+            LIFE.state.policeDispatching = true;
+            // First offense: 5-8 seconds (someone has to witness, call, dispatcher sends cops)
+            // Escalation while cops already out: 2-4 seconds (cops radio for backup)
+            LIFE.state.policeDispatchTimer = old === 0 ? (5 + Math.random() * 3) : (2 + Math.random() * 2);
+            if (old === 0) LIFE.ui.showPopup('Someone is calling the police!', '#f44336');
+        }
     }
-    LIFE.spawnPolice();
 };
 
-LIFE.spawnPolice = function() {
-    LIFE.police.forEach(function(p) { LIFE.scene.remove(p.char.group); });
-    LIFE.police = [];
-    var count = LIFE.state.wantedLevel;
-    if (count <= 0) return;
-    // In open world, spawn police near the player (not at bounds edge)
+// Create a police car model (dark blue with red/blue lights)
+LIFE.createPoliceCar = function() {
+    var group = LIFE.createCarModel(0x1a237e);
+    // Light bar on roof
+    var barBase = LIFE.makeBox(1.2, 0.08, 0.4, 0x333333, 0, 1.3, -0.3);
+    group.add(barBase);
+    var redLight = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.15, 0.25),
+        new THREE.MeshPhongMaterial({ color: 0xff1744, emissive: 0xff1744, emissiveIntensity: 0.8 })
+    );
+    redLight.position.set(-0.35, 1.38, -0.3);
+    group.add(redLight);
+    var blueLight = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.15, 0.25),
+        new THREE.MeshPhongMaterial({ color: 0x2979ff, emissive: 0x2979ff, emissiveIntensity: 0.8 })
+    );
+    blueLight.position.set(0.35, 1.38, -0.3);
+    group.add(blueLight);
+    group._redLight = redLight;
+    group._blueLight = blueLight;
+    group._lightTimer = 0;
+    return group;
+};
+
+// Create a SWAT truck model (black armored, larger)
+LIFE.createSwatTruck = function() {
+    var group = new THREE.Group();
+    var bodyMat = new THREE.MeshPhongMaterial({ color: 0x212121 });
+    // Larger armored body
+    var body = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.4, 5.5), bodyMat);
+    body.position.y = 0.8; body.castShadow = true; group.add(body);
+    // Cabin top
+    var cabin = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.8, 2.5), bodyMat);
+    cabin.position.set(0, 1.9, -0.8); cabin.castShadow = true; group.add(cabin);
+    // Armored windshield (small slit)
+    var winMat = new THREE.MeshPhongMaterial({ color: 0x445566, emissive: 0x223344, emissiveIntensity: 0.3 });
+    var win = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.2, 0.05), winMat);
+    win.position.set(0, 2.0, 0.46); group.add(win);
+    // Wheels (6 wheels - 3 per side)
+    var wheelMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+    var wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 8);
+    var positions = [[-1.2,0.4,1.8],[1.2,0.4,1.8],[-1.2,0.4,0],[1.2,0.4,0],[-1.2,0.4,-1.8],[1.2,0.4,-1.8]];
+    for (var i = 0; i < 6; i++) {
+        var w = new THREE.Mesh(wheelGeo, wheelMat);
+        w.rotation.z = Math.PI / 2;
+        w.position.set(positions[i][0], positions[i][1], positions[i][2]);
+        w.castShadow = true; group.add(w);
+    }
+    // SWAT label
+    var labelCanvas = document.createElement('canvas');
+    labelCanvas.width = 128; labelCanvas.height = 32;
+    var ctx = labelCanvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('SWAT', 64, 24);
+    var tex = new THREE.CanvasTexture(labelCanvas);
+    var label = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+    label.position.set(0, 2.6, 0); label.scale.set(1.5, 0.4, 1);
+    group.add(label);
+    // Red/blue lights
+    var redLight = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.3),
+        new THREE.MeshPhongMaterial({ color: 0xff1744, emissive: 0xff1744, emissiveIntensity: 0.8 }));
+    redLight.position.set(-0.6, 2.35, -0.8); group.add(redLight);
+    var blueLight = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.3),
+        new THREE.MeshPhongMaterial({ color: 0x2979ff, emissive: 0x2979ff, emissiveIntensity: 0.8 }));
+    blueLight.position.set(0.6, 2.35, -0.8); group.add(blueLight);
+    group._redLight = redLight;
+    group._blueLight = blueLight;
+    group._lightTimer = 0;
+    return group;
+};
+
+// Dispatch idle cops toward the player
+LIFE.dispatchPolice = function() {
+    var state = LIFE.state;
+    if (!LIFE.world.policeCops || !LIFE.player) return;
+    var px = LIFE.player.group.position.x;
+    var pz = LIFE.player.group.position.z;
+
+    // Count how many are already pursuing
+    var pursuing = 0;
+    for (var i = 0; i < LIFE.world.policeCops.length; i++) {
+        if (LIFE.world.policeCops[i].aiState === 'pursuing' || LIFE.world.policeCops[i].aiState === 'driving') pursuing++;
+    }
+    var copsNeeded = Math.min(LIFE.POLICE_MAX, Math.ceil(state.wantedLevel / 2));
+    var needed = copsNeeded - pursuing;
+
+    // Sort idle cops by distance to player (nearest first)
+    var idle = [];
+    for (var j = 0; j < LIFE.world.policeCops.length; j++) {
+        var cop = LIFE.world.policeCops[j];
+        if (cop.aiState === 'idle' || cop.aiState === 'patrolling' || cop.aiState === 'returning') {
+            if (!cop.npc.alive) continue;
+            var cdx = cop.npc.char.group.position.x - px;
+            var cdz = cop.npc.char.group.position.z - pz;
+            cop._distToPlayer = Math.sqrt(cdx * cdx + cdz * cdz);
+            idle.push(cop);
+        }
+    }
+    idle.sort(function(a, b) { return a._distToPlayer - b._distToPlayer; });
+
+    for (var k = 0; k < Math.min(needed, idle.length); k++) {
+        var c = idle[k];
+        if (c._distToPlayer < 30) {
+            // Close enough to chase on foot
+            c.aiState = 'pursuing';
+            c.npc.speed = LIFE.getSpeedForAge(state.age) * 1.5;
+            if (LIFE.police.indexOf(c.npc) < 0) LIFE.police.push(c.npc);
+        } else {
+            // Far away - get in police car and drive
+            c.aiState = 'driving';
+            c.npc.char.group.visible = false; // hide cop (they're in the car)
+            var car = LIFE.createPoliceCar();
+            car.position.copy(c.npc.char.group.position);
+            car.position.y = 0;
+            car.rotation.y = Math.atan2(px - car.position.x, pz - car.position.z);
+            LIFE.scene.add(car);
+            c.car = car;
+            c.carSpeed = 0;
+        }
+    }
+
+    // SWAT: only for extreme situations (mass murder, shooting sprees)
+    // Requires wanted 7+ AND at least 2 kills to justify SWAT mobilization
+    if (state.wantedLevel >= 7 && state.kills >= 2 && !state.swatDispatching && !state.swatDispatched) {
+        state.swatDispatching = true;
+        state.swatDispatchTimer = 15 + Math.random() * 10; // 15-25 seconds for SWAT to mobilize
+        LIFE.ui.showPopup('SWAT team has been called in!', '#f44336');
+    }
+
+    LIFE.sounds.siren();
+    state.policeDispatching = false;
+};
+
+// Dispatch SWAT from the edge of the world
+LIFE.dispatchSWAT = function() {
+    var state = LIFE.state;
     var px = LIFE.player ? LIFE.player.group.position.x : 0;
     var pz = LIFE.player ? LIFE.player.group.position.z : 0;
-    var spawnDist = LIFE.world.built ? 20 : LIFE.state.bounds * 0.8;
-    for (var i = 0; i < count; i++) {
-        var angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
-        var x = px + Math.cos(angle) * spawnDist;
-        var z = pz + Math.sin(angle) * spawnDist;
-        var p = LIFE.createNPC('Police', x, z);
-        p.speed = LIFE.getSpeedForAge(LIFE.state.age) * 1.5; // match player sprint
-        p.health = 200;
-        p.maxHealth = 200;
-        p.isPolice = true;
-        p.shootTimer = 0;
-        LIFE.police.push(p);
+    // Spawn from a far edge, heading toward player
+    var spawnDist = 200;
+    var angle = Math.random() * Math.PI * 2;
+    var sx = px + Math.cos(angle) * spawnDist;
+    var sz = pz + Math.sin(angle) * spawnDist;
+
+    var truck = LIFE.createSwatTruck();
+    truck.position.set(sx, 0, sz);
+    truck.rotation.y = Math.atan2(px - sx, pz - sz);
+    LIFE.scene.add(truck);
+
+    var swatUnit = {
+        truck: truck,
+        truckSpeed: 0,
+        state: 'driving', // driving, deployed
+        members: [],
+        deployDist: 25 // distance from player to deploy
+    };
+
+    // Create SWAT members (hidden for now, riding in truck)
+    for (var i = 0; i < LIFE.SWAT_WAVE_SIZE; i++) {
+        var npc = LIFE.createNPC('Police', sx, sz);
+        npc.speed = LIFE.getSpeedForAge(state.age) * 1.7; // SWAT are faster
+        npc.health = 350; npc.maxHealth = 350; // armored
+        npc.isPolice = true; npc.isSWAT = true;
+        npc.shootTimer = 0;
+        npc.char.group.visible = false;
+        // Darken SWAT gear color
+        if (npc.char.parts.body) npc.char.parts.body.material = new THREE.MeshPhongMaterial({ color: 0x111111 });
+        if (npc.char.parts.leftArm) npc.char.parts.leftArm.material = new THREE.MeshPhongMaterial({ color: 0x111111 });
+        if (npc.char.parts.rightArm) npc.char.parts.rightArm.material = new THREE.MeshPhongMaterial({ color: 0x111111 });
+        if (npc.char.parts.leftLeg) npc.char.parts.leftLeg.material = new THREE.MeshPhongMaterial({ color: 0x111111 });
+        if (npc.char.parts.rightLeg) npc.char.parts.rightLeg.material = new THREE.MeshPhongMaterial({ color: 0x111111 });
+        // SWAT helmet
+        var helmet = new THREE.Mesh(
+            new THREE.BoxGeometry(0.3, 0.15, 0.3),
+            new THREE.MeshPhongMaterial({ color: 0x111111 })
+        );
+        helmet.position.y = (npc.char.height || 1.8) + 0.26;
+        npc.char.group.add(helmet);
+        swatUnit.members.push(npc);
     }
+
+    LIFE.swat.push(swatUnit);
+    LIFE.ui.showPopup('SWAT team dispatched!', '#f44336');
 };
 
 LIFE.despawnPolice = function() {
-    LIFE.police.forEach(function(p) { LIFE.scene.remove(p.char.group); });
+    // Return all persistent cops to patrol (don't remove them from scene)
+    if (LIFE.world.policeCops) {
+        for (var i = 0; i < LIFE.world.policeCops.length; i++) {
+            var cop = LIFE.world.policeCops[i];
+            if (cop.car) { LIFE.scene.remove(cop.car); cop.car = null; }
+            if (cop._parkedCar) { LIFE.scene.remove(cop._parkedCar); cop._parkedCar = null; }
+            if (cop.npc.alive) {
+                cop.aiState = 'returning';
+                cop.returnTimer = 0;
+                cop.npc.char.group.visible = true;
+                cop.npc.speed = 0;
+            }
+        }
+    }
+    // Remove SWAT completely (they leave the area)
+    for (var s = 0; s < LIFE.swat.length; s++) {
+        var su = LIFE.swat[s];
+        if (su.truck) LIFE.scene.remove(su.truck);
+        for (var m = 0; m < su.members.length; m++) {
+            LIFE.scene.remove(su.members[m].char.group);
+        }
+    }
+    LIFE.swat = [];
     LIFE.police = [];
+    LIFE.state.swatDispatching = false;
+    LIFE.state.swatDispatched = false;
+};
+
+// Force-remove all police (for jail/death transitions)
+LIFE.removeAllPolice = function() {
+    if (LIFE.world.policeCops) {
+        for (var i = 0; i < LIFE.world.policeCops.length; i++) {
+            var cop = LIFE.world.policeCops[i];
+            if (cop.car) { LIFE.scene.remove(cop.car); cop.car = null; }
+            if (cop._parkedCar) { LIFE.scene.remove(cop._parkedCar); cop._parkedCar = null; }
+            cop.npc.char.group.visible = false;
+            cop.aiState = 'idle';
+        }
+    }
+    for (var s = 0; s < LIFE.swat.length; s++) {
+        var su = LIFE.swat[s];
+        if (su.truck) LIFE.scene.remove(su.truck);
+        for (var m = 0; m < su.members.length; m++) {
+            LIFE.scene.remove(su.members[m].char.group);
+        }
+    }
+    LIFE.swat = [];
+    LIFE.police = [];
+    LIFE.state.swatDispatching = false;
+    LIFE.state.swatDispatched = false;
+};
+
+// Respawn dead cops over time (called from game loop)
+LIFE.policeRespawnTimer = 0;
+LIFE.updatePoliceRespawn = function(dt) {
+    if (!LIFE.world.policeCops) return;
+    LIFE.policeRespawnTimer += dt;
+    // Check every ~60 seconds for dead cops to respawn (simulates hiring)
+    if (LIFE.policeRespawnTimer < 60) return;
+    LIFE.policeRespawnTimer = 0;
+    for (var i = 0; i < LIFE.world.policeCops.length; i++) {
+        var cop = LIFE.world.policeCops[i];
+        if (!cop.npc.alive) {
+            cop.respawnMonths = (cop.respawnMonths || 0) + 1;
+            // Takes 2-4 "months" (check cycles) to hire a replacement
+            if (cop.respawnMonths >= 2 + Math.floor(Math.random() * 3)) {
+                // Respawn as new officer at patrol position
+                LIFE.scene.remove(cop.npc.char.group);
+                var newNpc = LIFE.createNPC('Police', cop.patrolPos.x, cop.patrolPos.z);
+                newNpc.speed = 0;
+                newNpc.health = 200; newNpc.maxHealth = 200;
+                newNpc.isPolice = true; newNpc.shootTimer = 0;
+                cop.npc = newNpc;
+                cop.aiState = 'idle';
+                cop.respawnMonths = 0;
+            }
+        }
+    }
 };
 
 LIFE.updatePolice = function(dt) {
     var state = LIFE.state;
-    if (state.wantedLevel <= 0) return;
     var player = LIFE.player;
     if (!player || state.gamePhase !== 'playing') return;
+
+    // Always update police respawn timer (even when not wanted)
+    LIFE.updatePoliceRespawn(dt);
+
+    // Idle cop patrol behavior (when no wanted level)
+    if (LIFE.world.policeCops) {
+        for (var pi = 0; pi < LIFE.world.policeCops.length; pi++) {
+            var pcop = LIFE.world.policeCops[pi];
+            if (!pcop.npc.alive) continue;
+            // Return to patrol position
+            if (pcop.aiState === 'returning') {
+                pcop.returnTimer = (pcop.returnTimer || 0) + dt;
+                var rdx = pcop.patrolPos.x - pcop.npc.char.group.position.x;
+                var rdz = pcop.patrolPos.z - pcop.npc.char.group.position.z;
+                var rDist = Math.sqrt(rdx * rdx + rdz * rdz);
+                if (rDist > 2) {
+                    var rs = 4 * dt;
+                    pcop.npc.char.group.position.x += (rdx / rDist) * rs;
+                    pcop.npc.char.group.position.z += (rdz / rDist) * rs;
+                    pcop.npc.char.group.rotation.y = Math.atan2(rdx, rdz);
+                    pcop.npc.walkTime += dt * 6;
+                    var rsw = Math.sin(pcop.npc.walkTime) * 0.5;
+                    pcop.npc.char.parts.leftLeg.rotation.x = rsw;
+                    pcop.npc.char.parts.rightLeg.rotation.x = -rsw;
+                } else {
+                    pcop.aiState = 'idle';
+                    pcop.npc.speed = 0;
+                }
+            }
+            // Idle patrol wander near patrol position
+            if (pcop.aiState === 'idle' || pcop.aiState === 'patrolling') {
+                pcop.patrolTimer = (pcop.patrolTimer || 0) + dt;
+                if (pcop.patrolTimer > 5 + Math.random() * 5) {
+                    pcop.patrolTimer = 0;
+                    pcop.aiState = 'patrolling';
+                    pcop._patrolTarget = {
+                        x: pcop.patrolPos.x + (Math.random() - 0.5) * 16,
+                        z: pcop.patrolPos.z + (Math.random() - 0.5) * 16
+                    };
+                }
+                if (pcop.aiState === 'patrolling' && pcop._patrolTarget) {
+                    var ptdx = pcop._patrolTarget.x - pcop.npc.char.group.position.x;
+                    var ptdz = pcop._patrolTarget.z - pcop.npc.char.group.position.z;
+                    var ptDist = Math.sqrt(ptdx * ptdx + ptdz * ptdz);
+                    if (ptDist > 1) {
+                        var ps = 2 * dt;
+                        pcop.npc.char.group.position.x += (ptdx / ptDist) * ps;
+                        pcop.npc.char.group.position.z += (ptdz / ptDist) * ps;
+                        pcop.npc.char.group.rotation.y = Math.atan2(ptdx, ptdz);
+                        pcop.npc.walkTime += dt * 4;
+                        var psw = Math.sin(pcop.npc.walkTime) * 0.35;
+                        pcop.npc.char.parts.leftLeg.rotation.x = psw;
+                        pcop.npc.char.parts.rightLeg.rotation.x = -psw;
+                        pcop.npc.char.parts.leftArm.rotation.x = -psw * 0.3;
+                        pcop.npc.char.parts.rightArm.rotation.x = psw * 0.3;
+                    } else {
+                        pcop.aiState = 'idle';
+                        pcop.npc.char.parts.leftLeg.rotation.x *= 0.8;
+                        pcop.npc.char.parts.rightLeg.rotation.x *= 0.8;
+                    }
+                }
+            }
+        }
+    }
+
+    if (state.wantedLevel <= 0) return;
 
     // siren
     state.wantedCooldown = (state.wantedCooldown || 0) + dt;
     if (state.wantedCooldown > 4) { state.wantedCooldown = 0; LIFE.sounds.siren(); }
+
+    // Dispatch timer countdown
+    if (state.policeDispatching) {
+        state.policeDispatchTimer -= dt;
+        if (state.policeDispatchTimer <= 0) {
+            LIFE.dispatchPolice();
+        }
+        return; // don't chase yet, cops still on the way
+    }
+
+    // SWAT dispatch timer (separate from regular police - takes longer to mobilize)
+    if (state.swatDispatching) {
+        state.swatDispatchTimer -= dt;
+        if (state.swatDispatchTimer <= 0) {
+            state.swatDispatching = false;
+            state.swatDispatched = true;
+            LIFE.dispatchSWAT();
+        }
+    }
 
     // track car stall time for arrest immunity while driving
     if (state.inCar && LIFE.car.model) {
@@ -352,23 +704,109 @@ LIFE.updatePolice = function(dt) {
         state.carStallTimer = 0;
     }
 
-    // check if all cops are dead - you escaped by fighting them off
+    // Update driving cops (persistent cops in cars approaching player)
+    var px = player.group.position.x, pz = player.group.position.z;
+    if (LIFE.world.policeCops) {
+        for (var di = 0; di < LIFE.world.policeCops.length; di++) {
+            var dcop = LIFE.world.policeCops[di];
+            if (dcop.aiState !== 'driving' || !dcop.car) continue;
+            // Drive car toward player
+            var cdx = px - dcop.car.position.x;
+            var cdz = pz - dcop.car.position.z;
+            var cDist = Math.sqrt(cdx * cdx + cdz * cdz);
+            // Accelerate
+            dcop.carSpeed = Math.min(18, dcop.carSpeed + 12 * dt);
+            // Steer
+            dcop.car.rotation.y = Math.atan2(cdx, cdz);
+            dcop.car.position.x += Math.sin(dcop.car.rotation.y) * dcop.carSpeed * dt;
+            dcop.car.position.z += Math.cos(dcop.car.rotation.y) * dcop.carSpeed * dt;
+            // Flash lights
+            dcop.car._lightTimer = (dcop.car._lightTimer || 0) + dt;
+            var flash = Math.sin(dcop.car._lightTimer * 8) > 0;
+            if (dcop.car._redLight) dcop.car._redLight.visible = flash;
+            if (dcop.car._blueLight) dcop.car._blueLight.visible = !flash;
+
+            // Close enough - cop exits car
+            if (cDist < 20) {
+                dcop.npc.char.group.position.copy(dcop.car.position);
+                dcop.npc.char.group.position.y = 0;
+                dcop.npc.char.group.visible = true;
+                dcop.npc.speed = LIFE.getSpeedForAge(state.age) * 1.5;
+                // Leave car parked (stays in scene as static prop)
+                dcop.car._redLight.visible = true;
+                dcop.car._blueLight.visible = true;
+                dcop._parkedCar = dcop.car; // remember to clean up later
+                dcop.car = null;
+                dcop.aiState = 'pursuing';
+                if (LIFE.police.indexOf(dcop.npc) < 0) LIFE.police.push(dcop.npc);
+            }
+        }
+    }
+
+    // Update SWAT truck driving
+    for (var si = 0; si < LIFE.swat.length; si++) {
+        var su = LIFE.swat[si];
+        if (su.state !== 'driving' || !su.truck) continue;
+        var sdx = px - su.truck.position.x;
+        var sdz = pz - su.truck.position.z;
+        var sDist = Math.sqrt(sdx * sdx + sdz * sdz);
+        su.truckSpeed = Math.min(22, su.truckSpeed + 10 * dt);
+        su.truck.rotation.y = Math.atan2(sdx, sdz);
+        su.truck.position.x += Math.sin(su.truck.rotation.y) * su.truckSpeed * dt;
+        su.truck.position.z += Math.cos(su.truck.rotation.y) * su.truckSpeed * dt;
+        // Flash lights
+        su.truck._lightTimer = (su.truck._lightTimer || 0) + dt;
+        var sflash = Math.sin(su.truck._lightTimer * 8) > 0;
+        if (su.truck._redLight) su.truck._redLight.visible = sflash;
+        if (su.truck._blueLight) su.truck._blueLight.visible = !sflash;
+
+        // Deploy SWAT when close
+        if (sDist < su.deployDist) {
+            su.state = 'deployed';
+            // Spread SWAT members around truck
+            for (var sm = 0; sm < su.members.length; sm++) {
+                var swNpc = su.members[sm];
+                var sAngle = (sm / su.members.length) * Math.PI * 2;
+                swNpc.char.group.position.set(
+                    su.truck.position.x + Math.cos(sAngle) * 3,
+                    0,
+                    su.truck.position.z + Math.sin(sAngle) * 3
+                );
+                swNpc.char.group.visible = true;
+                swNpc.speed = LIFE.getSpeedForAge(state.age) * 1.7;
+                if (LIFE.police.indexOf(swNpc) < 0) LIFE.police.push(swNpc);
+            }
+        }
+    }
+
+    // check if all active cops are dead - you escaped by fighting them off
     var aliveCops = 0;
     LIFE.police.forEach(function(c) { if (c.alive) aliveCops++; });
-    if (aliveCops === 0 && LIFE.police.length > 0) {
+    // Also count driving cops that haven't arrived yet
+    var enRoute = 0;
+    if (LIFE.world.policeCops) {
+        for (var ei = 0; ei < LIFE.world.policeCops.length; ei++) {
+            if (LIFE.world.policeCops[ei].aiState === 'driving') enRoute++;
+        }
+    }
+    for (var esi = 0; esi < LIFE.swat.length; esi++) {
+        if (LIFE.swat[esi].state === 'driving') enRoute++;
+    }
+    if (aliveCops === 0 && enRoute === 0 && !state.swatDispatching && LIFE.police.length > 0) {
         LIFE.ui.showPopup('Cops eliminated! Bounty: $' + state.bounty, '#ff9800');
         state.wantedLevel = 0;
+        state.policeDispatching = false;
         LIFE.despawnPolice();
         return;
     }
 
-    // check escape by distance - if far from ALL cops, wanted decays faster
+    // check escape by distance
     var allFar = true;
     LIFE.police.forEach(function(c) {
         if (!c.alive) return;
         var edx = player.group.position.x - c.char.group.position.x;
         var edz = player.group.position.z - c.char.group.position.z;
-        if (Math.sqrt(edx * edx + edz * edz) < 25) allFar = false;
+        if (Math.sqrt(edx * edx + edz * edz) < 30) allFar = false;
     });
 
     // wanted decay - faster if outrunning cops
@@ -380,13 +818,17 @@ LIFE.updatePolice = function(dt) {
         state.wantedTimer = 0;
         state.wantedLevel = Math.max(0, state.wantedLevel - 1);
         if (state.wantedLevel <= 0) {
+            state.policeDispatching = false;
             LIFE.despawnPolice();
             LIFE.ui.showPopup('Escaped! Bounty: $' + state.bounty, '#ff9800');
             return;
         }
-        LIFE.spawnPolice();
+        // More cops needed? re-dispatch
+        LIFE.state.policeDispatching = true;
+        LIFE.state.policeDispatchTimer = 1;
     }
 
+    // Chase logic for all active pursuing cops
     LIFE.police.forEach(function(cop) {
         if (!cop.alive) return;
         var dx = player.group.position.x - cop.char.group.position.x;
@@ -414,24 +856,35 @@ LIFE.updatePolice = function(dt) {
             }
         }
 
-        // police shoot at high wanted - fires real bullets
-        if (state.wantedLevel >= 3 && dist < 20) {
+        // police shoot at high wanted (5+) / SWAT always shoot
+        var shouldShoot = cop.isSWAT ? (dist < 30) : (state.wantedLevel >= 5 && dist < 20);
+        var shootRate = cop.isSWAT ? 1.0 : 2.5; // SWAT fires faster (machine guns)
+        if (shouldShoot) {
             cop.shootTimer += dt;
-            if (cop.shootTimer >= 2.5) {
+            if (cop.shootTimer >= shootRate) {
                 cop.shootTimer = 0;
                 LIFE.sounds.gunshot();
                 var h = cop.char.height || 1.8;
                 var origin = new THREE.Vector3(
-                    cop.char.group.position.x,
-                    h * 0.7,
-                    cop.char.group.position.z
+                    cop.char.group.position.x, h * 0.7, cop.char.group.position.z
                 );
                 var dir = new THREE.Vector3(dx, 0, dz).normalize();
-                dir.x += (Math.random() - 0.5) * 0.12;
-                dir.z += (Math.random() - 0.5) * 0.12;
+                var spread = cop.isSWAT ? 0.08 : 0.12;
+                dir.x += (Math.random() - 0.5) * spread;
+                dir.z += (Math.random() - 0.5) * spread;
                 dir.normalize();
                 LIFE.createBullet(origin, dir, true);
                 LIFE.createMuzzleFlash(origin);
+                // SWAT fires burst (2-3 shots)
+                if (cop.isSWAT) {
+                    for (var bi = 0; bi < 2; bi++) {
+                        var bdir = new THREE.Vector3(dx, 0, dz).normalize();
+                        bdir.x += (Math.random() - 0.5) * 0.1;
+                        bdir.z += (Math.random() - 0.5) * 0.1;
+                        bdir.normalize();
+                        LIFE.createBullet(origin.clone(), bdir, true);
+                    }
+                }
             }
         }
     });
@@ -452,10 +905,12 @@ LIFE.arrestPlayer = function() {
     }
 
     // DEATH PENALTY check - too many kills or max wanted with high kill count (adults only)
-    if (state.age >= 18 && (state.kills >= 5 || (state.wantedLevel >= 5 && state.kills >= 3))) {
+    if (state.age >= 18 && (state.kills >= 5 || (state.wantedLevel >= 8 && state.kills >= 3))) {
         LIFE.cleanupBullets();
-        LIFE.despawnPolice();
+        LIFE.removeAllPolice();
         state.wantedLevel = 0;
+        state.policeDispatching = false;
+        state.swatDispatching = false; state.swatDispatched = false;
         state.bounty = 0;
         state.criminalRecord = true;
 
@@ -507,7 +962,7 @@ LIFE.arrestPlayer = function() {
         return;
     }
 
-    var years = Math.ceil(state.wantedLevel / 2) + state.kills * 12;
+    var years = Math.ceil(state.wantedLevel / 3) + state.kills * 12;
     if (years < 1) years = 1;
     // juveniles get much lighter sentences
     if (state.age < 18) {
@@ -519,7 +974,7 @@ LIFE.arrestPlayer = function() {
             years = Math.max(1, Math.ceil(years * 0.5)); // teens: reduced sentence
         }
     }
-    var fine = Math.min(state.money, 500 * state.wantedLevel + 5000 * state.kills);
+    var fine = Math.min(state.money, 300 * state.wantedLevel + 5000 * state.kills);
     if (state.age < 18) fine = Math.floor(fine * 0.3); // juveniles pay less fines
 
     state.gamePhase = 'jail';
@@ -535,8 +990,12 @@ LIFE.arrestPlayer = function() {
     state.criminalRecord = true;
     state.timesJailed++;
     state.wantedLevel = 0;
+    state.policeDispatching = false;
+    state.swatDispatching = false; state.swatDispatched = false;
     state.bounty = 0; // bounty cleared by serving time
     state.reputation = Math.max(-100, state.reputation - 15);
+    // Crime log is used by jail screen, clear after display
+    // (cleared below after showJailScreen call)
     // Display sentence text
     var sentenceText;
     if (years >= 50) sentenceText = 'multiple life sentences';
@@ -558,7 +1017,7 @@ LIFE.arrestPlayer = function() {
 
     // clean up bullets
     LIFE.cleanupBullets();
-    LIFE.despawnPolice();
+    LIFE.removeAllPolice();
 
     // hide world zones if built
     if (LIFE.world.built) {
@@ -625,6 +1084,7 @@ LIFE.arrestPlayer = function() {
 
     // show jail HUD
     LIFE.ui.showJailScreen(years, state.jailFine);
+    state.crimeLog = []; // clear crime log after displaying
     LIFE.ui.hideGameUI();
     LIFE.ui.$.ageBox.style.display = 'block';
     LIFE.ui.$.playerHpBar.style.display = 'block';
@@ -680,6 +1140,17 @@ LIFE.exitJail = function() {
         LIFE.scene.fog.color.set(0x87ceeb);
         LIFE.scene.fog.near = 50;
         LIFE.scene.fog.far = 200;
+        // Restore persistent police (show them at patrol positions)
+        if (LIFE.world.policeCops) {
+            for (var ri = 0; ri < LIFE.world.policeCops.length; ri++) {
+                var rcop = LIFE.world.policeCops[ri];
+                if (rcop.npc.alive) {
+                    rcop.npc.char.group.visible = true;
+                    rcop.npc.char.group.position.set(rcop.patrolPos.x, 0, rcop.patrolPos.z);
+                    rcop.aiState = 'idle';
+                }
+            }
+        }
         // Refresh NPCs and force culling update
         LIFE.world.spawnZoneNPCs(newStage);
         LIFE.world._cullingTimer = 999;
@@ -961,8 +1432,10 @@ LIFE.tryEnterExitHome = function() {
     if (LIFE.world.built) {
         // EXIT any interior
         if (LIFE.world.insideInterior) {
+            var interiorName = LIFE.world.insideInterior;
+            var friendlyNames = { classroom: 'the classroom', hsclassroom: 'the classroom', playerhome: 'your home', hospital: 'the hospital' };
             LIFE.world.exitInterior();
-            LIFE.ui.showPopup('Left ' + LIFE.world.insideInterior, '#ff9800');
+            LIFE.ui.showPopup('Left ' + (friendlyNames[interiorName] || interiorName), '#ff9800');
             return;
         }
         // ENTER a door
@@ -1846,7 +2319,7 @@ LIFE.triggerDeath = function(cause) {
         if (LIFE.player) LIFE.player.group.visible = true;
     }
     if (LIFE.car.parkedModel) { LIFE.scene.remove(LIFE.car.parkedModel); LIFE.car.parkedModel = null; }
-    LIFE.ui.hideGameUI(); LIFE.ui.hideJailScreen(); LIFE.despawnPolice(); LIFE.cleanupBullets();
+    LIFE.ui.hideGameUI(); LIFE.ui.hideJailScreen(); LIFE.removeAllPolice(); LIFE.cleanupBullets();
     if (LIFE.ui.$.controls) LIFE.ui.$.controls.style.color = '';
     LIFE.buildEnvironment('death'); LIFE.sounds.death();
     setTimeout(function() {
