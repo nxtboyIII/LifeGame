@@ -117,143 +117,419 @@ LIFE.DECISIONS = {
 LIFE.NPC_DIALOGUES = {
     'Mom': [
         { text: "How's my little one doing today?", options: [
-            { text: "Smile and reach out", effects: { happiness: 2 }, rep: 2 },
-            { text: "Start crying", effects: { happiness: -1 }, rep: -1, sound: 'cry' },
+            { text: "Smile and reach out", effects: { happiness: 2 }, rep: 2, response: {
+                text: "Aww, come here! You're such a sweetheart!", options: [
+                    { text: "Giggle happily", effects: { happiness: 2 }, rep: 1 },
+                    { text: "Hug tight", effects: { happiness: 3 }, rep: 2 }
+                ]
+            }},
+            { text: "Start crying", effects: { happiness: -1 }, rep: -1, sound: 'cry', response: {
+                text: "Oh no, what's wrong sweetie? It's okay, Mommy's here.", options: [
+                    { text: "Calm down slowly", effects: { happiness: 1 }, rep: 1 },
+                    { text: "Keep crying louder", effects: { happiness: -1 }, rep: -1 }
+                ]
+            }},
             { text: "Stare blankly", effects: {} }
         ]},
         { text: "Come here, sweetie. Want a hug?", options: [
-            { text: "Hug her back", effects: { happiness: 3 }, rep: 3 },
-            { text: "Squirm away", effects: { charisma: 1 }, rep: -1 }
+            { text: "Hug her back", effects: { happiness: 3 }, rep: 3, response: {
+                text: "I love you so much! You know that, right?", options: [
+                    { text: "I love you too, Mom!", effects: { happiness: 2 }, rep: 2 },
+                    { text: "Nod quietly", effects: { happiness: 1 }, rep: 1 }
+                ]
+            }},
+            { text: "Squirm away", effects: { charisma: 1 }, rep: -1, response: {
+                text: "Oh, you're getting so independent already!", options: [
+                    { text: "I'm a big kid now!", effects: { charisma: 1 }, rep: 1 },
+                    { text: "Sorry Mom, maybe later.", effects: { happiness: 1 }, rep: 2 }
+                ]
+            }}
         ]},
         { text: "I'm so proud of how you're growing!", options: [
             { text: "Thanks, Mom!", effects: { happiness: 2 }, rep: 2 },
-            { text: "Mom, you're embarrassing me...", effects: { charisma: 1 }, rep: -1 }
+            { text: "Mom, you're embarrassing me...", effects: { charisma: 1 }, rep: -1, response: {
+                text: "Oh honey, I can't help it! You'll always be my baby.", options: [
+                    { text: "Mooom!", effects: { charisma: 1 }, rep: 0 },
+                    { text: "I know, I know...", effects: { happiness: 1 }, rep: 1 }
+                ]
+            }}
         ]}
     ],
     'Dad': [
         { text: "Hey champ! Want to play catch?", options: [
-            { text: "Yeah! Let's go!", effects: { happiness: 3, health: 1 }, rep: 3 },
-            { text: "I'd rather read", effects: { intelligence: 2 }, rep: 0 },
-            { text: "Leave me alone.", effects: {}, rep: -3 }
+            { text: "Yeah! Let's go!", effects: { happiness: 3, health: 1 }, rep: 3, response: {
+                text: "Nice throw! You're getting better every day!", options: [
+                    { text: "Can we play more tomorrow?", effects: { happiness: 2 }, rep: 2 },
+                    { text: "I'm gonna be a pro!", effects: { charisma: 1, happiness: 1 }, rep: 1 }
+                ]
+            }},
+            { text: "I'd rather read", effects: { intelligence: 2 }, rep: 0, response: {
+                text: "That's fine too! Smart kids go far. What are you reading?", options: [
+                    { text: "Something about space!", effects: { intelligence: 1 }, rep: 2 },
+                    { text: "Just stuff.", effects: {}, rep: 0 }
+                ]
+            }},
+            { text: "Leave me alone.", effects: {}, rep: -3, response: {
+                text: "Alright kiddo... I'll be here if you change your mind.", options: [
+                    { text: "...sorry Dad.", effects: { happiness: 1 }, rep: 3 },
+                    { text: "Whatever.", effects: {}, rep: -1 }
+                ]
+            }}
         ]},
         { text: "Remember, work hard and you'll do great things.", options: [
             { text: "I will, Dad!", effects: { intelligence: 1, happiness: 1 }, rep: 2 },
-            { text: "Whatever you say...", effects: {}, rep: -2 }
+            { text: "Whatever you say...", effects: {}, rep: -2, response: {
+                text: "Hey, I'm serious. You'll thank me one day.", options: [
+                    { text: "Okay okay, I hear you.", effects: { intelligence: 1 }, rep: 1 },
+                    { text: "Sure, Dad.", effects: {}, rep: -1 }
+                ]
+            }}
         ]}
     ],
     'Sibling': [
         { text: "Wanna play? I'm bored!", options: [
-            { text: "Sure! Let's go!", effects: { happiness: 2, charisma: 1 }, rep: 3 },
-            { text: "Leave me alone!", effects: { charisma: -1 }, rep: -3 },
-            { text: "Only if I get to pick the game", effects: { charisma: 1 }, rep: 0 }
+            { text: "Sure! Let's go!", effects: { happiness: 2, charisma: 1 }, rep: 3, response: {
+                text: "Yay! Okay, what should we play?", options: [
+                    { text: "Hide and seek!", effects: { happiness: 2, health: 1 }, rep: 2 },
+                    { text: "Video games!", effects: { happiness: 2 }, rep: 1 },
+                    { text: "Let's build a fort!", effects: { happiness: 3 }, rep: 3 }
+                ]
+            }},
+            { text: "Leave me alone!", effects: { charisma: -1 }, rep: -3, response: {
+                text: "Fine! I'll tell Mom you're being mean!", options: [
+                    { text: "Go ahead, see if I care.", effects: {}, rep: -2 },
+                    { text: "Wait, okay fine let's play.", effects: { happiness: 1 }, rep: 2 }
+                ]
+            }},
+            { text: "Only if I get to pick the game", effects: { charisma: 1 }, rep: 0, response: {
+                text: "Ugh, fine! But I pick next time!", options: [
+                    { text: "Deal!", effects: { happiness: 2 }, rep: 2 },
+                    { text: "We'll see about that.", effects: { charisma: 1 }, rep: -1 }
+                ]
+            }}
         ]}
     ],
     'Teacher': [
         { text: "Have you finished your homework?", options: [
-            { text: "Yes! All done!", effects: { intelligence: 2 }, rep: 3 },
-            { text: "Uh... almost...", effects: {}, rep: 0 },
-            { text: "Homework is pointless!", effects: { intelligence: -1 }, rep: -5 }
+            { text: "Yes! All done!", effects: { intelligence: 2 }, rep: 3, response: {
+                text: "Wonderful! Keep up the great work. You're one of my best students.", options: [
+                    { text: "Thanks, teacher!", effects: { happiness: 2 }, rep: 2 },
+                    { text: "Can I get extra credit?", effects: { intelligence: 1 }, rep: 1 }
+                ]
+            }},
+            { text: "Uh... almost...", effects: {}, rep: 0, response: {
+                text: "Well, make sure it's done by tomorrow! No excuses.", options: [
+                    { text: "I'll have it done, I promise!", effects: { intelligence: 1 }, rep: 2 },
+                    { text: "Yeah, yeah...", effects: {}, rep: -2 }
+                ]
+            }},
+            { text: "Homework is pointless!", effects: { intelligence: -1 }, rep: -5, response: {
+                text: "Excuse me? That attitude won't get you far. See me after class.", options: [
+                    { text: "Sorry, I didn't mean it...", effects: { charisma: 1 }, rep: 3 },
+                    { text: "Make me.", effects: {}, rep: -5 }
+                ]
+            }}
         ]},
         { text: "Excellent work on the test!", options: [
-            { text: "Thanks! I studied hard!", effects: { intelligence: 2, happiness: 1 }, rep: 3 },
-            { text: "It was pretty easy", effects: { charisma: 1 }, rep: -1 }
+            { text: "Thanks! I studied hard!", effects: { intelligence: 2, happiness: 1 }, rep: 3, response: {
+                text: "It really shows! Have you thought about joining the honors program?", options: [
+                    { text: "That sounds great!", effects: { intelligence: 2, happiness: 1 }, rep: 3 },
+                    { text: "I'll think about it.", effects: { intelligence: 1 }, rep: 1 }
+                ]
+            }},
+            { text: "It was pretty easy", effects: { charisma: 1 }, rep: -1, response: {
+                text: "Don't get cocky. The next one will be much harder.", options: [
+                    { text: "Bring it on!", effects: { charisma: 1 }, rep: 1 },
+                    { text: "I was just kidding...", effects: {}, rep: 1 }
+                ]
+            }}
         ]}
     ],
     'Kid': [
         { text: "Wanna be friends?", options: [
-            { text: "Sure! What's your name?", effects: { charisma: 2, happiness: 2 }, rep: 5, friend: true },
-            { text: "No, you're weird.", effects: { charisma: -2 }, rep: -8, enemy: true },
-            { text: "OK, but I'm in charge", effects: { charisma: 1 }, rep: -2 }
+            { text: "Sure! What's your name?", effects: { charisma: 2, happiness: 2 }, rep: 5, friend: true, response: {
+                text: "Awesome! Wanna come play at recess?", options: [
+                    { text: "Yeah! Let's go!", effects: { happiness: 2, health: 1 }, rep: 2 },
+                    { text: "Sure, what should we play?", effects: { happiness: 1 }, rep: 1 }
+                ]
+            }},
+            { text: "No, you're weird.", effects: { charisma: -2 }, rep: -8, enemy: true, response: {
+                text: "...fine. You're mean anyway!", options: [
+                    { text: "Good, get lost.", effects: {}, rep: -3 },
+                    { text: "Wait, I'm sorry...", effects: { charisma: 1 }, rep: 3 }
+                ]
+            }},
+            { text: "OK, but I'm in charge", effects: { charisma: 1 }, rep: -2, response: {
+                text: "Fine! But I get to pick the game first!", options: [
+                    { text: "Deal!", effects: { happiness: 1 }, rep: 2 },
+                    { text: "No way, I pick!", effects: { charisma: 1 }, rep: -2 }
+                ]
+            }}
         ]},
         { text: "Tag! You're it!", options: [
-            { text: "Hey! Come back here!", effects: { health: 1, happiness: 2 }, rep: 3 },
-            { text: "I don't play stupid games", effects: {}, rep: -5 }
+            { text: "Hey! Come back here!", effects: { health: 1, happiness: 2 }, rep: 3, response: {
+                text: "Haha you can't catch me! I'm the fastest kid in school!", options: [
+                    { text: "Oh yeah? Watch this!", effects: { health: 1, happiness: 1 }, rep: 1 },
+                    { text: "Okay okay, you win!", effects: { happiness: 1 }, rep: 2 }
+                ]
+            }},
+            { text: "I don't play stupid games", effects: {}, rep: -5, response: {
+                text: "Jeez, you're no fun! Fine, I'll find someone else.", options: [
+                    { text: "Good.", effects: {}, rep: -1 },
+                    { text: "Wait... okay fine, let's play.", effects: { happiness: 1 }, rep: 3 }
+                ]
+            }}
         ]},
         { text: "Psst... check this out. I found this in my brother's room.", options: [
-            { text: "Whoa, is that a switchblade? Can I have it?", effects: { charisma: 1 }, rep: -3, giveSwitchblade: true },
-            { text: "That's dangerous! Put it away!", effects: { intelligence: 1 }, rep: 5 },
-            { text: "Cool! Let me see!", effects: { happiness: 1 }, rep: -1 }
+            { text: "Whoa, is that a switchblade? Can I have it?", effects: { charisma: 1 }, rep: -3, giveSwitchblade: true, response: {
+                text: "Uhh... sure I guess. Just don't tell anyone where you got it!", options: [
+                    { text: "Your secret's safe with me.", effects: { charisma: 1 }, rep: 1 },
+                    { text: "Yeah yeah, thanks!", effects: {}, rep: 0 }
+                ]
+            }},
+            { text: "That's dangerous! Put it away!", effects: { intelligence: 1 }, rep: 5, response: {
+                text: "You sound like my mom! Fine, I'll put it back...", options: [
+                    { text: "Good. You could get hurt.", effects: { intelligence: 1 }, rep: 2 },
+                    { text: "Actually wait, let me see it.", effects: { happiness: 1 }, rep: -2 }
+                ]
+            }},
+            { text: "Cool! Let me see!", effects: { happiness: 1 }, rep: -1, response: {
+                text: "Careful! It's super sharp. My brother would kill me if he knew.", options: [
+                    { text: "Can I keep it?", effects: { charisma: 1 }, rep: -2, giveSwitchblade: true },
+                    { text: "Better put it back before someone sees.", effects: { intelligence: 1 }, rep: 2 }
+                ]
+            }}
         ]}
     ],
     'Student': [
         { text: "This class is so boring, right?", options: [
-            { text: "I actually think it's interesting", effects: { intelligence: 2 }, rep: 1 },
-            { text: "Yeah, let's skip!", effects: { charisma: 2, intelligence: -1 }, rep: -4 },
+            { text: "I actually think it's interesting", effects: { intelligence: 2 }, rep: 1, response: {
+                text: "Seriously? You're such a nerd! ...no offense though.", options: [
+                    { text: "None taken! Knowledge is power.", effects: { intelligence: 1 }, rep: 1 },
+                    { text: "At least I'll pass the test.", effects: { charisma: 1 }, rep: 0 }
+                ]
+            }},
+            { text: "Yeah, let's skip!", effects: { charisma: 2, intelligence: -1 }, rep: -4, response: {
+                text: "For real? Alright, meet me by the back door at lunch!", options: [
+                    { text: "I'll be there!", effects: { happiness: 2, charisma: 1 }, rep: -2 },
+                    { text: "Actually, never mind. Too risky.", effects: { intelligence: 1 }, rep: 2 }
+                ]
+            }},
             { text: "At least it's almost over", effects: { happiness: 1 }, rep: 1 }
         ]},
         { text: "Want to study together for the exam?", options: [
-            { text: "Yes! Great idea!", effects: { intelligence: 3, charisma: 1 }, rep: 5, friend: true },
-            { text: "Nah, I'll wing it", effects: { charisma: 1 }, rep: -1 },
+            { text: "Yes! Great idea!", effects: { intelligence: 3, charisma: 1 }, rep: 5, friend: true, response: {
+                text: "Sweet! Library after school? I'll bring snacks!", options: [
+                    { text: "Perfect, see you there!", effects: { happiness: 1, intelligence: 1 }, rep: 2 },
+                    { text: "Make it your place, the library is boring.", effects: { charisma: 1 }, rep: 0 }
+                ]
+            }},
+            { text: "Nah, I'll wing it", effects: { charisma: 1 }, rep: -1, response: {
+                text: "Bold strategy... good luck with that!", options: [
+                    { text: "I always land on my feet.", effects: { charisma: 1 }, rep: 0 },
+                    { text: "Yeah I might regret this.", effects: { happiness: -1 }, rep: 1 }
+                ]
+            }},
             { text: "Study by yourself, loser", effects: {}, rep: -10, enemy: true }
         ]},
         { text: "There's a party this weekend!", options: [
-            { text: "I'll be there!", effects: { happiness: 3, charisma: 2 }, rep: 3, cost: 20 },
-            { text: "I need to study", effects: { intelligence: 2 }, rep: -1 },
-            { text: "Parties are lame", effects: {}, rep: -4 }
+            { text: "I'll be there!", effects: { happiness: 3, charisma: 2 }, rep: 3, cost: 20, response: {
+                text: "Awesome! It's gonna be epic! Bring your own drinks though.", options: [
+                    { text: "Say no more!", effects: { happiness: 1 }, rep: 1 },
+                    { text: "Who else is coming?", effects: { charisma: 1 }, rep: 1 }
+                ]
+            }},
+            { text: "I need to study", effects: { intelligence: 2 }, rep: -1, response: {
+                text: "You're no fun! But hey, good luck on the test.", options: [
+                    { text: "Thanks! Have fun at the party.", effects: { happiness: 1 }, rep: 2 },
+                    { text: "Whatever.", effects: {}, rep: -1 }
+                ]
+            }},
+            { text: "Parties are lame", effects: {}, rep: -4, response: {
+                text: "Wow okay... suit yourself. More fun for the rest of us.", options: [
+                    { text: "Fine, maybe I'll show up.", effects: { happiness: 1 }, rep: 2 },
+                    { text: "I said what I said.", effects: {}, rep: -1 }
+                ]
+            }}
         ]},
         { text: "Yo, look what I got from my cousin... don't tell anyone.", options: [
-            { text: "A switchblade?! Give it to me!", effects: { charisma: 1 }, rep: -5, giveSwitchblade: true },
-            { text: "Dude, you'll get expelled!", effects: { intelligence: 1 }, rep: 3 },
-            { text: "That's sick! Can I hold it?", effects: { happiness: 1 }, rep: -2 }
+            { text: "A switchblade?! Give it to me!", effects: { charisma: 1 }, rep: -5, giveSwitchblade: true, response: {
+                text: "Whoa easy! Alright fine, take it. But you didn't get it from me.", options: [
+                    { text: "I don't even know your name.", effects: { charisma: 1 }, rep: 0 },
+                    { text: "Thanks, I owe you one.", effects: {}, rep: 1 }
+                ]
+            }},
+            { text: "Dude, you'll get expelled!", effects: { intelligence: 1 }, rep: 3, response: {
+                text: "Relax! Nobody's gonna find out. You're not gonna snitch, right?", options: [
+                    { text: "Your secret's safe.", effects: { charisma: 1 }, rep: 2 },
+                    { text: "Just be careful, man.", effects: { intelligence: 1 }, rep: 1 }
+                ]
+            }},
+            { text: "That's sick! Can I hold it?", effects: { happiness: 1 }, rep: -2, response: {
+                text: "Careful with it! My cousin said it's real sharp.", options: [
+                    { text: "Can I keep it?", effects: { charisma: 1 }, rep: -3, giveSwitchblade: true },
+                    { text: "Okay that's enough, here.", effects: {}, rep: 1 }
+                ]
+            }}
         ]}
     ],
     'Professor': [
         { text: "Your thesis is showing real promise.", options: [
-            { text: "Thank you, professor!", effects: { intelligence: 3, happiness: 2 }, rep: 3 },
-            { text: "I've been working really hard", effects: { intelligence: 2 }, rep: 2 }
+            { text: "Thank you, professor!", effects: { intelligence: 3, happiness: 2 }, rep: 3, response: {
+                text: "Have you considered submitting it for publication? I could write you a recommendation.", options: [
+                    { text: "That would be amazing! Yes please!", effects: { intelligence: 2, happiness: 2 }, rep: 5 },
+                    { text: "I'll think about it.", effects: { intelligence: 1 }, rep: 1 }
+                ]
+            }},
+            { text: "I've been working really hard", effects: { intelligence: 2 }, rep: 2, response: {
+                text: "It shows. Keep at it and you'll go far in this field.", options: [
+                    { text: "That means a lot coming from you.", effects: { happiness: 2 }, rep: 3 },
+                    { text: "I plan to!", effects: { intelligence: 1 }, rep: 1 }
+                ]
+            }}
         ]}
     ],
     'Coworker': [
         { text: "Want to grab coffee?", options: [
-            { text: "Sure, my treat! ($5)", effects: { charisma: 2, happiness: 1 }, rep: 5, cost: 5, friend: true },
-            { text: "Yeah, but you're buying", effects: { charisma: 1 }, rep: -1 },
-            { text: "Go away, I'm busy", effects: { intelligence: 1 }, rep: -6 }
+            { text: "Sure, my treat! ($5)", effects: { charisma: 2, happiness: 1 }, rep: 5, cost: 5, friend: true, response: {
+                text: "Aw, you don't have to! But thanks. So, how's life treating you?", options: [
+                    { text: "Pretty good actually! Can't complain.", effects: { happiness: 1 }, rep: 1 },
+                    { text: "Could be better honestly...", effects: { charisma: 1 }, rep: 2 }
+                ]
+            }},
+            { text: "Yeah, but you're buying", effects: { charisma: 1 }, rep: -1, response: {
+                text: "Ha! Fine, but you owe me next time.", options: [
+                    { text: "Deal!", effects: { happiness: 1 }, rep: 2 },
+                    { text: "We'll see about that.", effects: { charisma: 1 }, rep: -1 }
+                ]
+            }},
+            { text: "Go away, I'm busy", effects: { intelligence: 1 }, rep: -6, response: {
+                text: "Jeez, someone woke up on the wrong side of the bed...", options: [
+                    { text: "Sorry, I'm just stressed.", effects: { charisma: 1 }, rep: 3 },
+                    { text: "You heard me.", effects: {}, rep: -3 }
+                ]
+            }}
         ]},
         { text: "Did you hear about the promotion opening?", options: [
-            { text: "May the best person win!", effects: { charisma: 2 }, rep: 5 },
-            { text: "It's mine. Back off.", effects: { charisma: -2 }, rep: -10, enemy: true },
+            { text: "May the best person win!", effects: { charisma: 2 }, rep: 5, response: {
+                text: "Agreed! Let's both give it our best shot. No hard feelings either way?", options: [
+                    { text: "Absolutely. May the best person win.", effects: { charisma: 1 }, rep: 3 },
+                    { text: "Sure... but I'm getting it.", effects: { charisma: 1 }, rep: -1 }
+                ]
+            }},
+            { text: "It's mine. Back off.", effects: { charisma: -2 }, rep: -10, enemy: true, response: {
+                text: "Wow... okay. We'll see about that.", options: [
+                    { text: "Yeah. We will.", effects: {}, rep: -2 },
+                    { text: "Sorry, that came out wrong.", effects: { charisma: 1 }, rep: 3 }
+                ]
+            }},
             { text: "I'm happy where I am", effects: { happiness: 2 }, rep: 2 }
         ]}
     ],
     'Boss': [
         { text: "I need that report done by end of day.", options: [
-            { text: "Consider it done!", effects: { intelligence: 1 }, rep: 3, money: 50 },
-            { text: "I'll need overtime pay...", effects: { charisma: 1 }, rep: -2, money: 80 },
-            { text: "Do it yourself!", effects: {}, rep: -15 }
+            { text: "Consider it done!", effects: { intelligence: 1 }, rep: 3, money: 50, response: {
+                text: "That's what I like to hear! Keep this up and good things will come your way.", options: [
+                    { text: "I appreciate that, boss.", effects: { happiness: 1 }, rep: 2 },
+                    { text: "I hope so!", effects: { happiness: 1 }, rep: 1 }
+                ]
+            }},
+            { text: "I'll need overtime pay...", effects: { charisma: 1 }, rep: -2, money: 80, response: {
+                text: "Fine. Double time. But it better be flawless.", options: [
+                    { text: "It will be. You can count on me.", effects: { intelligence: 1 }, rep: 3 },
+                    { text: "No promises.", effects: {}, rep: -3 }
+                ]
+            }},
+            { text: "Do it yourself!", effects: {}, rep: -15, response: {
+                text: "Excuse me?! We need to have a serious talk about your attitude.", options: [
+                    { text: "I'm sorry, I'm just having a bad day.", effects: { charisma: 1 }, rep: 5 },
+                    { text: "I said what I said.", effects: {}, rep: -5 }
+                ]
+            }}
         ]},
         { text: "Great quarter! Here's a bonus.", options: [
-            { text: "Thank you! I earned it!", effects: { happiness: 3 }, rep: 2, money: 200 },
-            { text: "I couldn't do it without the team", effects: { charisma: 3 }, rep: 8, money: 150, friend: true }
+            { text: "Thank you! I earned it!", effects: { happiness: 3 }, rep: 2, money: 200, response: {
+                text: "You did! And there's more where that came from if you keep performing.", options: [
+                    { text: "I'll keep grinding!", effects: { happiness: 1, intelligence: 1 }, rep: 2 },
+                    { text: "Music to my ears!", effects: { happiness: 2 }, rep: 1 }
+                ]
+            }},
+            { text: "I couldn't do it without the team", effects: { charisma: 3 }, rep: 8, money: 150, friend: true, response: {
+                text: "That kind of attitude is exactly why this team works so well. I respect that.", options: [
+                    { text: "Teamwork makes the dream work!", effects: { charisma: 1 }, rep: 2 },
+                    { text: "Thanks, boss. Means a lot.", effects: { happiness: 2 }, rep: 2 }
+                ]
+            }}
         ]}
     ],
     'Stranger': [
         { text: "Excuse me, do you have the time?", options: [
-            { text: "Sure! It's about noon.", effects: { charisma: 1 }, rep: 3 },
+            { text: "Sure! It's about noon.", effects: { charisma: 1 }, rep: 3, response: {
+                text: "Thanks so much! Have a great day!", options: [
+                    { text: "You too!", effects: { happiness: 1 }, rep: 1 },
+                    { text: "No problem.", effects: {}, rep: 0 }
+                ]
+            }},
             { text: "Get lost.", effects: {}, rep: -8 },
             { text: "Sorry, I'm in a hurry", effects: {}, rep: 0 }
         ]},
         { text: "Nice weather today, huh?", options: [
-            { text: "Beautiful day!", effects: { happiness: 1 }, rep: 2 },
+            { text: "Beautiful day!", effects: { happiness: 1 }, rep: 2, response: {
+                text: "Makes you want to just be outside all day! You from around here?", options: [
+                    { text: "Yeah, lived here my whole life!", effects: { charisma: 1 }, rep: 2, friend: true },
+                    { text: "Just passing through.", effects: {}, rep: 0 }
+                ]
+            }},
             { text: "Mind your own business", effects: {}, rep: -5 }
         ]}
     ],
     'Old Friend': [
         { text: "Remember when we were young? Those were the days...", options: [
-            { text: "Best years of my life!", effects: { happiness: 3 }, rep: 3 },
-            { text: "I think life keeps getting better", effects: { happiness: 2, intelligence: 1 }, rep: 5 },
+            { text: "Best years of my life!", effects: { happiness: 3 }, rep: 3, response: {
+                text: "Right?! We should hang out more like the old days. What do you say?", options: [
+                    { text: "Absolutely! Let's plan something!", effects: { happiness: 3, charisma: 2 }, rep: 5 },
+                    { text: "Yeah, we really should.", effects: { happiness: 1 }, rep: 2 }
+                ]
+            }},
+            { text: "I think life keeps getting better", effects: { happiness: 2, intelligence: 1 }, rep: 5, response: {
+                text: "That's a great way to look at it. You always were the optimist!", options: [
+                    { text: "Gotta stay positive!", effects: { happiness: 2 }, rep: 2 },
+                    { text: "Learned it from you!", effects: { charisma: 2 }, rep: 3 }
+                ]
+            }},
             { text: "I try not to look back", effects: {}, rep: -1 }
         ]}
     ],
     'Neighbor': [
         { text: "Lovely garden you've got!", options: [
-            { text: "Thanks! Want some tomatoes?", effects: { charisma: 2, happiness: 1 }, rep: 8, friend: true },
-            { text: "Stay off my lawn!", effects: {}, rep: -10, enemy: true }
+            { text: "Thanks! Want some tomatoes?", effects: { charisma: 2, happiness: 1 }, rep: 8, friend: true, response: {
+                text: "Oh yes please! I'll bring you some of my cookies in return!", options: [
+                    { text: "That sounds wonderful!", effects: { happiness: 2 }, rep: 3 },
+                    { text: "No need, happy to share!", effects: { charisma: 1 }, rep: 2 }
+                ]
+            }},
+            { text: "Stay off my lawn!", effects: {}, rep: -10, enemy: true, response: {
+                text: "Well! I was just trying to be friendly! Some neighbor you are.", options: [
+                    { text: "Sorry, I didn't mean it like that.", effects: { charisma: 1 }, rep: 5 },
+                    { text: "And stay off it!", effects: {}, rep: -3 }
+                ]
+            }}
         ]}
     ],
     'Grandchild': [
         { text: "Grandma/Grandpa! Tell me a story!", options: [
-            { text: "Let me tell you about when I was your age...", effects: { happiness: 5 }, rep: 5 },
-            { text: "How about we get ice cream? ($8)", effects: { happiness: 4, charisma: 2 }, rep: 5, cost: 8 }
+            { text: "Let me tell you about when I was your age...", effects: { happiness: 5 }, rep: 5, response: {
+                text: "Wow really?! Tell me more! What happened next?", options: [
+                    { text: "Well, one time I got into all sorts of trouble...", effects: { happiness: 3, charisma: 1 }, rep: 3 },
+                    { text: "Maybe another time, kiddo.", effects: { happiness: 1 }, rep: 0 }
+                ]
+            }},
+            { text: "How about we get ice cream? ($8)", effects: { happiness: 4, charisma: 2 }, rep: 5, cost: 8, response: {
+                text: "YAY! Can I get sprinkles?!", options: [
+                    { text: "You can get whatever you want!", effects: { happiness: 3 }, rep: 3 },
+                    { text: "Of course! All the sprinkles!", effects: { happiness: 2 }, rep: 2 }
+                ]
+            }}
         ]}
     ]
 };
@@ -262,8 +538,18 @@ LIFE.NPC_DIALOGUES = {
 LIFE.NPC_DIALOGUES['Dealer'] = [
     { text: "Psst... I got some items you won't find at any store. Interested?", options: [
         { text: "Show me what you got.", effects: {}, rep: -2, openDealer: true },
-        { text: "No thanks, I'm clean.", effects: { happiness: 1 }, rep: 2 },
-        { text: "I should report you!", effects: { charisma: 2 }, rep: 8 }
+        { text: "No thanks, I'm clean.", effects: { happiness: 1 }, rep: 2, response: {
+            text: "Suit yourself. You know where to find me if you change your mind.", options: [
+                { text: "I won't.", effects: { happiness: 1 }, rep: 2 },
+                { text: "Actually... wait. Show me.", effects: {}, rep: -3, openDealer: true }
+            ]
+        }},
+        { text: "I should report you!", effects: { charisma: 2 }, rep: 8, response: {
+            text: "Whoa whoa, let's not do anything crazy here. You didn't see nothing, alright?", options: [
+                { text: "Get out of here.", effects: { charisma: 1 }, rep: 3 },
+                { text: "Fine. But I'm watching you.", effects: { charisma: 1 }, rep: 2 }
+            ]
+        }}
     ]},
     { text: "Back again? I got fresh stock today.", options: [
         { text: "Let me see.", effects: {}, rep: -2, openDealer: true },
@@ -274,13 +560,38 @@ LIFE.NPC_DIALOGUES['Dealer'] = [
 // INMATE DIALOGUES
 LIFE.NPC_DIALOGUES['Inmate'] = [
     { text: "First time in here? You'll get used to it.", options: [
-        { text: "How long you been here?", effects: { charisma: 1 }, rep: 2 },
+        { text: "How long you been here?", effects: { charisma: 1 }, rep: 2, response: {
+            text: "Going on three years. Time moves different in here. Just keep your head down.", options: [
+                { text: "Three years? What'd you do?", effects: { charisma: 1 }, rep: 1, response: {
+                    text: "That's not something you ask people in here. Rule number one.", options: [
+                        { text: "Sorry, my bad.", effects: { intelligence: 1 }, rep: 2 },
+                        { text: "Fair enough.", effects: {}, rep: 1 }
+                    ]
+                }},
+                { text: "Thanks for the heads up.", effects: { intelligence: 1 }, rep: 2 }
+            ]
+        }},
         { text: "Leave me alone.", effects: {}, rep: -3 },
-        { text: "Any tips for surviving?", effects: { intelligence: 1 }, rep: 3 }
+        { text: "Any tips for surviving?", effects: { intelligence: 1 }, rep: 3, response: {
+            text: "Don't stare at anyone, don't take anything from anyone, and find someone to watch your back.", options: [
+                { text: "Would you watch my back?", effects: { charisma: 2 }, rep: 3, friend: true },
+                { text: "I'll keep that in mind.", effects: { intelligence: 1 }, rep: 1 }
+            ]
+        }}
     ]},
     { text: "Keep your head down and don't make enemies.", options: [
-        { text: "Thanks for the advice.", effects: { intelligence: 1 }, rep: 3 },
-        { text: "I can handle myself.", effects: { charisma: 1 }, rep: -2 }
+        { text: "Thanks for the advice.", effects: { intelligence: 1 }, rep: 3, response: {
+            text: "Don't mention it. Seriously. Don't mention it to anyone.", options: [
+                { text: "Got it. Lips sealed.", effects: { intelligence: 1 }, rep: 2 },
+                { text: "You're alright, you know that?", effects: { charisma: 1 }, rep: 2 }
+            ]
+        }},
+        { text: "I can handle myself.", effects: { charisma: 1 }, rep: -2, response: {
+            text: "Ha! That's what they all say. We'll see how long that lasts.", options: [
+                { text: "Watch me.", effects: { charisma: 1 }, rep: -1 },
+                { text: "Maybe you're right...", effects: { intelligence: 1 }, rep: 2 }
+            ]
+        }}
     ]}
 ];
 
@@ -332,18 +643,6 @@ LIFE.dialogue.selectOption = function(idx) {
 
     var opt = dlg.options[idx];
     LIFE.sounds.select();
-
-    // goodbye ends conversation immediately
-    if (opt.goodbye) {
-        LIFE.dialogue._endConversation = true;
-        LIFE.dialogue.showing = 'response';
-        LIFE.dialogue.responseTimer = 0.5;
-        var gel = LIFE.dialogue.elements;
-        gel.options.style.display = 'none';
-        gel.response.style.display = 'block';
-        gel.response.innerHTML = '<div class="dlgYouLabel">You:</div>' + opt.text;
-        return;
-    }
 
     if (opt.cost && opt.cost > 0) {
         if (!LIFE.economy.canAfford(opt.cost)) {
@@ -547,11 +846,8 @@ LIFE.dialogue.selectOption = function(idx) {
         LIFE.dialogue.decisionsMade[LIFE.state.age] = opt.tag || idx;
     }
 
-    // determine if conversation should end after this response
-    var shouldEnd = dlg.isDecision || opt.goodbye || opt.hospitalExit || opt.hospital ||
-        opt.marry || opt.haveKid || opt.kids || opt.career !== undefined ||
-        opt.setGender || opt.childName || opt.giveSwitchblade || opt.rehab;
-    LIFE.dialogue._endConversation = shouldEnd;
+    // store selected option for dialogue tree chaining
+    LIFE.dialogue._selectedOpt = opt;
 
     // show player's response then continue or close
     LIFE.dialogue.showing = 'response';
@@ -581,13 +877,27 @@ LIFE.dialogue.update = function(dt) {
     if (LIFE.dialogue.showing === 'response') {
         LIFE.dialogue.responseTimer -= dt;
         if (LIFE.dialogue.responseTimer <= 0) {
-            // Skyrim-style: continue conversation if possible
-            if (!LIFE.dialogue._endConversation && LIFE.dialogue.npc &&
-                LIFE.dialogue.npc.alive && !LIFE.dialogue.blocking) {
-                LIFE.dialogue._endConversation = false;
-                LIFE.dialogue.continueConversation();
+            var selOpt = LIFE.dialogue._selectedOpt;
+            LIFE.dialogue._selectedOpt = null;
+            // chain to follow-up if option has a response tree
+            if (selOpt && selOpt.response && LIFE.dialogue.npc && LIFE.dialogue.npc.alive) {
+                var resp = selOpt.response;
+                var spkName = LIFE.dialogue.npc.name || LIFE.dialogue.npc.type;
+                LIFE.dialogue.showing = 'npc';
+                LIFE.dialogue.current = { speaker: spkName, text: resp.text, options: resp.options, isDecision: false };
+                LIFE.dialogue.fullText = resp.text;
+                LIFE.dialogue.displayText = '';
+                LIFE.dialogue.textIndex = 0;
+                LIFE.dialogue.textTimer = 0;
+                LIFE.dialogue.selectedOption = -1;
+                LIFE.dialogue.responseTimer = 0;
+                var cEl = LIFE.dialogue.elements;
+                cEl.name.textContent = spkName;
+                cEl.text.textContent = '';
+                cEl.options.innerHTML = '';
+                cEl.options.style.display = 'none';
+                cEl.response.style.display = 'none';
             } else {
-                LIFE.dialogue._endConversation = false;
                 LIFE.dialogue.close();
             }
         }
@@ -637,58 +947,138 @@ LIFE.dialogue.showOptions = function() {
 LIFE.NPC_FRIEND_DIALOGUES = {
     'Kid': [
         { text: "Hey bestie! Wanna play tag?", options: [
-            { text: "You're it!", effects: { happiness: 3, health: 1 }, rep: 3 },
-            { text: "Let's go on an adventure!", effects: { happiness: 2, charisma: 1 }, rep: 2 }
+            { text: "You're it!", effects: { happiness: 3, health: 1 }, rep: 3, response: {
+                text: "No fair, you always tag me first! Okay, you better run!", options: [
+                    { text: "Catch me if you can!", effects: { health: 1, happiness: 2 }, rep: 1 },
+                    { text: "I'm too fast for you!", effects: { happiness: 1, charisma: 1 }, rep: 0 }
+                ]
+            }},
+            { text: "Let's go on an adventure!", effects: { happiness: 2, charisma: 1 }, rep: 2, response: {
+                text: "Yeah! Let's pretend we're explorers! The playground is our jungle!", options: [
+                    { text: "I'll be the leader! Follow me!", effects: { charisma: 2 }, rep: 1 },
+                    { text: "We can take turns leading!", effects: { happiness: 1 }, rep: 2 }
+                ]
+            }}
         ]},
         { text: "I saved you a seat at lunch!", options: [
-            { text: "Thanks! You're the best!", effects: { happiness: 2 }, rep: 3 },
+            { text: "Thanks! You're the best!", effects: { happiness: 2 }, rep: 3, response: {
+                text: "I also have extra cookies! Want one?", options: [
+                    { text: "Yes please! You're awesome!", effects: { happiness: 2 }, rep: 2 },
+                    { text: "Only if you have chocolate chip!", effects: { happiness: 1 }, rep: 1 }
+                ]
+            }},
             { text: "Cool, let's eat!", effects: { happiness: 1 }, rep: 1 }
         ]}
     ],
     'Student': [
         { text: "Hey! Want to hang out after class?", options: [
-            { text: "Definitely! Let's go!", effects: { happiness: 3, charisma: 1 }, rep: 3 },
-            { text: "Can't today, but soon!", effects: { happiness: 1 }, rep: 1 }
+            { text: "Definitely! Let's go!", effects: { happiness: 3, charisma: 1 }, rep: 3, response: {
+                text: "Sweet! Where should we go? Mall? Park? Your call!", options: [
+                    { text: "Mall! I need new stuff.", effects: { happiness: 1, charisma: 1 }, rep: 1 },
+                    { text: "Let's just walk around and chill.", effects: { happiness: 2 }, rep: 2 }
+                ]
+            }},
+            { text: "Can't today, but soon!", effects: { happiness: 1 }, rep: 1, response: {
+                text: "No worries! Text me when you're free. We'll figure something out!", options: [
+                    { text: "For sure! This weekend maybe?", effects: { happiness: 1 }, rep: 2 },
+                    { text: "Will do!", effects: {}, rep: 1 }
+                ]
+            }}
         ]},
         { text: "Thanks for being a good friend. It means a lot.", options: [
-            { text: "You too! We're in this together!", effects: { happiness: 3, charisma: 2 }, rep: 5 },
-            { text: "Don't get mushy on me!", effects: { happiness: 1 }, rep: 0 }
+            { text: "You too! We're in this together!", effects: { happiness: 3, charisma: 2 }, rep: 5, response: {
+                text: "For real. I don't know what I'd do without you in this school.", options: [
+                    { text: "Same here, honestly.", effects: { happiness: 2 }, rep: 3 },
+                    { text: "We're gonna make it through!", effects: { happiness: 1, charisma: 1 }, rep: 2 }
+                ]
+            }},
+            { text: "Don't get mushy on me!", effects: { happiness: 1 }, rep: 0, response: {
+                text: "Ha! Fine fine. But for real though... thanks.", options: [
+                    { text: "Anytime. That's what friends are for.", effects: { happiness: 1 }, rep: 3 },
+                    { text: "Yeah yeah, I know.", effects: { happiness: 1 }, rep: 1 }
+                ]
+            }}
         ]},
         { text: "Want to study together? We both do better that way!", options: [
-            { text: "Good idea! Let's hit the library!", effects: { intelligence: 3, happiness: 1 }, rep: 3 },
-            { text: "Sure, your place or mine?", effects: { intelligence: 2 }, rep: 2 }
+            { text: "Good idea! Let's hit the library!", effects: { intelligence: 3, happiness: 1 }, rep: 3, response: {
+                text: "I'll grab us some snacks on the way! Brain food, you know?", options: [
+                    { text: "You're a lifesaver!", effects: { happiness: 1 }, rep: 2 },
+                    { text: "Focus first, snacks later!", effects: { intelligence: 1 }, rep: 0 }
+                ]
+            }},
+            { text: "Sure, your place or mine?", effects: { intelligence: 2 }, rep: 2, response: {
+                text: "Mine! My mom made snacks. She always makes extra when you come over.", options: [
+                    { text: "Your mom is the best!", effects: { happiness: 2 }, rep: 2 },
+                    { text: "Sweet, let's go!", effects: { happiness: 1 }, rep: 1 }
+                ]
+            }}
         ]}
     ],
     'Stranger': [
         { text: "Oh hey, it's you again! Good to see a familiar face!", options: [
-            { text: "Same here! How've you been?", effects: { happiness: 1, charisma: 1 }, rep: 3 },
+            { text: "Same here! How've you been?", effects: { happiness: 1, charisma: 1 }, rep: 3, response: {
+                text: "Can't complain! Life's treating me well. We should grab a coffee sometime!", options: [
+                    { text: "I'd like that!", effects: { happiness: 2, charisma: 1 }, rep: 3 },
+                    { text: "Maybe! See you around!", effects: { happiness: 1 }, rep: 1 }
+                ]
+            }},
             { text: "Hey! Small world!", effects: { happiness: 1 }, rep: 2 }
         ]}
     ],
     'Neighbor': [
         { text: "Hey neighbor! I baked too many cookies, want some?", options: [
-            { text: "You're the best neighbor ever!", effects: { happiness: 3 }, rep: 5 },
+            { text: "You're the best neighbor ever!", effects: { happiness: 3 }, rep: 5, response: {
+                text: "Oh stop it! But seriously, come over anytime. My door's always open!", options: [
+                    { text: "Same goes for you!", effects: { charisma: 1 }, rep: 3 },
+                    { text: "I'll take you up on that!", effects: { happiness: 1 }, rep: 1 }
+                ]
+            }},
             { text: "Thanks! I'll bring dessert next time!", effects: { happiness: 2, charisma: 1 }, rep: 4 }
         ]},
         { text: "Want to come over for a barbecue this weekend?", options: [
-            { text: "I'll bring the drinks!", effects: { happiness: 3, charisma: 2 }, rep: 5, cost: 20 },
+            { text: "I'll bring the drinks!", effects: { happiness: 3, charisma: 2 }, rep: 5, cost: 20, response: {
+                text: "Perfect! The more the merrier! I'm grilling burgers and ribs!", options: [
+                    { text: "Can't wait!", effects: { happiness: 2 }, rep: 1 },
+                    { text: "Should I invite anyone else?", effects: { charisma: 1 }, rep: 2 }
+                ]
+            }},
             { text: "Sounds fun! Count me in!", effects: { happiness: 2 }, rep: 3 }
         ]}
     ],
     'Coworker': [
         { text: "Hey buddy! Want to grab lunch together?", options: [
-            { text: "My treat today! ($15)", effects: { happiness: 2, charisma: 2 }, rep: 5, cost: 15 },
+            { text: "My treat today! ($15)", effects: { happiness: 2, charisma: 2 }, rep: 5, cost: 15, response: {
+                text: "You're too generous! I'll get it next time. What are you in the mood for?", options: [
+                    { text: "Anything, I'm starving!", effects: { happiness: 1 }, rep: 1 },
+                    { text: "Surprise me!", effects: { charisma: 1 }, rep: 2 }
+                ]
+            }},
             { text: "Sure, let's go!", effects: { happiness: 1 }, rep: 2 }
         ]},
         { text: "I put in a good word for you with the boss!", options: [
-            { text: "You're a real one! Thanks!", effects: { happiness: 3, charisma: 1 }, rep: 5 },
+            { text: "You're a real one! Thanks!", effects: { happiness: 3, charisma: 1 }, rep: 5, response: {
+                text: "Hey, you deserve it! Just remember me when you're running the place!", options: [
+                    { text: "Ha! I'll make you VP!", effects: { charisma: 2, happiness: 1 }, rep: 3 },
+                    { text: "I won't forget this!", effects: { happiness: 1 }, rep: 2 }
+                ]
+            }},
             { text: "I appreciate that!", effects: { happiness: 2 }, rep: 3 }
         ]}
     ],
     'Inmate': [
         { text: "Hey, I got your back in here.", options: [
-            { text: "Same here. We stick together.", effects: { charisma: 2, happiness: 1 }, rep: 3 },
-            { text: "Thanks. I needed that.", effects: { happiness: 2 }, rep: 2 }
+            { text: "Same here. We stick together.", effects: { charisma: 2, happiness: 1 }, rep: 3, response: {
+                text: "That's what it takes in here. Loyalty. Don't forget that.", options: [
+                    { text: "Never.", effects: { charisma: 1 }, rep: 2 },
+                    { text: "I won't. You can count on me.", effects: { happiness: 1 }, rep: 2 }
+                ]
+            }},
+            { text: "Thanks. I needed that.", effects: { happiness: 2 }, rep: 2, response: {
+                text: "We all need someone in here. Just stay out of trouble and we'll be fine.", options: [
+                    { text: "Doing my best.", effects: { happiness: 1 }, rep: 1 },
+                    { text: "Easier said than done...", effects: {}, rep: 0 }
+                ]
+            }}
         ]}
     ]
 };
@@ -759,8 +1149,23 @@ LIFE.dialogue.talkToNPC = function(npc) {
 
         if (alreadyHas) {
             LIFE.dialogue.open(speakerName, "You already work here! Keep up the good work.", [
-                { text: "Thanks! Will do!", effects: { happiness: 2 }, rep: 2 },
-                { text: "Actually, I quit.", effects: { happiness: -3 }, rep: -5, career: 'none' }
+                { text: "Thanks! Will do!", effects: { happiness: 2 }, rep: 2, response: {
+                    text: "That's the attitude! Big things are coming your way if you keep this up.", options: [
+                        { text: "I appreciate that!", effects: { happiness: 1 }, rep: 1 },
+                        { text: "Any chance of a raise?", effects: { charisma: 1 }, rep: -1, response: {
+                            text: "Ha! Always pushing. We'll see at the next review.", options: [
+                                { text: "Fair enough!", effects: { happiness: 1 }, rep: 1 },
+                                { text: "I'll hold you to that.", effects: { charisma: 1 }, rep: 0 }
+                            ]
+                        }}
+                    ]
+                }},
+                { text: "Actually, I quit.", effects: { happiness: -3 }, rep: -5, career: 'none', response: {
+                    text: "What?! Are you serious? Well... if that's your decision. Good luck out there.", options: [
+                        { text: "Thanks. Time for something new.", effects: { charisma: 1 }, rep: 0 },
+                        { text: "See ya.", effects: {}, rep: -2 }
+                    ]
+                }}
             ], true);
             return;
         }
@@ -776,13 +1181,34 @@ LIFE.dialogue.talkToNPC = function(npc) {
 
         if (!meetsReqs) {
             LIFE.dialogue.open(speakerName, "Sorry, we can't hire you right now. " + reqText + ".", [
-                { text: "I'll work on it and come back.", effects: { intelligence: 1 }, rep: 2 },
-                { text: "That's unfair!", effects: {}, rep: -3 }
+                { text: "I'll work on it and come back.", effects: { intelligence: 1 }, rep: 2, response: {
+                    text: "That's the spirit! We'd love to have you when you're ready.", options: [
+                        { text: "I'll be back!", effects: { happiness: 1 }, rep: 2 },
+                        { text: "Thanks for your time.", effects: {}, rep: 1 }
+                    ]
+                }},
+                { text: "That's unfair!", effects: {}, rep: -3, response: {
+                    text: "I'm sorry, I don't make the rules. Come back when you meet the requirements.", options: [
+                        { text: "Fine.", effects: {}, rep: -1 },
+                        { text: "I understand. Thanks anyway.", effects: { charisma: 1 }, rep: 2 }
+                    ]
+                }}
             ], true);
         } else {
             LIFE.dialogue.open(speakerName, "We're hiring for " + career.title + "! Pay is $" + career.income + "/work. Interested?", [
-                { text: "Yes! I'll take the job!", effects: { happiness: 5 }, rep: 5, career: npc.careerType },
-                { text: "What are the benefits?", effects: { intelligence: 1 }, rep: 1 },
+                { text: "Yes! I'll take the job!", effects: { happiness: 5 }, rep: 5, career: npc.careerType, response: {
+                    text: "Welcome aboard! We're glad to have you. Report in tomorrow and we'll get you started!", options: [
+                        { text: "I won't let you down!", effects: { happiness: 2 }, rep: 2 },
+                        { text: "Looking forward to it!", effects: { happiness: 1 }, rep: 1 }
+                    ]
+                }},
+                { text: "What are the benefits?", effects: { intelligence: 1 }, rep: 1, response: {
+                    text: "Great question! We offer health insurance, paid time off, and room for advancement. The pay is $" + career.income + " per shift. What do you say?", options: [
+                        { text: "I'm in! Sign me up!", effects: { happiness: 5 }, rep: 5, career: npc.careerType },
+                        { text: "Let me think about it.", effects: {}, rep: 0 },
+                        { text: "Not worth it.", effects: {}, rep: -3 }
+                    ]
+                }},
                 { text: "No thanks, not for me.", effects: {}, rep: 0 }
             ], true);
         }
@@ -795,22 +1221,25 @@ LIFE.dialogue.talkToNPC = function(npc) {
 
     LIFE.dialogue.npc = npc;
 
-    // helper to append [End conversation] to options
-    var addGoodbye = function(opts) {
-        var copy = opts.slice();
-        copy.push({ text: "[End conversation]", effects: {}, goodbye: true });
-        return copy;
-    };
-
     // feared reputation override
     if (LIFE.state.reputation <= -40 && type !== 'Mom' && type !== 'Dad' && type !== 'Dealer') {
         var fearDialogue = { text: "Stay away from me! I've heard about you...", options: [
-            { text: "I'm not that bad, really.", effects: { charisma: 1 }, rep: 3 },
+            { text: "I'm not that bad, really.", effects: { charisma: 1 }, rep: 3, response: {
+                text: "Hmph... actions speak louder than words.", options: [
+                    { text: "Give me a chance.", effects: { charisma: 1 }, rep: 3 },
+                    { text: "Forget it then.", effects: {}, rep: -2 }
+                ]
+            }},
             { text: "You should be afraid.", effects: {}, rep: -8, enemy: true },
-            { text: "I'm trying to change...", effects: { happiness: 1 }, rep: 5 }
+            { text: "I'm trying to change...", effects: { happiness: 1 }, rep: 5, response: {
+                text: "We'll see about that... talk is cheap.", options: [
+                    { text: "I mean it. Watch me.", effects: { charisma: 1 }, rep: 3 },
+                    { text: "Whatever.", effects: {}, rep: -1 }
+                ]
+            }}
         ]};
         if (Math.random() < 0.5) {
-            LIFE.dialogue.open(speakerName, fearDialogue.text, addGoodbye(fearDialogue.options), false);
+            LIFE.dialogue.open(speakerName, fearDialogue.text, fearDialogue.options, false);
             return;
         }
     }
@@ -818,11 +1247,21 @@ LIFE.dialogue.talkToNPC = function(npc) {
     // enemy dialogue
     if (relLevel <= -30) {
         var enemyDlg = { text: "I have nothing to say to you.", options: [
-            { text: "I'm sorry for what happened.", effects: { charisma: 1 }, rep: 5 },
+            { text: "I'm sorry for what happened.", effects: { charisma: 1 }, rep: 5, response: {
+                text: "...I'll believe it when I see it.", options: [
+                    { text: "Fair enough. I'll prove it.", effects: { charisma: 1 }, rep: 3 },
+                    { text: "Fine, be that way.", effects: {}, rep: -2 }
+                ]
+            }},
             { text: "The feeling's mutual.", effects: {}, rep: -3 },
-            { text: "Can we start over?", effects: { happiness: 1 }, rep: 8 }
+            { text: "Can we start over?", effects: { happiness: 1 }, rep: 8, response: {
+                text: "Start over? After everything? ...I don't know.", options: [
+                    { text: "Please. I've changed.", effects: { charisma: 2 }, rep: 5 },
+                    { text: "Okay, forget I asked.", effects: {}, rep: -1 }
+                ]
+            }}
         ]};
-        LIFE.dialogue.open(speakerName, enemyDlg.text, addGoodbye(enemyDlg.options), false);
+        LIFE.dialogue.open(speakerName, enemyDlg.text, enemyDlg.options, false);
         return;
     }
 
@@ -841,7 +1280,7 @@ LIFE.dialogue.talkToNPC = function(npc) {
         if (LIFE.state.married && LIFE.state.spouseName === npc.name && LIFE.state.age >= 22) {
             romOptions.push({ text: "Want to start a family?", effects: { happiness: 5 }, rep: 5, haveKid: true });
         }
-        LIFE.dialogue.open(speakerName, romDlg.text, addGoodbye(romOptions), false);
+        LIFE.dialogue.open(speakerName, romDlg.text, romOptions, false);
         LIFE.state.romanceLevel = Math.min(100, LIFE.state.romanceLevel + romDlg.romance * 0.3);
         return;
     }
@@ -855,7 +1294,7 @@ LIFE.dialogue.talkToNPC = function(npc) {
         if (LIFE.canFlirtWith(npc)) {
             LIFE.getFlirtOptions(npc.name).forEach(function(fo) { fOpts.push(fo); });
         }
-        LIFE.dialogue.open(speakerName, fdlg.text, addGoodbye(fOpts), false);
+        LIFE.dialogue.open(speakerName, fdlg.text, fOpts, false);
         return;
     }
 
@@ -873,7 +1312,7 @@ LIFE.dialogue.talkToNPC = function(npc) {
         LIFE.getFlirtOptions(npc.name).forEach(function(fo) { finalOpts.push(fo); });
     }
 
-    LIFE.dialogue.open(speakerName, dlg.text, addGoodbye(finalOpts), false);
+    LIFE.dialogue.open(speakerName, dlg.text, finalOpts, false);
 };
 
 // Child naming dialogue
@@ -997,115 +1436,65 @@ LIFE.dialogue.openHospitalDialogue = function(reason) {
 // NPC dialogues for Doctor and Nurse (when talking to them manually)
 LIFE.NPC_DIALOGUES['Doctor'] = [
     { text: "How are you feeling? Any pain or discomfort?", options: [
-        { text: "A little sore, but okay", effects: { health: 3, happiness: 1 }, rep: 1 },
+        { text: "A little sore, but okay", effects: { health: 3, happiness: 1 }, rep: 1, response: {
+            text: "That's normal. Give it a day or two and you should feel much better. Any questions?", options: [
+                { text: "How long do I need to stay?", effects: { happiness: 1 }, rep: 1, response: {
+                    text: "You should be good to go soon. Just take it easy out there.", options: [
+                        { text: "Thanks, doc. I'm ready to leave.", effects: { happiness: 1 }, hospitalExit: true },
+                        { text: "I'll rest a bit more first.", effects: { health: 2 }, rep: 1 }
+                    ]
+                }},
+                { text: "No, I'm good. Thanks.", effects: {}, rep: 1 }
+            ]
+        }},
         { text: "When can I leave?", effects: { happiness: 2 }, hospitalExit: true },
-        { text: "Can you give me something for the pain? ($50)", effects: { health: 5, happiness: 3 }, cost: 50 }
+        { text: "Can you give me something for the pain? ($50)", effects: { health: 5, happiness: 3 }, cost: 50, response: {
+            text: "Here you go. Take these with food and get plenty of rest.", options: [
+                { text: "Will do. Am I good to leave?", effects: { happiness: 1 }, hospitalExit: true },
+                { text: "Thanks, doc.", effects: { happiness: 1 }, rep: 1 }
+            ]
+        }}
     ]},
     { text: "Your vitals are looking better. Rest is the best medicine.", options: [
-        { text: "Thanks, doc", effects: { health: 2, happiness: 2 }, rep: 2 },
+        { text: "Thanks, doc", effects: { health: 2, happiness: 2 }, rep: 2, response: {
+            text: "Of course. Take care of yourself out there. And don't hesitate to come back if anything changes.", options: [
+                { text: "I will. Thanks for everything.", effects: { happiness: 1 }, rep: 2 },
+                { text: "Hopefully I won't need to!", effects: { happiness: 1 }, rep: 1 }
+            ]
+        }},
         { text: "I feel ready to go", effects: { happiness: 1 }, hospitalExit: true }
     ]}
 ];
 LIFE.NPC_DIALOGUES['Nurse'] = [
     { text: "Can I get you anything? Water? An extra blanket?", options: [
-        { text: "Some water would be great", effects: { health: 2, happiness: 2 }, rep: 2 },
+        { text: "Some water would be great", effects: { health: 2, happiness: 2 }, rep: 2, response: {
+            text: "Here you go! Let me know if you need anything else. The doctor will check on you soon.", options: [
+                { text: "Thank you so much!", effects: { happiness: 1 }, rep: 2 },
+                { text: "When can I see the doctor?", effects: {}, rep: 1, response: {
+                    text: "Shouldn't be long now! Just sit tight.", options: [
+                        { text: "Alright, thanks.", effects: { happiness: 1 }, rep: 1 },
+                        { text: "Okay.", effects: {}, rep: 0 }
+                    ]
+                }}
+            ]
+        }},
         { text: "I'm good, thanks", effects: { happiness: 1 }, rep: 1 }
     ]},
     { text: "Time for your medication!", options: [
-        { text: "Okay, give it here", effects: { health: 5 }, rep: 1 },
-        { text: "Do I have to?", effects: { health: 2, happiness: -1 }, rep: -1 }
+        { text: "Okay, give it here", effects: { health: 5 }, rep: 1, response: {
+            text: "There you go! You should start feeling better in about 20 minutes.", options: [
+                { text: "Thanks, nurse.", effects: { happiness: 1 }, rep: 1 },
+                { text: "Can't wait.", effects: {}, rep: 0 }
+            ]
+        }},
+        { text: "Do I have to?", effects: { health: 2, happiness: -1 }, rep: -1, response: {
+            text: "Doctor's orders! Trust me, you'll feel a lot better after.", options: [
+                { text: "Fine, give it here.", effects: { health: 3 }, rep: 1 },
+                { text: "Ugh, okay...", effects: { health: 2 }, rep: 0 }
+            ]
+        }}
     ]}
 ];
-
-// ============================================================
-// SKYRIM-STYLE CONVERSATION CONTINUATION
-// ============================================================
-LIFE.dialogue.continueConversation = function() {
-    var npc = LIFE.dialogue.npc;
-    if (!npc || !npc.alive) { LIFE.dialogue.close(); return; }
-
-    var type = npc.type;
-    var speakerName = npc.name || type;
-
-    // gather all available dialogues for this NPC
-    var pool = [];
-    var dialogues = LIFE.NPC_DIALOGUES[type];
-    if (dialogues) {
-        for (var i = 0; i < dialogues.length; i++) pool.push(dialogues[i]);
-    }
-
-    // add friend dialogues if relationship is high
-    var rel = LIFE.state.relationships[npc.name];
-    var relLevel = rel ? rel.level : 0;
-    if (relLevel >= 15 && LIFE.NPC_FRIEND_DIALOGUES[type]) {
-        var fDlgs = LIFE.NPC_FRIEND_DIALOGUES[type];
-        for (var j = 0; j < fDlgs.length; j++) pool.push(fDlgs[j]);
-    }
-
-    // romance partner gets romance dialogues
-    if (LIFE.state.romanceTarget === npc.name && LIFE.state.romanceLevel >= 30) {
-        var romDlg = LIFE.ROMANCE_DIALOGUES[Math.floor(Math.random() * LIFE.ROMANCE_DIALOGUES.length)];
-        pool.push({
-            text: romDlg.text,
-            options: [
-                { text: "I feel the same way!", effects: { happiness: 5 }, rep: 3 },
-                { text: "You're so sweet!", effects: { happiness: 3, charisma: 1 }, rep: 2 }
-            ]
-        });
-    }
-
-    if (pool.length === 0) {
-        LIFE.dialogue.close();
-        return;
-    }
-
-    // pick a random dialogue from pool
-    var dlg = pool[Math.floor(Math.random() * pool.length)];
-
-    // build options from the chosen dialogue
-    var options = [];
-    for (var k = 0; k < dlg.options.length; k++) {
-        options.push(dlg.options[k]);
-    }
-
-    // add flirt options if eligible
-    if (LIFE.canFlirtWith(npc)) {
-        var flirtOpts = LIFE.getFlirtOptions(npc.name);
-        options.push(flirtOpts[0]);
-    }
-
-    // add propose/kids options if romantic partner
-    if (LIFE.state.romanceLevel >= 70 && !LIFE.state.married &&
-        LIFE.state.age >= 20 && LIFE.state.romanceTarget === npc.name) {
-        options.push({ text: "Will you marry me? ($3,000)", effects: { happiness: 15 }, rep: 10, cost: 3000, marry: npc.name });
-    }
-    if (LIFE.state.married && LIFE.state.spouseName === npc.name && LIFE.state.age >= 22) {
-        options.push({ text: "Want to start a family?", effects: { happiness: 5 }, rep: 5, haveKid: true });
-    }
-
-    // always add goodbye option
-    options.push({ text: "[End conversation]", effects: {}, goodbye: true });
-
-    // set up the new dialogue without closing (preserve npc reference)
-    LIFE.dialogue.active = true;
-    LIFE.dialogue.blocking = false;
-    LIFE.dialogue.showing = 'npc';
-    LIFE.dialogue.current = { speaker: speakerName, text: dlg.text, options: options, isDecision: false };
-    LIFE.dialogue.fullText = dlg.text;
-    LIFE.dialogue.displayText = '';
-    LIFE.dialogue.textIndex = 0;
-    LIFE.dialogue.textTimer = 0;
-    LIFE.dialogue.selectedOption = -1;
-    LIFE.dialogue.responseTimer = 0;
-
-    var el = LIFE.dialogue.elements;
-    el.name.textContent = speakerName;
-    el.name.style.color = '#4fc3f7';
-    el.text.textContent = '';
-    el.options.innerHTML = '';
-    el.options.style.display = 'none';
-    el.response.style.display = 'none';
-};
 
 LIFE.dialogue.triggerDecision = function(age) {
     var dec = LIFE.DECISIONS[age];
