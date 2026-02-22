@@ -166,20 +166,37 @@ LIFE.performAction = function(idx) {
 
                 if (Math.random() < 0.4) state.enemies++;
 
-                // NPC FIGHTS BACK - family less likely to fight back
-                var fightBackChance = isFamily ? 0.2 : 0.5;
+                // NPC FIGHTS BACK - depends on type, relationship, and how many times attacked
+                var fightBackChance = isFamily ? 0.2 : 0.6;
+                if (npc.type === 'Inmate') fightBackChance = 0.85;
+                if (npc.type === 'Dealer') fightBackChance = 0.7;
+                // NPCs you've attacked before are more likely to fight back
+                var prevRel = LIFE.state.relationships[npc.name];
+                if (prevRel && prevRel.level <= -30) fightBackChance = Math.min(0.9, fightBackChance + 0.3);
                 if (npc.alive && Math.random() < fightBackChance) {
                     var retalDmg = 5;
                     if (npc.type === 'Boss') retalDmg = 12;
                     else if (npc.type === 'Police') retalDmg = 15;
+                    else if (npc.type === 'Inmate') retalDmg = 14;
+                    else if (npc.type === 'Dealer') retalDmg = 10;
                     else if (isVulnerable) retalDmg = 1;
                     else if (npc.type === 'Stranger') retalDmg = 8;
+                    else if (npc.type === 'Student') retalDmg = 6;
                     else if (npc.type === 'Coworker') retalDmg = 7;
                     else if (npc.type === 'Mom' || npc.type === 'Dad') retalDmg = 6;
                     else if (npc.type === 'Spouse') retalDmg = 7;
+                    else if (npc.type === 'Old Friend') retalDmg = 6;
+                    else if (npc.type === 'Neighbor') retalDmg = 7;
+                    // Stronger retaliation if NPC has been attacked before
+                    if (prevRel && prevRel.level <= -50) retalDmg = Math.floor(retalDmg * 1.5);
                     setTimeout(function() {
-                        if (state.gamePhase === 'playing') {
-                            LIFE.damagePlayer(retalDmg, npc.type + ' fought back');
+                        if (state.gamePhase === 'playing' && npc.alive) {
+                            LIFE.damagePlayer(retalDmg, npc.name + ' fought back');
+                            // Attacked NPC might call for help
+                            if (!npc.isPolice && Math.random() < 0.3) {
+                                LIFE.ui.showPopup(npc.name + ' screams for help!', '#ff9800');
+                                LIFE.addWanted(1);
+                            }
                         }
                     }, 400);
                 }
@@ -198,19 +215,25 @@ LIFE.checkWitnesses = function(victim) {
     var player = LIFE.player;
     if (!player) return;
     var witnessCount = 0;
-    LIFE.npcs.forEach(function(npc) {
-        if (!npc.alive || npc === victim) return;
+    var allNPCs = LIFE.getAllNPCs();
+    for (var i = 0; i < allNPCs.length; i++) {
+        var npc = allNPCs[i];
+        if (!npc.alive || npc === victim) continue;
         var dx = npc.char.group.position.x - player.group.position.x;
         var dz = npc.char.group.position.z - player.group.position.z;
         var dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist < 12) {
+        if (dist < 15) {
             witnessCount++;
-            npc.fleeing = true;
-            npc.fleeTimer = 5 + Math.random() * 3;
+            if (!npc.isPolice) {
+                npc.fleeing = true;
+                npc.fleeTimer = 5 + Math.random() * 3;
+            }
+            // Witnesses remember: relationship drops
+            LIFE.updateRelationship(npc.name, -10);
         }
-    });
+    }
     if (witnessCount > 0 && !victim.isPolice) {
-        var extra = Math.min(2, Math.floor(witnessCount / 2));
+        var extra = Math.min(3, Math.floor(witnessCount / 2));
         if (extra > 0) LIFE.addWanted(extra);
     }
 };

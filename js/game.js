@@ -224,6 +224,29 @@ LIFE.news.addGameNews = function() {
     if (state.drugUses > 3 && Math.random() < 0.2) {
         LIFE.news.add('Health officials warn about rising substance abuse rates.', 'crime');
     }
+    // Career-specific news
+    if (state.career === 'doctor' || state.career === 'surgeon') {
+        if (Math.random() < 0.15) LIFE.news.add('Hospital reports record patient satisfaction scores.', 'career');
+    }
+    if (state.career === 'athlete' && Math.random() < 0.15) {
+        LIFE.news.add('Local athlete breaks personal record in training.', 'fame');
+    }
+    // Property owner news
+    if (state.properties && state.properties.length > 0 && Math.random() < 0.1) {
+        var propNews = [
+            'Property values surge in local housing market.',
+            'City announces zoning changes that may affect property owners.',
+            'New development planned near residential areas.'
+        ];
+        LIFE.news.add(propNews[Math.floor(Math.random() * propNews.length)], 'career');
+    }
+    // Age milestone news
+    if (state.age === 50 && Math.random() < 0.5) LIFE.news.add('Studies show life begins at 50.', 'world');
+    if (state.age === 70 && Math.random() < 0.5) LIFE.news.add('Record number of seniors living active lifestyles.', 'world');
+    // Criminal underworld news
+    if (state.criminalRecord && state.bounty > 0 && Math.random() < 0.2) {
+        LIFE.news.add('Police increase patrols following reports of criminal activity.', 'crime');
+    }
     // Always add random world news
     if (Math.random() < 0.5) {
         var rn = LIFE.NEWS_RANDOM[Math.floor(Math.random() * LIFE.NEWS_RANDOM.length)];
@@ -306,13 +329,14 @@ LIFE.logCrime = function(crime) {
 
 LIFE.addWanted = function(amount) {
     if (LIFE.state.age < 10) return;
-    var old = LIFE.state.wantedLevel;
-    LIFE.state.wantedLevel = Math.min(10, LIFE.state.wantedLevel + amount);
-    LIFE.state.bounty += amount * 500;
-    LIFE.state.wantedTimer = 0;
-    LIFE.state.wantedCooldown = 0;
+    var state = LIFE.state;
+    var old = state.wantedLevel;
+    state.wantedLevel = Math.min(10, state.wantedLevel + amount);
+    state.bounty += amount * 500;
+    state.wantedTimer = 0;
+    state.wantedCooldown = 0;
     // Start dispatch timer (someone calling the police)
-    if (LIFE.state.wantedLevel > 0 && !LIFE.state.policeDispatching) {
+    if (state.wantedLevel > 0 && !state.policeDispatching) {
         var alreadyPursuing = 0;
         if (LIFE.world.policeCops) {
             for (var i = 0; i < LIFE.world.policeCops.length; i++) {
@@ -320,14 +344,20 @@ LIFE.addWanted = function(amount) {
             }
         }
         // Scale cops dispatched: 1-2 for minor, 3-4 for moderate, 5-6 for serious
-        var copsNeeded = Math.min(LIFE.POLICE_MAX, Math.ceil(LIFE.state.wantedLevel / 2));
+        var copsNeeded = Math.min(LIFE.POLICE_MAX, Math.ceil(state.wantedLevel / 2));
         if (alreadyPursuing < copsNeeded) {
-            LIFE.state.policeDispatching = true;
+            state.policeDispatching = true;
             // First offense: 5-8 seconds (someone has to witness, call, dispatcher sends cops)
             // Escalation while cops already out: 2-4 seconds (cops radio for backup)
-            LIFE.state.policeDispatchTimer = old === 0 ? (5 + Math.random() * 3) : (2 + Math.random() * 2);
+            state.policeDispatchTimer = old === 0 ? (5 + Math.random() * 3) : (2 + Math.random() * 2);
             if (old === 0) LIFE.ui.showPopup('Someone is calling the police!', '#f44336');
         }
+    }
+    // SWAT check - evaluated every time wanted rises, independent of regular police dispatch
+    if (state.wantedLevel >= 7 && state.kills >= 2 && !state.swatDispatching && !state.swatDispatched) {
+        state.swatDispatching = true;
+        state.swatDispatchTimer = 15 + Math.random() * 10;
+        LIFE.ui.showPopup('SWAT team has been called in!', '#f44336');
     }
 };
 
@@ -454,14 +484,6 @@ LIFE.dispatchPolice = function() {
         }
     }
 
-    // SWAT: only for extreme situations (mass murder, shooting sprees)
-    // Requires wanted 7+ AND at least 2 kills to justify SWAT mobilization
-    if (state.wantedLevel >= 7 && state.kills >= 2 && !state.swatDispatching && !state.swatDispatched) {
-        state.swatDispatching = true;
-        state.swatDispatchTimer = 15 + Math.random() * 10; // 15-25 seconds for SWAT to mobilize
-        LIFE.ui.showPopup('SWAT team has been called in!', '#f44336');
-    }
-
     LIFE.sounds.siren();
     state.policeDispatching = false;
 };
@@ -545,6 +567,7 @@ LIFE.despawnPolice = function() {
     LIFE.police = [];
     LIFE.state.swatDispatching = false;
     LIFE.state.swatDispatched = false;
+    LIFE.sounds.stopSiren();
 };
 
 // Force-remove all police (for jail/death transitions)
@@ -569,6 +592,7 @@ LIFE.removeAllPolice = function() {
     LIFE.police = [];
     LIFE.state.swatDispatching = false;
     LIFE.state.swatDispatched = false;
+    LIFE.sounds.stopSiren();
 };
 
 // Respawn dead cops over time (called from game loop)
@@ -668,11 +692,55 @@ LIFE.updatePolice = function(dt) {
         }
     }
 
-    if (state.wantedLevel <= 0) return;
+    if (state.wantedLevel <= 0) {
+        LIFE.sounds.stopSiren();
+        return;
+    }
 
-    // siren
-    state.wantedCooldown = (state.wantedCooldown || 0) + dt;
-    if (state.wantedCooldown > 4) { state.wantedCooldown = 0; LIFE.sounds.siren(); }
+    // 3D siren - start if not playing, update position from nearest police car
+    LIFE.sounds.startSiren();
+    var nearestCarPos = null;
+    var nearestCarDist = Infinity;
+    var px = player.group.position.x, pz = player.group.position.z;
+    if (LIFE.world.policeCops) {
+        for (var sci = 0; sci < LIFE.world.policeCops.length; sci++) {
+            var sc = LIFE.world.policeCops[sci];
+            var sirenPos = sc.car ? sc.car.position : (sc._parkedCar ? sc._parkedCar.position : null);
+            if (sirenPos) {
+                var sdx = px - sirenPos.x, sdz = pz - sirenPos.z;
+                var sd = sdx * sdx + sdz * sdz;
+                if (sd < nearestCarDist) { nearestCarDist = sd; nearestCarPos = sirenPos; }
+            }
+        }
+    }
+    for (var swi = 0; swi < LIFE.swat.length; swi++) {
+        if (LIFE.swat[swi].truck) {
+            var stPos = LIFE.swat[swi].truck.position;
+            var stdx = px - stPos.x, stdz = pz - stPos.z;
+            var std = stdx * stdx + stdz * stdz;
+            if (std < nearestCarDist) { nearestCarDist = std; nearestCarPos = stPos; }
+        }
+    }
+    if (nearestCarPos) {
+        LIFE.sounds.updateSirenPosition(nearestCarPos.x, 1.5, nearestCarPos.z);
+    } else {
+        // Fallback: place siren on nearest cop
+        var nearCop = null, ncDist = Infinity;
+        LIFE.police.forEach(function(c) {
+            if (!c.alive) return;
+            var cdx = px - c.char.group.position.x, cdz = pz - c.char.group.position.z;
+            var cd = cdx * cdx + cdz * cdz;
+            if (cd < ncDist) { ncDist = cd; nearCop = c; }
+        });
+        if (nearCop) LIFE.sounds.updateSirenPosition(nearCop.char.group.position.x, 1.5, nearCop.char.group.position.z);
+    }
+    // Update listener position to match player/camera
+    var cam = LIFE.camera;
+    if (cam) {
+        var camDir = new THREE.Vector3();
+        cam.getWorldDirection(camDir);
+        LIFE.sounds.updateListenerPosition(px, 1.5, pz, camDir.x, camDir.y, camDir.z);
+    }
 
     // Dispatch timer countdown
     if (state.policeDispatching) {
@@ -1685,6 +1753,91 @@ LIFE.getSimDate = function() {
 };
 
 // ============================================================
+// WEATHER SYSTEM
+// ============================================================
+LIFE.weather = {
+    current: 'clear',   // clear, cloudy, rain, storm, fog, windy
+    timer: 0,           // time until next weather change
+    intensity: 0,       // 0-1 for visual effects
+    _transitionTimer: 0,
+    _targetIntensity: 0
+};
+
+LIFE.WEATHER_TYPES = [
+    { name: 'clear',  weight: 40, fogMod: 0,    lightMod: 0,    happinessMod: 0.005 },
+    { name: 'cloudy', weight: 25, fogMod: -30,  lightMod: -0.1, happinessMod: -0.002 },
+    { name: 'rain',   weight: 15, fogMod: -50,  lightMod: -0.2, happinessMod: -0.005 },
+    { name: 'storm',  weight: 5,  fogMod: -80,  lightMod: -0.3, happinessMod: -0.01 },
+    { name: 'fog',    weight: 10, fogMod: -100, lightMod: -0.15, happinessMod: -0.003 },
+    { name: 'windy',  weight: 5,  fogMod: -20,  lightMod: -0.05, happinessMod: 0 }
+];
+
+LIFE.weather.changeWeather = function() {
+    var totalWeight = 0;
+    for (var i = 0; i < LIFE.WEATHER_TYPES.length; i++) totalWeight += LIFE.WEATHER_TYPES[i].weight;
+    var roll = Math.random() * totalWeight;
+    var cumulative = 0;
+    for (var j = 0; j < LIFE.WEATHER_TYPES.length; j++) {
+        cumulative += LIFE.WEATHER_TYPES[j].weight;
+        if (roll <= cumulative) {
+            LIFE.weather.current = LIFE.WEATHER_TYPES[j].name;
+            LIFE.weather._targetIntensity = 0.3 + Math.random() * 0.7;
+            break;
+        }
+    }
+    LIFE.weather.timer = 120 + Math.random() * 300; // 2-7 minutes
+    LIFE.weather._transitionTimer = 5; // 5 second transition
+};
+
+LIFE.weather.getWeatherData = function() {
+    for (var i = 0; i < LIFE.WEATHER_TYPES.length; i++) {
+        if (LIFE.WEATHER_TYPES[i].name === LIFE.weather.current) return LIFE.WEATHER_TYPES[i];
+    }
+    return LIFE.WEATHER_TYPES[0];
+};
+
+LIFE.weather.update = function(dt) {
+    if (LIFE.state.gamePhase !== 'playing') return;
+    var skip = { hospital: true, jail: true, execution: true, death: true, womb: true };
+    if (skip[LIFE.state.currentStage]) return;
+    // Don't weather indoors
+    if (LIFE.world.built && LIFE.world.insideInterior) return;
+
+    LIFE.weather.timer -= dt;
+    if (LIFE.weather.timer <= 0) LIFE.weather.changeWeather();
+
+    // Smooth intensity transition
+    if (LIFE.weather._transitionTimer > 0) {
+        LIFE.weather._transitionTimer -= dt;
+        var t = 1 - Math.max(0, LIFE.weather._transitionTimer / 5);
+        LIFE.weather.intensity += (LIFE.weather._targetIntensity - LIFE.weather.intensity) * t * dt;
+    }
+
+    // Apply weather effects to scene
+    var wd = LIFE.weather.getWeatherData();
+    if (LIFE.scene.fog) {
+        LIFE.scene.fog.far = Math.max(30, (LIFE.scene.fog.far || 200) + wd.fogMod * LIFE.weather.intensity * dt * 0.5);
+        // Slowly normalize fog when clear
+        if (wd.name === 'clear') {
+            LIFE.scene.fog.far = Math.min(200, LIFE.scene.fog.far + 2 * dt);
+        }
+    }
+
+    // Mood effects from weather
+    if (wd.happinessMod !== 0) {
+        LIFE.state.stats.happiness = Math.max(0, Math.min(100,
+            LIFE.state.stats.happiness + wd.happinessMod * LIFE.weather.intensity * dt));
+    }
+
+    // Rain/storm darkens ambient slightly
+    if (wd.name === 'rain' || wd.name === 'storm') {
+        if (LIFE.ambientLight) {
+            LIFE.ambientLight.intensity = Math.max(0.1, LIFE.ambientLight.intensity + wd.lightMod * 0.01);
+        }
+    }
+};
+
+// ============================================================
 // DAY / NIGHT CYCLE
 // ============================================================
 LIFE._dayNightTimer = 0;
@@ -2059,17 +2212,59 @@ LIFE.advanceYear = function() {
 
     if (state.age > LIFE.MAX_AGE) { state.deathCause = 'old age'; LIFE.triggerDeath(); return; }
 
-    // aging health loss
-    if (state.age > 60) state.stats.health = Math.max(0, state.stats.health - 1.5);
-    else if (state.age > 40) state.stats.health = Math.max(0, state.stats.health - 0.5);
+    // aging health loss - accelerates with age, offset by happiness
+    var ageHealthLoss = 0;
+    if (state.age > 70) ageHealthLoss = 3;
+    else if (state.age > 60) ageHealthLoss = 1.5;
+    else if (state.age > 50) ageHealthLoss = 0.8;
+    else if (state.age > 40) ageHealthLoss = 0.3;
+    // Happy people age slower, miserable people age faster
+    if (state.stats.happiness > 70) ageHealthLoss *= 0.7;
+    else if (state.stats.happiness < 20) ageHealthLoss *= 1.4;
+    state.stats.health = Math.max(0, state.stats.health - ageHealthLoss);
+
+    // intelligence degrades slowly in old age without stimulation
+    if (state.age > 65) {
+        var intLoss = (state.age - 65) * 0.15;
+        if (state.career === 'professor' || state.career === 'scientist') intLoss *= 0.3;
+        state.stats.intelligence = Math.max(5, state.stats.intelligence - intLoss);
+    }
+
+    // charisma shifts with age
+    if (state.age > 55 && state.stats.charisma > 10) {
+        state.stats.charisma = Math.max(10, state.stats.charisma - 0.3);
+    }
 
     // reputation affects happiness
-    if (state.reputation > 30) state.stats.happiness = Math.min(100, state.stats.happiness + 0.5);
+    if (state.reputation > 50) state.stats.happiness = Math.min(100, state.stats.happiness + 1.5);
+    else if (state.reputation > 30) state.stats.happiness = Math.min(100, state.stats.happiness + 0.5);
+    else if (state.reputation < -50) state.stats.happiness = Math.max(0, state.stats.happiness - 1.5);
     else if (state.reputation < -30) state.stats.happiness = Math.max(0, state.stats.happiness - 0.5);
 
     // criminal record = harder life
     if (state.criminalRecord && state.career === null) {
         if (Math.random() < 0.3) { state.career = 'worker'; }
+    }
+
+    // Loneliness penalty - no friends or family contact hurts
+    var friendCount = 0;
+    var rels = state.relationships;
+    for (var rn in rels) { if (rels[rn].level >= 15) friendCount++; }
+    state.friends = friendCount;
+    if (friendCount === 0 && !state.married && state.age > 25) {
+        state.stats.happiness = Math.max(0, state.stats.happiness - 2);
+    }
+
+    // Happy marriage boost
+    if (state.married && state.stats.happiness > 40) {
+        state.stats.health = Math.min(100, state.stats.health + 0.5);
+    }
+
+    // Active career boosts relevant stats
+    if (state.career && state.career !== 'none') {
+        var c = LIFE.economy.getCareer();
+        if (c.intBonus) state.stats.intelligence = Math.min(100, state.stats.intelligence + c.intBonus * 0.3);
+        if (c.chaBonus) state.stats.charisma = Math.min(100, state.stats.charisma + c.chaBonus * 0.3);
     }
 
     // yearly salary
@@ -2100,12 +2295,22 @@ LIFE.advanceYear = function() {
         state.stats.happiness = Math.max(0, state.stats.happiness - 1);
     }
 
-    // relationship decay - people you haven't interacted with recently
-    var rels = state.relationships;
-    for (var name in rels) {
-        if (rels[name].level > 5) rels[name].level -= 1; // friendships slowly fade
-        else if (rels[name].level < -5) rels[name].level += 0.5; // grudges heal very slowly
+    // relationship decay - nuanced by relationship strength
+    for (var relName in state.relationships) {
+        var r = state.relationships[relName];
+        if (r.level > 50) r.level -= 0.5; // strong bonds fade slowly
+        else if (r.level > 15) r.level -= 1; // casual friends fade
+        else if (r.level > 5) r.level -= 1.5; // acquaintances fade faster
+        else if (r.level < -60) r.level += 0.2; // deep grudges barely heal
+        else if (r.level < -30) r.level += 0.3; // grudges heal very slowly
+        else if (r.level < -5) r.level += 0.5;
     }
+    // Count enemies
+    var enemyCount = 0;
+    for (var en in state.relationships) {
+        if (state.relationships[en].level <= -30) enemyCount++;
+    }
+    state.enemies = enemyCount;
 
     // decision events
     if (LIFE.DECISIONS[state.age]) {
@@ -2597,6 +2802,8 @@ LIFE.animate = function() {
             LIFE.updateSchoolDayCycle();
             // day/night lighting cycle
             LIFE.updateDayNight(dt);
+            // weather system
+            LIFE.weather.update(dt);
             // update date/time display
             LIFE.ui.updateDateTime();
             LIFE.economy.passiveIncome(dt);
@@ -2621,28 +2828,60 @@ LIFE.animate = function() {
                 }
             }
 
-            // stat cascades
+            // stat cascades - interconnected systems
+            // Depression: deep unhappiness damages health
             if (state.stats.happiness < 15) state.stats.health = Math.max(0, state.stats.health - 0.08 * dt);
+            else if (state.stats.happiness < 30) state.stats.health = Math.max(0, state.stats.health - 0.02 * dt);
+            // Joy: high happiness slowly heals
+            if (state.stats.happiness > 80) state.stats.health = Math.min(100, state.stats.health + 0.01 * dt);
+
+            // Drug addiction cascade
             if (state.drugUses > 3) {
                 state.stats.happiness = Math.max(0, state.stats.happiness - 0.04 * dt);
                 state.stats.health = Math.max(0, state.stats.health - 0.03 * dt);
                 state.stats.beauty = Math.max(0, state.stats.beauty - 0.01 * dt);
+                state.stats.charisma = Math.max(0, state.stats.charisma - 0.005 * dt);
             }
             // beauty degrades slowly with old age
             if (state.age >= 50) {
                 var beautyDecay = (state.age - 50) * 0.0003;
                 state.stats.beauty = Math.max(5, state.stats.beauty - beautyDecay * dt);
             }
+            // High health = slight beauty maintenance
+            if (state.stats.health > 80 && state.stats.beauty < state._baseBeauty) {
+                state.stats.beauty = Math.min(state._baseBeauty, state.stats.beauty + 0.003 * dt);
+            }
+
+            // Social isolation hurts
             if (state.friends === 0 && state.enemies > 3 && state.age > 10)
                 state.stats.happiness = Math.max(0, state.stats.happiness - 0.02 * dt);
+            // Many enemies = stress
+            if (state.enemies > 5) state.stats.happiness = Math.max(0, state.stats.happiness - 0.01 * dt);
+
+            // Relationships boost happiness
             if (state.married) state.stats.happiness = Math.min(100, state.stats.happiness + 0.008 * dt);
             if (state.hasKids) state.stats.happiness = Math.min(100, state.stats.happiness + 0.006 * dt);
+            // Good friends boost charisma
+            if (state.friends > 5) state.stats.charisma = Math.min(100, state.stats.charisma + 0.003 * dt);
+
+            // Criminal life takes a toll
+            if (state.criminalRecord) {
+                state.stats.happiness = Math.max(0, state.stats.happiness - 0.005 * dt);
+            }
             // family violence permanent trauma
             if (state.familyKiller) {
                 state.stats.happiness = Math.max(0, state.stats.happiness - 0.05 * dt);
                 state.stats.health = Math.max(0, state.stats.health - 0.02 * dt);
             } else if (state.familyAbuser) {
                 state.stats.happiness = Math.max(0, state.stats.happiness - 0.02 * dt);
+            }
+
+            // Wealth/poverty effects
+            if (state.money < -1000 && state.age > 18) {
+                state.stats.happiness = Math.max(0, state.stats.happiness - 0.015 * dt);
+            }
+            if (state.money > 200000) {
+                state.stats.happiness = Math.min(100, state.stats.happiness + 0.003 * dt);
             }
 
             // health death check
@@ -2687,29 +2926,156 @@ LIFE.animate = function() {
             if (state.jailEventTimer <= 0 && !LIFE.dialogue.active) {
                 state.jailEventTimer = 8 + Math.random() * 15;
                 var eventRoll = Math.random();
-                if (eventRoll < 0.3) {
-                    // inmate makes an advance / tries to fight
+                if (eventRoll < 0.15) {
+                    // inmate demands food rations
                     LIFE.dialogue.open('Inmate', "Hey fresh meat... give me your food rations or else.", [
-                        { text: "Back off!", effects: { charisma: 2 }, rep: -2 },
+                        { text: "Back off!", effects: { charisma: 2 }, rep: -2, response: {
+                            text: "Tough guy, huh? We'll see how long that lasts in here.", options: [
+                                { text: "Try me.", effects: { charisma: 1 }, rep: -1 },
+                                { text: "Just leave me alone.", effects: {}, rep: 0 }
+                            ]
+                        }},
                         { text: "Fine, take it.", effects: { happiness: -5, health: -3 }, rep: -5 },
                         { text: "Try me.", effects: { health: -8, charisma: 3 }, rep: 3 }
                     ], true);
-                } else if (eventRoll < 0.5) {
-                    // inmate attack - takes damage
+                } else if (eventRoll < 0.25) {
+                    // random attack
                     LIFE.ui.showPopup('An inmate attacked you!', '#ff1744');
                     LIFE.damagePlayer(10 + Math.floor(Math.random() * 10), 'inmate attack');
                     LIFE.sounds.punch();
-                } else if (eventRoll < 0.65) {
+                } else if (eventRoll < 0.35) {
+                    // gang recruitment
                     LIFE.dialogue.open('Inmate', "You want to join my gang? Could use someone like you.", [
-                        { text: "Sure, I'm in.", effects: { charisma: 3 }, rep: -10 },
+                        { text: "Sure, I'm in.", effects: { charisma: 3 }, rep: -10, response: {
+                            text: "Smart move. We look out for our own in here. First task: deliver this to Block C.", options: [
+                                { text: "Consider it done.", effects: { charisma: 2 }, rep: -5 },
+                                { text: "What is it?", effects: { intelligence: 1 }, rep: -3 }
+                            ]
+                        }},
                         { text: "No thanks.", effects: {}, rep: 2 },
                         { text: "I work alone.", effects: { charisma: 1 }, rep: 0 }
                     ], true);
-                } else if (eventRoll < 0.8) {
+                } else if (eventRoll < 0.42) {
+                    // guard lights out
                     LIFE.dialogue.open('Guard', "Lights out! Get to your bed.", [
                         { text: "Yes sir.", effects: { happiness: -2 } },
-                        { text: "Make me.", effects: { health: -5 }, rep: -5 }
+                        { text: "Make me.", effects: { health: -5 }, rep: -5, response: {
+                            text: "That's it! Solitary confinement for you!", options: [
+                                { text: "Worth it.", effects: { happiness: -3, charisma: 1 }, rep: -3 },
+                                { text: "I'm sorry, I didn't mean it.", effects: { happiness: -1 }, rep: 1 }
+                            ]
+                        }}
                     ], true);
+                } else if (eventRoll < 0.50) {
+                    // workout opportunity
+                    LIFE.dialogue.open('Inmate', "Hey, I'm hitting the yard for some reps. Wanna join? Gotta stay strong in here.", [
+                        { text: "Yeah, let's do it.", effects: { health: 5, happiness: 2 }, rep: 2, response: {
+                            text: "Not bad! You're stronger than you look. Keep it up and nobody will mess with you.", options: [
+                                { text: "Thanks for the workout.", effects: { charisma: 1, health: 1 }, rep: 2 },
+                                { text: "Same time tomorrow?", effects: { happiness: 1 }, rep: 3, friend: true }
+                            ]
+                        }},
+                        { text: "Nah, I'm good.", effects: {}, rep: 0 },
+                        { text: "Working out is pointless in here.", effects: { happiness: -1 }, rep: -2 }
+                    ], true);
+                } else if (eventRoll < 0.57) {
+                    // contraband offer
+                    LIFE.dialogue.open('Inmate', "Psst... I got a phone smuggled in. 5 minutes for a favor later. Deal?", [
+                        { text: "Deal. Let me make a call.", effects: { happiness: 5 }, rep: -5, response: {
+                            text: "Make it quick. Guards switch shifts in 3 minutes.", options: [
+                                { text: "*call family*", effects: { happiness: 5 }, rep: 2 },
+                                { text: "*call old contact*", effects: { charisma: 2 }, rep: -3 }
+                            ]
+                        }},
+                        { text: "No thanks, not worth the risk.", effects: { intelligence: 1 }, rep: 3 },
+                        { text: "I'll tell the guards.", effects: { charisma: -1 }, rep: 5, response: {
+                            text: "You snitch on me and you won't survive the night. Think carefully.", options: [
+                                { text: "I won't say anything.", effects: { happiness: -2 }, rep: 0 },
+                                { text: "I'm not afraid of you.", effects: { charisma: 2, health: -5 }, rep: 3 }
+                            ]
+                        }}
+                    ], true);
+                } else if (eventRoll < 0.64) {
+                    // friendly inmate shares advice
+                    LIFE.dialogue.open('Inmate', "Listen kid, I've been watching you. You don't belong in here. Want some advice?", [
+                        { text: "Sure, I'm listening.", effects: { intelligence: 2 }, rep: 2, response: {
+                            text: "When you get out, don't look back. Get a job, even a bad one. Stay clean. Trust me, I wish I had.", options: [
+                                { text: "I appreciate that. Really.", effects: { happiness: 3, intelligence: 1 }, rep: 3, friend: true },
+                                { text: "Thanks... I'll try.", effects: { happiness: 1 }, rep: 2 }
+                            ]
+                        }},
+                        { text: "What do you know about my life?", effects: { charisma: 1 }, rep: -2 },
+                        { text: "Save the lecture.", effects: {}, rep: -3 }
+                    ], true);
+                } else if (eventRoll < 0.71) {
+                    // guard offers good behavior deal
+                    LIFE.dialogue.open('Guard', "You've been keeping your head down. The warden noticed. There might be a reduced sentence if you cooperate.", [
+                        { text: "I'll do whatever it takes.", effects: { happiness: 3, intelligence: 1 }, rep: 5, response: {
+                            text: "Good. Keep it up. No fights, no trouble. We'll see what happens.", options: [
+                                { text: "Yes sir.", effects: { happiness: 1 }, rep: 3 },
+                                { text: "Thank you for the chance.", effects: { charisma: 1 }, rep: 2 }
+                            ]
+                        }},
+                        { text: "I don't cooperate with guards.", effects: { charisma: 1 }, rep: -5 }
+                    ], true);
+                } else if (eventRoll < 0.78) {
+                    // prison food event
+                    var foodEvents = [
+                        { text: "Cafeteria today: mystery meat. Looks worse than usual.", opts: [
+                            { text: "Eat it. Food is food.", effects: { health: -2, happiness: -1 }, rep: 0 },
+                            { text: "Skip the meal.", effects: { health: -1 }, rep: 0 },
+                            { text: "Trade it for something better.", effects: { charisma: 1, happiness: 1 }, rep: -1 }
+                        ]},
+                        { text: "Another inmate accidentally spilled their tray on you.", opts: [
+                            { text: "It's fine, accidents happen.", effects: { charisma: 2 }, rep: 3 },
+                            { text: "Watch it!", effects: { charisma: -1 }, rep: -2 },
+                            { text: "Spill yours on them.", effects: { health: -3 }, rep: -5 }
+                        ]}
+                    ];
+                    var fe = foodEvents[Math.floor(Math.random() * foodEvents.length)];
+                    LIFE.dialogue.open('Narrator', fe.text, fe.opts, true);
+                } else if (eventRoll < 0.85) {
+                    // visitation
+                    var visitor = state.married ? 'Spouse' : (state.hasKids ? 'Your Child' : 'Old Friend');
+                    LIFE.dialogue.open(visitor, "I came to see you... How are you holding up in here?", [
+                        { text: "I'm okay. Thanks for coming.", effects: { happiness: 8 }, rep: 2, response: {
+                            text: "I miss you so much. Please stay safe in there.", options: [
+                                { text: "I miss you too. I'll be home soon.", effects: { happiness: 5 }, rep: 3 },
+                                { text: "Don't worry about me.", effects: { happiness: 2 }, rep: 1 }
+                            ]
+                        }},
+                        { text: "It's terrible. I hate it here.", effects: { happiness: 3 }, rep: 1, response: {
+                            text: "I'm sorry... Just hang in there. Time will pass.", options: [
+                                { text: "I know. Thank you.", effects: { happiness: 3 }, rep: 2 },
+                                { text: "Easy for you to say.", effects: { happiness: -2 }, rep: -3 }
+                            ]
+                        }},
+                        { text: "Don't come back. Forget about me.", effects: { happiness: -5 }, rep: -5 }
+                    ], true);
+                } else if (eventRoll < 0.92) {
+                    // prison library / self-improvement
+                    LIFE.dialogue.open('Guard', "Library is open for the next hour. Want to go?", [
+                        { text: "Yes, I'd like to read.", effects: { intelligence: 3, happiness: 2 }, rep: 3, response: {
+                            text: "Good choice. Education is the best way to spend your time in here.", options: [
+                                { text: "*read about law*", effects: { intelligence: 2 }, rep: 1 },
+                                { text: "*read fiction*", effects: { happiness: 2 }, rep: 0 }
+                            ]
+                        }},
+                        { text: "No, I'll stay in my cell.", effects: {}, rep: 0 }
+                    ], true);
+                } else {
+                    // random health event in prison
+                    var prisonHealth = Math.random();
+                    if (prisonHealth < 0.4) {
+                        LIFE.ui.showPopup('You caught a cold from the damp cell...', '#ff9800');
+                        state.stats.health = Math.max(0, state.stats.health - 5);
+                    } else if (prisonHealth < 0.7) {
+                        LIFE.ui.showPopup('Bad night - barely slept.', '#ff9800');
+                        state.stats.happiness = Math.max(0, state.stats.happiness - 3);
+                    } else {
+                        LIFE.ui.showPopup('Found a book in your cell.', '#4fc3f7');
+                        state.stats.intelligence = Math.min(100, state.stats.intelligence + 1);
+                    }
                 }
             }
 

@@ -1621,16 +1621,29 @@ LIFE.updateCarDriving = function(dt) {
             var ndz = carPos.z - npc.char.group.position.z;
             var ndist = Math.sqrt(ndx * ndx + ndz * ndz);
             if (ndist < hitRadius) {
+                var wasAlive = npc.alive;
                 var damage = Math.floor(Math.abs(car.currentSpeed) * 5);
                 LIFE.damageNPC(npc, damage);
                 car.currentSpeed *= 0.7; // slow on impact
-                if (npc.alive) {
-                    var hitLabel = npc.isPolice ? 'You hit a police officer!' : 'You hit ' + npc.name + '!';
-                    LIFE.ui.showPopup(hitLabel, '#ff9800');
-                    LIFE.logCrime(npc.isPolice ? 'Vehicular assault on police' : 'Hit and run');
-                    LIFE.addWanted(npc.isPolice ? 3 : 1);
-                    state.reputation = Math.max(-100, state.reputation - (npc.isPolice ? 8 : 3));
-                    LIFE.ui.showRepChange(npc.isPolice ? -8 : -3);
+                if (wasAlive) {
+                    if (npc.alive) {
+                        // Hit but survived
+                        var hitLabel = npc.isPolice ? 'You hit a police officer!' : 'You hit ' + npc.name + '!';
+                        LIFE.ui.showPopup(hitLabel, '#ff9800');
+                        LIFE.logCrime(npc.isPolice ? 'Vehicular assault on police' : 'Hit and run');
+                        LIFE.addWanted(npc.isPolice ? 3 : 1);
+                        state.reputation = Math.max(-100, state.reputation - (npc.isPolice ? 8 : 3));
+                        LIFE.ui.showRepChange(npc.isPolice ? -8 : -3);
+                    } else {
+                        // Killed by car - killNPC already handles wanted/rep for police
+                        // Log vehicular crime for non-police kills
+                        if (!npc.isPolice) {
+                            LIFE.logCrime('Vehicular manslaughter');
+                            LIFE.addWanted(2);
+                        }
+                        var killLabel = npc.isPolice ? 'You killed a police officer!' : 'You ran over ' + npc.name + '!';
+                        LIFE.ui.showPopup(killLabel, '#ff1744');
+                    }
                 }
                 break; // only hit one NPC per frame
             }

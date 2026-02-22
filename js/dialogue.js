@@ -481,6 +481,41 @@ LIFE.NPC_DIALOGUES = {
                 ]
             }},
             { text: "Mind your own business", effects: {}, rep: -1 }
+        ]},
+        { text: "Hey, you dropped something!", options: [
+            { text: "Oh thanks! What would I do without you?", effects: { happiness: 2, charisma: 1 }, rep: 3, friend: true },
+            { text: "That's not mine.", effects: {}, rep: 0 },
+            { text: "Just keep it.", effects: {}, rep: -1 }
+        ]},
+        { text: "Do you know any good restaurants around here?", options: [
+            { text: "There's a great place down the street!", effects: { charisma: 2 }, rep: 5, response: {
+                text: "Perfect! Thanks for the tip! Maybe I'll see you there sometime.", options: [
+                    { text: "Anytime! Enjoy!", effects: { happiness: 1 }, rep: 2, friend: true },
+                    { text: "Sure, maybe.", effects: {}, rep: 0 }
+                ]
+            }},
+            { text: "I don't eat out much.", effects: {}, rep: 0 },
+            { text: "Figure it out yourself.", effects: {}, rep: -3 }
+        ]},
+        { text: "I've been having the worst day. My car broke down, I'm late for work...", options: [
+            { text: "I'm sorry to hear that. Need a ride?", effects: { charisma: 3, happiness: 2 }, rep: 8, friend: true },
+            { text: "That sucks. Hope it gets better.", effects: { charisma: 1 }, rep: 2 },
+            { text: "Not my problem.", effects: {}, rep: -3 }
+        ]},
+        { text: "Hey, did you hear about what happened on the news?", options: [
+            { text: "No, what happened?", effects: { intelligence: 1 }, rep: 2, response: {
+                text: "Apparently there's been a string of break-ins in the neighborhood. Stay safe out there!", options: [
+                    { text: "Thanks for the heads up!", effects: { intelligence: 1 }, rep: 3 },
+                    { text: "I can handle myself.", effects: { charisma: 1 }, rep: 0 }
+                ]
+            }},
+            { text: "I don't watch the news.", effects: {}, rep: -1 }
+        ]},
+        { text: "Spare some change? I haven't eaten all day.", options: [
+            { text: "Here, take $10.", effects: { happiness: 3, charisma: 2 }, cost: 10, rep: 10 },
+            { text: "Sorry, I can't right now.", effects: {}, rep: -1 },
+            { text: "There's a food bank nearby, I can show you.", effects: { charisma: 3 }, rep: 12, friend: true },
+            { text: "Get a job.", effects: {}, rep: -8 }
         ]}
     ],
     'Old Friend': [
@@ -590,6 +625,75 @@ LIFE.NPC_DIALOGUES['Inmate'] = [
             text: "Ha! That's what they all say. We'll see how long that lasts.", options: [
                 { text: "Watch me.", effects: { charisma: 1 }, rep: -1 },
                 { text: "Maybe you're right...", effects: { intelligence: 1 }, rep: 2 }
+            ]
+        }}
+    ]},
+    { text: "You play cards? Gets boring as hell in here.", options: [
+        { text: "Deal me in.", effects: { happiness: 3, charisma: 1 }, rep: 2, friend: true, response: {
+            text: "Alright! I'll teach you the rules. Loser does the other's laundry.", options: [
+                { text: "You're on!", effects: { happiness: 2 }, rep: 1 },
+                { text: "No stakes, just for fun.", effects: { happiness: 1, intelligence: 1 }, rep: 2 }
+            ]
+        }},
+        { text: "Not interested.", effects: {}, rep: -1 },
+        { text: "Only if we play for commissary.", effects: { charisma: 1 }, rep: -1, response: {
+            text: "Ha, a gambler! I like it. Don't cry when you lose everything.", options: [
+                { text: "*play and win*", effects: { happiness: 3, charisma: 2 }, rep: 1 },
+                { text: "*play and lose*", effects: { happiness: -2 }, rep: -1 }
+            ]
+        }}
+    ]},
+    { text: "I used to have a family, you know. Wife, two kids. All gone now.", options: [
+        { text: "I'm sorry to hear that.", effects: { charisma: 2 }, rep: 3, response: {
+            text: "Don't be. It was my own fault. I chose this life. Just... don't make the same mistakes I did.", options: [
+                { text: "I won't. I promise.", effects: { intelligence: 2, happiness: 1 }, rep: 3 },
+                { text: "What mistakes?", effects: { intelligence: 1 }, rep: 2, response: {
+                    text: "Thinking I was invincible. Thinking the money was worth it. It never is.", options: [
+                        { text: "That's heavy. Thanks for being real.", effects: { intelligence: 1, charisma: 1 }, rep: 3, friend: true },
+                        { text: "I'll keep that in mind.", effects: { intelligence: 1 }, rep: 1 }
+                    ]
+                }}
+            ]
+        }},
+        { text: "Sounds like you deserved it.", effects: {}, rep: -5, response: {
+            text: "...You know what, maybe I did. But at least I own it. Can you say the same?", options: [
+                { text: "I didn't mean it like that.", effects: { charisma: 1 }, rep: 3 },
+                { text: "I don't owe you anything.", effects: {}, rep: -2 }
+            ]
+        }}
+    ]},
+    { text: "Word is there's gonna be a shakedown tonight. Hide anything you don't want found.", options: [
+        { text: "Thanks for the warning.", effects: { intelligence: 2 }, rep: 2, friend: true },
+        { text: "I don't have anything to hide.", effects: { intelligence: 1 }, rep: 3 },
+        { text: "Why are you telling me?", effects: { charisma: 1 }, rep: 0, response: {
+            text: "Because you haven't given me a reason not to. That's rare in here.", options: [
+                { text: "Respect.", effects: { charisma: 2 }, rep: 3, friend: true },
+                { text: "Keep your guard up.", effects: { intelligence: 1 }, rep: 1 }
+            ]
+        }}
+    ]},
+    { text: "What are you in for? ...You don't have to answer that.", options: [
+        { text: "I'd rather not say.", effects: {}, rep: 2, response: {
+            text: "Smart. The less people know, the better off you are in here.", options: [
+                { text: "Noted.", effects: { intelligence: 1 }, rep: 1 },
+                { text: "What about you?", effects: { charisma: 1 }, rep: 0, response: {
+                    text: "Let's just say I made some poor business decisions. Very poor.", options: [
+                        { text: "Haven't we all.", effects: { charisma: 1 }, rep: 2 },
+                        { text: "...", effects: {}, rep: 0 }
+                    ]
+                }}
+            ]
+        }},
+        { text: "Long story.", effects: { charisma: 1 }, rep: 1, response: {
+            text: "Aren't they all? Time is all we've got in here though.", options: [
+                { text: "Maybe I'll tell you someday.", effects: { charisma: 1 }, rep: 2 },
+                { text: "Some stories are better left untold.", effects: { intelligence: 1 }, rep: 1 }
+            ]
+        }},
+        { text: "Murder.", effects: { charisma: 2 }, rep: -3, response: {
+            text: "...Okay. I'll make sure to stay on your good side then.", options: [
+                { text: "Wise choice.", effects: { charisma: 1 }, rep: -1 },
+                { text: "Relax, I'm not a monster.", effects: { charisma: 1 }, rep: 2 }
             ]
         }}
     ]}
@@ -826,6 +930,14 @@ LIFE.dialogue.selectOption = function(idx) {
     if (opt.careerChange) {
         var careers = ['teacher', 'artist', 'worker'];
         LIFE.state.career = careers[Math.floor(Math.random() * careers.length)];
+    }
+    if (opt.quitJob) {
+        LIFE.state.career = null;
+        LIFE.ui.showPopup('You quit your job!', '#ff9800');
+    }
+    if (opt.drugUse) {
+        LIFE.state.drugUses++;
+        LIFE.sounds.drug();
     }
     if (opt.surrender) {
         // Player surrenders to police
@@ -1743,6 +1855,56 @@ LIFE.dialogue.talkToNPC = function(npc) {
             LIFE.getFlirtOptions(npc.name).forEach(function(fo) { fOpts.push(fo); });
         }
         LIFE.dialogue.open(speakerName, fdlg.text, fOpts, false);
+        return;
+    }
+
+    // Relationship-aware dialogue overrides
+    var rel = state.relationships[npc.name];
+    var relLevel = rel ? rel.level : 0;
+
+    // Hostile NPCs refuse to talk
+    if (relLevel <= -60 && type !== 'Mom' && type !== 'Dad' && !npc.isPolice) {
+        var hostileLines = [
+            { text: "Get away from me. Now.", options: [
+                { text: "I'm sorry for what happened.", effects: { happiness: -1 }, rep: 3,
+                  response: { text: "Sorry doesn't cut it. Leave me alone.", options: [
+                    { text: "I understand.", effects: {}, rep: 1 },
+                    { text: "Fine. Your loss.", effects: {}, rep: -2 }
+                  ]}
+                },
+                { text: "I just want to talk.", effects: {}, rep: 0 },
+                { text: "Whatever.", effects: {}, rep: -1 }
+            ]},
+            { text: "I have nothing to say to you.", options: [
+                { text: "Can we start over?", effects: { charisma: 1 }, rep: 2 },
+                { text: "Fair enough.", effects: {}, rep: 0 }
+            ]},
+            { text: "You've got some nerve showing your face around here.", options: [
+                { text: "I deserve that.", effects: { happiness: -2 }, rep: 5 },
+                { text: "I don't need this.", effects: {}, rep: -2 }
+            ]}
+        ];
+        var hd = hostileLines[Math.floor(Math.random() * hostileLines.length)];
+        LIFE.dialogue.open(speakerName, hd.text, hd.options, false);
+        return;
+    }
+
+    // Close friends have warmer greetings mixed in
+    if (relLevel >= 40 && Math.random() < 0.3) {
+        var friendlyLines = [
+            { text: "Hey! It's so good to see you! What's up?", options: [
+                { text: "Just wanted to hang out!", effects: { happiness: 3, charisma: 1 }, rep: 3 },
+                { text: "Not much, just saying hi!", effects: { happiness: 2 }, rep: 2 },
+                { text: "Actually, I could use some advice...", effects: { intelligence: 1 }, rep: 2 }
+            ]},
+            { text: "There's my favorite person! How's life treating you?", options: [
+                { text: "Great, thanks to friends like you!", effects: { happiness: 3, charisma: 2 }, rep: 5 },
+                { text: "Could be better, honestly.", effects: { happiness: 1 }, rep: 2 },
+                { text: "Living the dream!", effects: { happiness: 2, charisma: 1 }, rep: 2 }
+            ]}
+        ];
+        var fd = friendlyLines[Math.floor(Math.random() * friendlyLines.length)];
+        LIFE.dialogue.open(speakerName, fd.text, fd.options, false);
         return;
     }
 

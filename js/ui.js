@@ -649,7 +649,13 @@ LIFE.ui.updateDateTime = function() {
     if (LIFE.state.dayPhase === 'classroom') phaseLabel = ' | In Class';
     else if (LIFE.state.dayPhase === 'schoolyard') phaseLabel = ' | Recess';
     else if (LIFE.state.dayPhase === 'home') phaseLabel = ' | At Home';
-    el.textContent = sim.text + phaseLabel;
+    // Weather indicator
+    var weatherLabel = '';
+    if (LIFE.weather && LIFE.weather.current !== 'clear' && LIFE.state.gamePhase === 'playing') {
+        var weatherIcons = { cloudy: 'Cloudy', rain: 'Rain', storm: 'Storm', fog: 'Foggy', windy: 'Windy' };
+        weatherLabel = ' | ' + (weatherIcons[LIFE.weather.current] || '');
+    }
+    el.textContent = sim.text + phaseLabel + weatherLabel;
 
     // update speed display
     var speedEl = document.getElementById('speedDisplay');
@@ -887,6 +893,11 @@ LIFE.ui.updateAgeColor = function() {
 
 LIFE.ui.openShop = function() {
     if (LIFE.dialogue.active || LIFE.state.shopOpen) return;
+    // Very bad reputation - shops refuse service
+    if (LIFE.state.reputation <= -80 && Math.random() < 0.5) {
+        LIFE.ui.showPopup("The shopkeeper refuses to serve you!", '#ef5350');
+        return;
+    }
     LIFE.state.shopOpen = true;
     LIFE.unlockCursor();
 
@@ -896,21 +907,24 @@ LIFE.ui.openShop = function() {
 
     LIFE.SHOP_ITEMS.forEach(function(item, i) {
         if (item.minAge > age) return;
-        if (item.once && LIFE.state.purchasedOnce && LIFE.state.purchasedOnce.indexOf(item.name) >= 0) return;
+        var soldOut = item.once && LIFE.economy.isItemSoldOut(item.name);
+        if (item.minAge > age) return;
         var div = document.createElement('div');
         var price = item.cost;
         if (LIFE.state.stats.charisma > 50) price = Math.round(price * 0.9);
         if (LIFE.state.reputation < -30) price = Math.round(price * 1.2);
         var cantAfford = LIFE.state.money < price;
-        div.className = 'shopItem' + (cantAfford ? ' cantAfford' : '');
+        div.className = 'shopItem' + (cantAfford || soldOut ? ' cantAfford' : '');
         var tags = '';
         if (item.rep > 0) tags += '<span class="shopTag good">+Rep</span>';
         if (item.rep < 0) tags += '<span class="shopTag bad">-Rep</span>';
+        if (soldOut) tags += '<span class="shopTag bad">Restocking</span>';
         div.innerHTML = '<span class="shopName">' + item.name + '</span>' +
             '<span class="shopTags">' + tags + '</span>' +
             '<span class="shopStat">+' + item.amount + ' ' + item.stat + '</span>' +
-            '<span class="shopCost">$' + price + '</span>';
+            '<span class="shopCost">' + (soldOut ? 'SOLD OUT' : '$' + price) + '</span>';
         div.onclick = function() {
+            if (soldOut) { LIFE.ui.showPopup('Out of stock - check back later!', '#ff9800'); return; }
             if (LIFE.economy.buyItem(i)) {
                 LIFE.sounds.money();
                 LIFE.ui.showPopup(item.name + ' purchased!', '#4caf50');
@@ -965,21 +979,23 @@ LIFE.ui.openDealerShop = function() {
 
     LIFE.DEALER_ITEMS.forEach(function(item, i) {
         if (item.minAge > age) return;
-        if (item.once && LIFE.state.purchasedOnce && LIFE.state.purchasedOnce.indexOf(item.name) >= 0) return;
+        var soldOut = item.once && LIFE.economy.isItemSoldOut(item.name);
         var div = document.createElement('div');
         var price = item.cost;
         if (LIFE.state.stats.charisma > 50) price = Math.round(price * 0.9);
         var cantAfford = LIFE.state.money < price;
-        div.className = 'shopItem shopContra' + (cantAfford ? ' cantAfford' : '');
+        div.className = 'shopItem shopContra' + (cantAfford || soldOut ? ' cantAfford' : '');
         var tags = '<span class="shopTag bad">Contraband</span>';
         if (item.rep < 0) tags += '<span class="shopTag bad">-Rep</span>';
         if (item.healthCost) tags += '<span class="shopTag bad">-' + item.healthCost + ' HP</span>';
         if (item.moneyBonus) tags += '<span class="shopTag good">+$' + item.moneyBonus + '</span>';
+        if (soldOut) tags += '<span class="shopTag bad">Restocking</span>';
         div.innerHTML = '<span class="shopName">' + item.name + '</span>' +
             '<span class="shopTags">' + tags + '</span>' +
             '<span class="shopStat">+' + item.amount + ' ' + item.stat + '</span>' +
-            '<span class="shopCost">$' + price + '</span>';
+            '<span class="shopCost">' + (soldOut ? 'SOLD OUT' : '$' + price) + '</span>';
         div.onclick = function() {
+            if (soldOut) { LIFE.ui.showPopup('Out of stock - check back later!', '#ff9800'); return; }
             if (LIFE.economy.buyDealerItem(i)) {
                 LIFE.sounds.money();
                 var msg = item.name + ' acquired!';
@@ -1018,6 +1034,11 @@ LIFE.ui.openVendorShop = function(vendorType) {
     if (LIFE.dialogue.active || LIFE.state.shopOpen) return;
     var vendorItems = LIFE.VENDOR_ITEMS[vendorType];
     if (!vendorItems) return;
+    // Very bad reputation - vendors refuse service (but not Dealer)
+    if (LIFE.state.reputation <= -80 && Math.random() < 0.4) {
+        LIFE.ui.showPopup("\"We don't serve your kind here.\"", '#ef5350');
+        return;
+    }
     LIFE.state.shopOpen = true;
     LIFE.unlockCursor();
 
@@ -1038,22 +1059,23 @@ LIFE.ui.openVendorShop = function(vendorType) {
 
     vendorItems.forEach(function(item, i) {
         if (item.minAge > age) return;
-        var alreadyOwned = item.once && LIFE.state.purchasedOnce && LIFE.state.purchasedOnce.indexOf(item.name) >= 0;
-        if (alreadyOwned) return; // hide already-owned one-time items
+        var soldOut = item.once && LIFE.economy.isItemSoldOut(item.name);
         var div = document.createElement('div');
         var price = item.cost;
         if (LIFE.state.stats.charisma > 50) price = Math.round(price * 0.9);
         var cantAfford = LIFE.state.money < price;
-        div.className = 'shopItem' + (cantAfford ? ' cantAfford' : '');
+        div.className = 'shopItem' + (cantAfford || soldOut ? ' cantAfford' : '');
         var tags = '';
-        if (item.once) tags += '<span class="shopTag good">One-time</span>';
+        if (item.once && !soldOut) tags += '<span class="shopTag good">Limited</span>';
         if (item.rep > 0) tags += '<span class="shopTag good">+Rep</span>';
         if (item.rep < 0) tags += '<span class="shopTag bad">-Rep</span>';
+        if (soldOut) tags += '<span class="shopTag bad">Restocking</span>';
         div.innerHTML = '<span class="shopName">' + item.name + '</span>' +
             '<span class="shopTags">' + tags + '</span>' +
             '<span class="shopStat">+' + item.amount + ' ' + item.stat + '</span>' +
-            '<span class="shopCost">$' + price + '</span>';
+            '<span class="shopCost">' + (soldOut ? 'SOLD OUT' : '$' + price) + '</span>';
         div.onclick = function() {
+            if (soldOut) { LIFE.ui.showPopup('Out of stock - check back later!', '#ff9800'); return; }
             if (LIFE.economy.buyVendorItem(vendorType, i)) {
                 LIFE.sounds.money();
                 LIFE.ui.showPopup(item.name + ' purchased!', titleColor);

@@ -461,5 +461,106 @@ LIFE.RANDOM_EVENTS = [
         { text: "Take it and hide it in your backpack", effects: { charisma: 1 }, rep: -3, giveSwitchblade: true },
         { text: "Put it back, that's dangerous", effects: { intelligence: 2, happiness: 1 }, rep: 3 },
         { text: "Tell Mom and Dad you found it", effects: { happiness: 1 }, rep: 5 }
+      ]},
+    // WORKPLACE DRAMA
+    { text: "Your boss accused you of slacking off in front of everyone.", minAge: 23, maxAge: 65, chance: 0.12,
+      reqAnyCareer: true,
+      options: [
+        { text: "Apologize and work harder", effects: { happiness: -5, intelligence: 2 }, rep: 2 },
+        { text: "Stand up for yourself", effects: { charisma: 3, happiness: 2 }, rep: 5 },
+        { text: "Quit on the spot", effects: { happiness: 5, charisma: 5 }, rep: -3, quitJob: true },
+        { text: "Start looking for a new job quietly", effects: { intelligence: 2 }, rep: 0 }
+      ]},
+    { text: "A coworker confided in you about embezzlement at work.", minAge: 23, maxAge: 60, chance: 0.08,
+      reqAnyCareer: true,
+      options: [
+        { text: "Report it to the authorities", effects: { intelligence: 2 }, rep: 15, money: 1000 },
+        { text: "Confront the embezzler", effects: { charisma: 3 }, rep: 5 },
+        { text: "Get a cut of the action", effects: { charisma: -3 }, rep: -15, money: 5000 },
+        { text: "Mind your own business", effects: {}, rep: -3 }
+      ]},
+    // HEALTH SCARES
+    { text: "You collapsed while walking down the street!", minAge: 35, maxAge: 80, chance: 0.06,
+      options: [
+        { text: "Go to the hospital", effects: { health: -5 }, hospital: 'illness' },
+        { text: "Rest at home and hope for the best", effects: { health: -12, happiness: -5 } },
+        { text: "It's probably nothing...", effects: { health: -8 } }
+      ]},
+    { text: "You discovered a lump during a self-exam. Your heart drops.", minAge: 30, maxAge: 80, chance: 0.05,
+      options: [
+        { text: "Rush to the doctor immediately", effects: { health: 5, happiness: -3 }, hospital: 'illness' },
+        { text: "Wait and see if it goes away", effects: { health: -10, happiness: -8 } },
+        { text: "Research symptoms online (bad idea)", effects: { happiness: -10, intelligence: 1 } }
+      ]},
+    // NEIGHBORHOOD / SOCIAL
+    { text: "Your neighbor's house was broken into last night. They're shaken up.", minAge: 18, maxAge: 80, chance: 0.1,
+      options: [
+        { text: "Bring them food and offer to help", effects: { happiness: 3, charisma: 2 }, rep: 10 },
+        { text: "Install security cameras on your own house ($300)", effects: { intelligence: 1 }, cost: 300, rep: 2 },
+        { text: "Offer to patrol the neighborhood", effects: { health: -2, charisma: 3 }, rep: 12 },
+        { text: "Not my problem", effects: {}, rep: -5 }
+      ]},
+    { text: "A stray dog keeps following you around everywhere.", minAge: 8, maxAge: 70, chance: 0.1,
+      options: [
+        { text: "Adopt it! ($50 for supplies)", effects: { happiness: 8, charisma: 2 }, cost: 50, rep: 8 },
+        { text: "Take it to the shelter", effects: { happiness: 2 }, rep: 5 },
+        { text: "Shoo it away", effects: {}, rep: -3 }
+      ]},
+    // MORAL DILEMMAS
+    { text: "You saw someone shoplifting at the store. They noticed you watching.", minAge: 14, maxAge: 80, chance: 0.1,
+      options: [
+        { text: "Tell the store manager", effects: { intelligence: 1 }, rep: 8, enemy: true },
+        { text: "Pretend you didn't see anything", effects: {}, rep: -2 },
+        { text: "Confront them directly", effects: { charisma: 2, health: -3 }, rep: 5 },
+        { text: "Join in", effects: { happiness: 2 }, rep: -15, money: 30 }
+      ]},
+    { text: "You found a phone on a park bench. It keeps buzzing with messages.", minAge: 12, maxAge: 80, chance: 0.08,
+      options: [
+        { text: "Wait for the owner to come back", effects: { happiness: 3, charisma: 2 }, rep: 12 },
+        { text: "Turn it in to the police", effects: {}, rep: 8 },
+        { text: "Snoop through their messages", effects: { charisma: -2 }, rep: -5 },
+        { text: "Sell it ($200)", effects: {}, money: 200, rep: -10 }
+      ]},
+    // ADDICTION / TEMPTATION
+    { text: "Someone at a party offered you something 'that'll make you feel amazing'.", minAge: 16, maxAge: 40, chance: 0.1,
+      options: [
+        { text: "No way, I'm good", effects: { charisma: 2, health: 1 }, rep: 3 },
+        { text: "Just this once...", effects: { happiness: 10, health: -8 }, rep: -5, drugUse: true },
+        { text: "Walk away from this party", effects: { happiness: -2 }, rep: 2 }
+      ]},
+    // UNEXPECTED WINDFALLS / LOSSES
+    { text: "Your car broke down and needs major repairs. ($600)", minAge: 18, maxAge: 75, chance: 0.1,
+      options: [
+        { text: "Pay for repairs", effects: { happiness: -3 }, cost: 600 },
+        { text: "Try to fix it yourself", effects: { intelligence: 2, health: -3 }, cost: 100 },
+        { text: "Can't afford it, take the bus", effects: { happiness: -5 } }
+      ]},
+    { text: "You received a letter saying you owe back taxes! ($1500)", minAge: 25, maxAge: 80, chance: 0.06,
+      options: [
+        { text: "Pay it immediately", effects: { happiness: -5 }, cost: 1500, rep: 3 },
+        { text: "Hire an accountant to fight it ($500)", effects: { intelligence: 2 }, cost: 500, money: 800 },
+        { text: "Ignore it", effects: {}, rep: -5, cost: 2000 }
+      ]},
+    // MIDLIFE CRISIS
+    { text: "You looked in the mirror and barely recognized yourself. Where did the years go?", minAge: 40, maxAge: 55, chance: 0.1,
+      options: [
+        { text: "Hit the gym and reinvent yourself", effects: { health: 5, happiness: 3, beauty: 2 }, rep: 2 },
+        { text: "Buy something expensive to feel better ($2000)", effects: { happiness: 5 }, cost: 2000 },
+        { text: "Call an old friend and reminisce", effects: { happiness: 4, charisma: 2 }, rep: 3, friend: true },
+        { text: "Accept aging gracefully", effects: { happiness: 3, intelligence: 2 }, rep: 5 }
+      ]},
+    // LATE LIFE
+    { text: "Your grandchild asked you to teach them something you're good at.", minAge: 55, maxAge: 80, chance: 0.12,
+      reqKids: true,
+      options: [
+        { text: "Spend the whole afternoon teaching them", effects: { happiness: 10, charisma: 3 }, rep: 5 },
+        { text: "Buy them a book about it ($20)", effects: { happiness: 3 }, cost: 20, rep: 2 },
+        { text: "I'm too tired today...", effects: { happiness: -3 }, rep: -2 }
+      ]},
+    { text: "A young person asked for your life advice. They look up to you.", minAge: 50, maxAge: 80, chance: 0.1,
+      options: [
+        { text: "Share everything you've learned", effects: { happiness: 8, charisma: 5 }, rep: 10 },
+        { text: "Tell them to figure it out themselves", effects: { charisma: -2 }, rep: -3 },
+        { text: "Warn them about the mistakes you made", effects: { happiness: 3, intelligence: 2 }, rep: 8 }
       ]}
 ];

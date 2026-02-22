@@ -463,8 +463,8 @@ LIFE.economy.spend = function(cost) {
 LIFE.economy.buyItem = function(index) {
     var item = LIFE.SHOP_ITEMS[index];
     if (!item || item.minAge > LIFE.state.age) return false;
-    // check once-only
-    if (item.once && LIFE.state.purchasedOnce && LIFE.state.purchasedOnce.indexOf(item.name) >= 0) return false;
+    // check sold out (restocking)
+    if (item.once && LIFE.economy.isItemSoldOut(item.name)) return false;
     // price modifier from charisma/reputation
     var price = item.cost;
     if (LIFE.state.stats.charisma > 50) price = Math.round(price * 0.9);
@@ -493,8 +493,7 @@ LIFE.economy.buyItem = function(index) {
         LIFE.sounds.drug();
     }
     if (item.once) {
-        if (!LIFE.state.purchasedOnce) LIFE.state.purchasedOnce = [];
-        LIFE.state.purchasedOnce.push(item.name);
+        LIFE.economy.markPurchased(item.name);
     }
     return true;
 };
@@ -504,8 +503,8 @@ LIFE.economy.buyVendorItem = function(vendorType, index) {
     if (!items) return false;
     var item = items[index];
     if (!item || item.minAge > LIFE.state.age) return false;
-    // check once-only
-    if (item.once && LIFE.state.purchasedOnce && LIFE.state.purchasedOnce.indexOf(item.name) >= 0) return false;
+    // check sold out (restocking)
+    if (item.once && LIFE.economy.isItemSoldOut(item.name)) return false;
     var price = item.cost;
     if (LIFE.state.stats.charisma > 50) price = Math.round(price * 0.9);
     if (!LIFE.economy.spend(price)) return false;
@@ -514,10 +513,9 @@ LIFE.economy.buyVendorItem = function(vendorType, index) {
         LIFE.state.reputation = Math.max(-100, Math.min(100, LIFE.state.reputation + item.rep));
         LIFE.ui.showRepChange(item.rep);
     }
-    // track once-only purchases
+    // track purchase for restocking
     if (item.once) {
-        if (!LIFE.state.purchasedOnce) LIFE.state.purchasedOnce = [];
-        LIFE.state.purchasedOnce.push(item.name);
+        LIFE.economy.markPurchased(item.name);
     }
     return true;
 };
@@ -525,7 +523,7 @@ LIFE.economy.buyVendorItem = function(vendorType, index) {
 LIFE.economy.buyDealerItem = function(index) {
     var item = LIFE.DEALER_ITEMS[index];
     if (!item || item.minAge > LIFE.state.age) return false;
-    if (item.once && LIFE.state.purchasedOnce && LIFE.state.purchasedOnce.indexOf(item.name) >= 0) return false;
+    if (item.once && LIFE.economy.isItemSoldOut(item.name)) return false;
     var price = item.cost;
     if (LIFE.state.stats.charisma > 50) price = Math.round(price * 0.9);
     if (!LIFE.economy.spend(price)) return false;
@@ -552,10 +550,29 @@ LIFE.economy.buyDealerItem = function(index) {
         LIFE.sounds.drug();
     }
     if (item.once) {
-        if (!LIFE.state.purchasedOnce) LIFE.state.purchasedOnce = [];
-        LIFE.state.purchasedOnce.push(item.name);
+        LIFE.economy.markPurchased(item.name);
     }
     return true;
+};
+
+// Item restocking system - items restock after 7-20 game days
+LIFE.economy.isItemSoldOut = function(itemName) {
+    var ts = LIFE.state.purchaseTimestamps;
+    if (!ts || !ts[itemName]) return false;
+    // Calculate current game day: age * 365 + (yearTimer / YEAR_DURATION) * 365
+    var currentDay = LIFE.state.age * 365 + (LIFE.state.yearTimer / LIFE.YEAR_DURATION) * 365;
+    var purchaseDay = ts[itemName].day;
+    var restockDays = ts[itemName].restock;
+    return (currentDay - purchaseDay) < restockDays;
+};
+
+LIFE.economy.markPurchased = function(itemName) {
+    if (!LIFE.state.purchaseTimestamps) LIFE.state.purchaseTimestamps = {};
+    var currentDay = LIFE.state.age * 365 + (LIFE.state.yearTimer / LIFE.YEAR_DURATION) * 365;
+    // Weapons/contraband restock slower (14-20 days), consumables faster (7-12 days)
+    var isWeapon = (itemName === 'Pistol' || itemName === 'Switchblade');
+    var restockDays = isWeapon ? (14 + Math.floor(Math.random() * 7)) : (7 + Math.floor(Math.random() * 6));
+    LIFE.state.purchaseTimestamps[itemName] = { day: currentDay, restock: restockDays };
 };
 
 LIFE.economy.getLifeSummary = function() {
@@ -606,27 +623,63 @@ LIFE.economy.getLifeSummary = function() {
         charisma: 'You were loved by all who knew you.',
         health: 'You lived a strong and active life.'
     };
-    if (s.money > 100000) lines.push('You left behind a comfortable fortune.');
+    if (s.money > 1000000) lines.push('You left behind an empire worth millions.');
+    else if (s.money > 100000) lines.push('You left behind a comfortable fortune.');
     else if (s.money > 10000) lines.push('You lived comfortably within your means.');
+    else if (s.money < -5000) lines.push('You died buried in debt.');
     else if (s.money < 0) lines.push('You died in debt.');
     else lines.push('Money was never your priority.');
     lines.push(epitaphs[best] || '');
-    if (s.fame >= 75) lines.push('Your name will be remembered by millions.');
+
+    // Life milestones
+    if (s.married && s.hasKids) lines.push('You built a family and a home.');
+    else if (s.married) lines.push('You found love and shared your life with someone.');
+    else if (s.age > 50) lines.push('You walked your own path through life.');
+
+    if (s.properties && s.properties.length > 3) lines.push('Your real estate portfolio was legendary.');
+    else if (s.properties && s.properties.length > 0) lines.push('You were a property owner.');
+
+    if (s.fame >= 90) lines.push('You became a living legend. Your name echoes through history.');
+    else if (s.fame >= 75) lines.push('Your name will be remembered by millions.');
     else if (s.fame >= 50) lines.push('You achieved the fame you always dreamed of.');
+    else if (s.fame >= 30) lines.push('You had your moment in the spotlight.');
+
     if (s.reputation >= 80) lines.push('You will be remembered as a true hero.');
     else if (s.reputation >= 50) lines.push('People will speak fondly of you.');
+    else if (s.reputation >= 25) lines.push('You were generally well-liked.');
     else if (s.reputation <= -80) lines.push('Your name will be feared for generations.');
     else if (s.reputation <= -50) lines.push('Many breathed a sigh of relief.');
     else if (s.reputation <= -25) lines.push('You left behind a troubled legacy.');
+
     if (s.familyKiller && s.killedFamily && s.killedFamily.length > 0) {
         lines.push('You murdered your own family... ' + s.killedFamily.join(', ') + '.');
     } else if (s.familyAbuser) {
         lines.push('You were violent toward your own family.');
     }
-    if (s.kills > 0) lines.push('Blood stains your legacy... ' + s.kills + ' lives taken.');
-    if (s.timesJailed > 0) lines.push('You spent years behind bars.');
-    if (s.friends > 5) lines.push('You were surrounded by friends until the end.');
-    if (s.enemies > 5) lines.push('You made many enemies along the way.');
-    if (s.drugUses > 5) lines.push('Addiction haunted your final days.');
+    if (s.kills > 10) lines.push('A trail of blood follows your name... ' + s.kills + ' lives taken.');
+    else if (s.kills > 0) lines.push('Blood stains your legacy... ' + s.kills + ' lives taken.');
+    if (s.timesJailed > 3) lines.push('You spent much of your life behind bars.');
+    else if (s.timesJailed > 0) lines.push('You spent years behind bars.');
+    if (s.friends > 10) lines.push('You were surrounded by friends until the very end.');
+    else if (s.friends > 5) lines.push('You were surrounded by friends until the end.');
+    if (s.enemies > 10) lines.push('You left behind a long list of enemies.');
+    else if (s.enemies > 5) lines.push('You made many enemies along the way.');
+    if (s.drugUses > 10) lines.push('Addiction consumed your life.');
+    else if (s.drugUses > 5) lines.push('Addiction haunted your final days.');
+    if (s.bounty > 0) lines.push('An outstanding bounty of $' + s.bounty.toLocaleString() + ' dies with you.');
+
+    // Final epitaph based on overall life
+    lines.push('');
+    var totalStats = s.stats.happiness + s.stats.intelligence + s.stats.charisma + s.stats.health;
+    if (totalStats > 300 && s.reputation > 50 && s.money > 50000)
+        lines.push('You lived the perfect life. Rest in peace.');
+    else if (totalStats > 250 && s.reputation > 0)
+        lines.push('A life well lived. You will be missed.');
+    else if (s.kills > 5 && s.reputation < -50)
+        lines.push('The world is a darker place because you lived in it.');
+    else if (s.reputation < -30 && s.timesJailed > 0)
+        lines.push('A cautionary tale for those who follow.');
+    else
+        lines.push('And so another life comes to an end.');
     return lines.join('\n');
 };

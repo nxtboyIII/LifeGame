@@ -184,20 +184,109 @@ LIFE.sounds.drug = function() {
     LIFE.sounds._osc(800, 'sine', 0.08, 0.1, 0.2);
 };
 
+// 3D positional police siren system
+LIFE.sounds._sirenNode = null;
+LIFE.sounds._sirenGain = null;
+LIFE.sounds._sirenPanner = null;
+
 LIFE.sounds.siren = function() {
+    // Legacy call - start siren if not already running
+    LIFE.sounds.startSiren();
+};
+
+LIFE.sounds.startSiren = function() {
+    var c = LIFE.sounds.ctx; if (!c) return;
+    if (LIFE.sounds._sirenNode) return; // already playing
+
+    var t = c.currentTime;
+
+    // Create two oscillators for a realistic wail (fundamental + overtone)
+    var o1 = c.createOscillator();
+    var o2 = c.createOscillator();
+    o1.type = 'sawtooth';
+    o2.type = 'sine';
+
+    // LFO to modulate frequency for the wail sweep (hi-lo-hi pattern)
+    var lfo = c.createOscillator();
+    var lfoGain = c.createGain();
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(0.7, t); // 0.7 Hz = wail cycle ~1.4s
+    lfoGain.gain.setValueAtTime(200, t); // sweep range ±200 Hz
+    lfo.connect(lfoGain);
+
+    // Base frequencies
+    o1.frequency.setValueAtTime(700, t);
+    o2.frequency.setValueAtTime(1400, t); // octave above
+    lfoGain.connect(o1.frequency);
+    lfoGain.connect(o2.frequency);
+
+    // Mix and gain
+    var g = c.createGain();
+    g.gain.setValueAtTime(0.15, t);
+    var g2 = c.createGain();
+    g2.gain.setValueAtTime(0.06, t); // quieter overtone
+
+    // 3D panner for spatial positioning
+    var panner = c.createPanner();
+    panner.panningModel = 'HRTF';
+    panner.distanceModel = 'inverse';
+    panner.refDistance = 5;
+    panner.maxDistance = 150;
+    panner.rolloffFactor = 1.5;
+    panner.setPosition(0, 0, 0);
+
+    o1.connect(g);
+    o2.connect(g2);
+    g.connect(panner);
+    g2.connect(panner);
+    panner.connect(LIFE.sounds.master);
+
+    o1.start(t);
+    o2.start(t);
+    lfo.start(t);
+
+    LIFE.sounds._sirenNode = { o1: o1, o2: o2, lfo: lfo };
+    LIFE.sounds._sirenGain = g;
+    LIFE.sounds._sirenPanner = panner;
+};
+
+LIFE.sounds.stopSiren = function() {
+    if (!LIFE.sounds._sirenNode) return;
     var c = LIFE.sounds.ctx; if (!c) return;
     var t = c.currentTime;
-    var o = c.createOscillator(), g = c.createGain();
-    o.type = 'sawtooth';
-    o.frequency.setValueAtTime(600, t);
-    o.frequency.linearRampToValueAtTime(900, t + 0.3);
-    o.frequency.linearRampToValueAtTime(600, t + 0.6);
-    o.frequency.linearRampToValueAtTime(900, t + 0.9);
-    o.frequency.linearRampToValueAtTime(600, t + 1.2);
-    g.gain.setValueAtTime(0.12, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 1.3);
-    o.connect(g); g.connect(LIFE.sounds.master);
-    o.start(t); o.stop(t + 1.3);
+    // Fade out
+    if (LIFE.sounds._sirenGain) {
+        LIFE.sounds._sirenGain.gain.linearRampToValueAtTime(0, t + 0.3);
+    }
+    var node = LIFE.sounds._sirenNode;
+    setTimeout(function() {
+        try { node.o1.stop(); } catch(e) {}
+        try { node.o2.stop(); } catch(e) {}
+        try { node.lfo.stop(); } catch(e) {}
+    }, 400);
+    LIFE.sounds._sirenNode = null;
+    LIFE.sounds._sirenGain = null;
+    LIFE.sounds._sirenPanner = null;
+};
+
+LIFE.sounds.updateSirenPosition = function(x, y, z) {
+    if (!LIFE.sounds._sirenPanner) return;
+    LIFE.sounds._sirenPanner.setPosition(x, y, z);
+};
+
+LIFE.sounds.updateListenerPosition = function(x, y, z, fx, fy, fz) {
+    var c = LIFE.sounds.ctx; if (!c || !c.listener) return;
+    if (c.listener.positionX) {
+        c.listener.positionX.setValueAtTime(x, c.currentTime);
+        c.listener.positionY.setValueAtTime(y, c.currentTime);
+        c.listener.positionZ.setValueAtTime(z, c.currentTime);
+        c.listener.forwardX.setValueAtTime(fx, c.currentTime);
+        c.listener.forwardY.setValueAtTime(fy, c.currentTime);
+        c.listener.forwardZ.setValueAtTime(fz, c.currentTime);
+    } else if (c.listener.setPosition) {
+        c.listener.setPosition(x, y, z);
+        c.listener.setOrientation(fx, fy, fz, 0, 1, 0);
+    }
 };
 
 LIFE.sounds.arrest = function() {

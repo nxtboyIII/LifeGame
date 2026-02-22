@@ -65,9 +65,70 @@ LIFE.getNPCChatMessage = function(npc) {
         var scared = ["Someone call the police!", "Stay away!", "Help! Help!", "Oh no...", "What's happening?!"];
         return scared[Math.floor(Math.random() * scared.length)];
     }
+
+    // NPC was previously attacked by player - they remember
+    if (relLevel <= -40 && npc.type !== 'Dealer' && !npc.isPolice) {
+        var hostile = ["Get away from me!", "I haven't forgotten what you did.", "Don't you dare come near me.",
+            "I'm watching you...", "Leave me alone!", "You're not welcome here."];
+        return hostile[Math.floor(Math.random() * hostile.length)];
+    }
+
+    // Player has bad reputation - NPCs react
     if (state.reputation <= -60 && npc.type !== 'Mom' && npc.type !== 'Dad' && npc.type !== 'Dealer' && !npc.isPolice) {
         var fear = ["Don't come near me...", "I know who you are.", "Please don't hurt me...", "Stay back!"];
         return fear[Math.floor(Math.random() * fear.length)];
+    }
+
+    // Player is famous
+    if (state.fame >= 50 && npc.type === 'Stranger' && Math.random() < 0.3) {
+        var fanMsgs = ["Oh my god, is that you?!", "Can I get a selfie?!", "I'm your biggest fan!", "I follow you everywhere!"];
+        return fanMsgs[Math.floor(Math.random() * fanMsgs.length)];
+    }
+
+    // Close friends greet warmly
+    if (relLevel >= 50 && Math.random() < 0.4) {
+        var warmMsgs = ["Hey, great to see you!", "There's my favorite person!", "I was hoping I'd run into you!",
+            "You always brighten my day!"];
+        return warmMsgs[Math.floor(Math.random() * warmMsgs.length)];
+    }
+
+    // Player is injured - NPCs notice
+    if (state.stats.health < 20 && Math.random() < 0.3 && !npc.isPolice && npc.type !== 'Dealer') {
+        var concernMsgs = ["You don't look so good...", "Are you okay?", "Maybe you should see a doctor.",
+            "You look like you need help."];
+        return concernMsgs[Math.floor(Math.random() * concernMsgs.length)];
+    }
+
+    // Weather-aware comments
+    if (LIFE.weather && LIFE.weather.current !== 'clear' && Math.random() < 0.2 && !npc.isPolice) {
+        var weatherChat = {
+            rain: ["Wish I brought an umbrella...", "This rain won't stop!", "Getting soaked out here..."],
+            storm: ["We should get inside!", "This storm is scary!", "Thunder!"],
+            cloudy: ["Looks like rain.", "Gray day today.", "Hope the sun comes out."],
+            fog: ["Can barely see anything...", "Creepy fog today.", "Where'd the sun go?"],
+            windy: ["Hold onto your hat!", "So windy today!", "Brrr, that wind!"]
+        };
+        var wMsgs = weatherChat[LIFE.weather.current];
+        if (wMsgs) return wMsgs[Math.floor(Math.random() * wMsgs.length)];
+    }
+
+    // Time-of-day comments
+    var simDate = LIFE.getSimDate ? LIFE.getSimDate() : null;
+    if (simDate && Math.random() < 0.1 && !npc.isPolice && npc.type !== 'Dealer') {
+        if (simDate.hour >= 5 && simDate.hour < 9) {
+            var morningMsgs = ["Good morning!", "Early bird gets the worm!", "Coffee time!"];
+            return morningMsgs[Math.floor(Math.random() * morningMsgs.length)];
+        } else if (simDate.hour >= 19 || simDate.hour < 5) {
+            var nightMsgs = ["Getting late...", "Beautiful night.", "Should head home soon."];
+            return nightMsgs[Math.floor(Math.random() * nightMsgs.length)];
+        }
+    }
+
+    // Player is rich - some NPCs notice
+    if (state.money > 50000 && npc.type === 'Stranger' && Math.random() < 0.15) {
+        var richMsgs = ["Must be nice being rich...", "Hey, can you spare some change?",
+            "I heard you're doing well for yourself.", "Nice clothes!"];
+        return richMsgs[Math.floor(Math.random() * richMsgs.length)];
     }
     if (state.reputation <= -60 && npc.isPolice) {
         var copThreat = ["I've got my eye on you.", "Don't try anything funny.", "You look familiar... in a bad way.", "One wrong move, pal."];
@@ -83,6 +144,42 @@ LIFE.getNPCChatMessage = function(npc) {
     }
     if (state.stats.health < 20 && npc.type !== 'Dealer') {
         return "You don't look so good...";
+    }
+
+    // Age-specific contextual messages
+    if (state.age >= 65 && npc.type === 'Stranger' && Math.random() < 0.15) {
+        var elderMsgs = ["Enjoy your retirement!", "Wisdom comes with age.", "You've lived a full life, huh?", "Nice to see seniors out and about!"];
+        return elderMsgs[Math.floor(Math.random() * elderMsgs.length)];
+    }
+
+    // Career-aware messages from coworkers/strangers
+    if (state.career && state.career !== 'none' && npc.type === 'Stranger' && Math.random() < 0.1) {
+        var careerChat = {
+            doctor: ["Thank you for your service, doc!", "My cousin went to see you at the hospital."],
+            athlete: ["Saw your game last week! Great play!", "Can I get your autograph?"],
+            musician: ["Love your music!", "When's the next concert?"],
+            actor: ["I saw you in that show! Amazing!", "Are you filming something new?"],
+            scientist: ["Read your paper! Fascinating stuff.", "Science is the future!"],
+            business: ["Heard your company is doing well!", "Teach me your business secrets!"],
+            teacher: ["My kid says you're the best teacher!", "Education shapes the future."]
+        };
+        var cMsgs = careerChat[state.career];
+        if (cMsgs) return cMsgs[Math.floor(Math.random() * cMsgs.length)];
+    }
+
+    // Criminal past - some people recognize you
+    if (state.criminalRecord && state.timesJailed > 0 && npc.type !== 'Dealer' && !npc.isPolice && Math.random() < 0.08) {
+        var exConMsgs = ["Aren't you that person from the news?", "Didn't you just get out of prison?",
+            "I heard about what you did...", "People can change, right?"];
+        return exConMsgs[Math.floor(Math.random() * exConMsgs.length)];
+    }
+
+    // Married/kids comments from neighbors
+    if (state.married && npc.type === 'Neighbor' && Math.random() < 0.2) {
+        var familyMsgs = state.hasKids
+            ? ["Your kids are growing up so fast!", "Heard the little ones playing earlier!", "Family life treating you well?"]
+            : ["You two make a lovely couple!", "How's married life?", "Saw your spouse earlier. Lovely person!"];
+        return familyMsgs[Math.floor(Math.random() * familyMsgs.length)];
     }
 
     var msgs = LIFE.NPC_CHAT[npc.type];
@@ -363,6 +460,76 @@ LIFE.isInsideCollider = function(x, z) {
     return false;
 };
 
+// ============================================================
+// NPC PATHFINDING / OBSTACLE AVOIDANCE
+// ============================================================
+// Raycast-style check: is there a collider between point A and point B?
+LIFE.pathBlocked = function(ax, az, bx, bz) {
+    var dx = bx - ax, dz = bz - az;
+    var dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < 1) return false;
+    var steps = Math.ceil(dist / 1.5); // check every 1.5 units
+    for (var i = 1; i <= steps; i++) {
+        var t = i / steps;
+        var px = ax + dx * t;
+        var pz = az + dz * t;
+        if (LIFE.isInsideCollider(px, pz)) return true;
+    }
+    return false;
+};
+
+// Find a clear target for NPC, avoiding colliders in the path
+LIFE.findClearTarget = function(npc, centerX, centerZ, radius) {
+    var npcX = npc.char.group.position.x;
+    var npcZ = npc.char.group.position.z;
+    // Try up to 8 random targets, pick first one with clear path
+    for (var i = 0; i < 8; i++) {
+        var tx = centerX + (Math.random() - 0.5) * radius * 2;
+        var tz = centerZ + (Math.random() - 0.5) * radius * 2;
+        if (!LIFE.isInsideCollider(tx, tz) && !LIFE.pathBlocked(npcX, npcZ, tx, tz)) {
+            return { x: tx, z: tz };
+        }
+    }
+    // Fallback: just find a non-collider spot (old behavior)
+    for (var j = 0; j < 5; j++) {
+        var fx = centerX + (Math.random() - 0.5) * radius * 2;
+        var fz = centerZ + (Math.random() - 0.5) * radius * 2;
+        if (!LIFE.isInsideCollider(fx, fz)) return { x: fx, z: fz };
+    }
+    return { x: centerX, z: centerZ };
+};
+
+// Steer NPC around obstacle: when stuck, try perpendicular directions
+LIFE.steerAroundObstacle = function(npc, targetX, targetZ) {
+    var nx = npc.char.group.position.x;
+    var nz = npc.char.group.position.z;
+    var dx = targetX - nx;
+    var dz = targetZ - nz;
+    var dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < 0.5) return null;
+
+    // Normalize direction
+    var ndx = dx / dist;
+    var ndz = dz / dist;
+
+    // Try perpendicular directions (left and right of target direction)
+    var perpDist = 5 + Math.random() * 5; // steer 5-10 units to the side
+    var candidates = [
+        { x: nx - ndz * perpDist, z: nz + ndx * perpDist }, // left
+        { x: nx + ndz * perpDist, z: nz - ndx * perpDist }, // right
+        { x: nx - ndz * perpDist + ndx * 3, z: nz + ndx * perpDist + ndz * 3 }, // left-forward
+        { x: nx + ndz * perpDist + ndx * 3, z: nz - ndx * perpDist + ndz * 3 }  // right-forward
+    ];
+
+    for (var i = 0; i < candidates.length; i++) {
+        var c = candidates[i];
+        if (!LIFE.isInsideCollider(c.x, c.z) && !LIFE.pathBlocked(nx, nz, c.x, c.z)) {
+            return c;
+        }
+    }
+    return null; // couldn't find a way around
+};
+
 LIFE.updateNPCHealthBar = function(npc) {
     var pct = npc.health / npc.maxHealth;
     var ctx = npc.hpCtx;
@@ -575,10 +742,16 @@ LIFE.spawnNPCs = function(stage) {
         });
     }
 
-    // spawn inmates in jail
+    // spawn inmates in jail - more for a livelier prison
     if (stage === 'jail') {
-        var inmateName = LIFE.NPC_FIRST_NAMES[Math.floor(Math.random() * LIFE.NPC_FIRST_NAMES.length)];
-        LIFE.npcs.push(LIFE.createNPC('Inmate', 2, -2, inmateName));
+        var inmateCount = 2 + Math.floor(Math.random() * 2); // 2-3 inmates
+        for (var ini = 0; ini < inmateCount; ini++) {
+            var inmateName = LIFE.NPC_FIRST_NAMES[Math.floor(Math.random() * LIFE.NPC_FIRST_NAMES.length)];
+            var ix = (Math.random() - 0.5) * 5;
+            var iz = (Math.random() - 0.5) * 5;
+            var inmate = LIFE.createNPC('Inmate', ix + npcOffX, iz + npcOffZ, inmateName);
+            LIFE.npcs.push(inmate);
+        }
     }
 };
 
@@ -786,6 +959,16 @@ LIFE.updateNPCs = function(dt) {
             return;
         }
 
+        // NPCs walk faster in rain/storm to seek shelter
+        if (LIFE.weather && (LIFE.weather.current === 'rain' || LIFE.weather.current === 'storm')) {
+            if (!npc.stayNear && npc.speed > 0 && !npc.waiting) {
+                // speed up walking in bad weather
+                var weatherBoost = LIFE.weather.current === 'storm' ? 1.6 : 1.3;
+                npc.char.group.position.x += (dx / dist) * npc.speed * weatherBoost * dt * 0.3;
+                npc.char.group.position.z += (dz / dist) * npc.speed * weatherBoost * dt * 0.3;
+            }
+        }
+
         // friendly NPCs occasionally approach
         if (relLevel >= 40 && player && Math.random() < 0.005) {
             var adx = player.group.position.x - npc.char.group.position.x;
@@ -801,10 +984,73 @@ LIFE.updateNPCs = function(dt) {
             }
         }
 
+        // NPC-to-NPC socializing: occasionally pair up with nearby NPC and face each other
+        if (!npc._socialPartner && !npc.stayNear && npc.speed > 0 && Math.random() < 0.002) {
+            // find a nearby NPC to chat with
+            for (var si = 0; si < LIFE.npcs.length; si++) {
+                var other = LIFE.npcs[si];
+                if (other === npc || !other.alive || other._sleeping || other.fleeing || other._socialPartner || other.stayNear) continue;
+                if (other.isPolice || other.isDealer || other.isVendor) continue;
+                var sdx = other.char.group.position.x - npc.char.group.position.x;
+                var sdz = other.char.group.position.z - npc.char.group.position.z;
+                var sdist = Math.sqrt(sdx * sdx + sdz * sdz);
+                if (sdist < 6 && sdist > 1) {
+                    npc._socialPartner = other;
+                    other._socialPartner = npc;
+                    npc._socialTimer = 4 + Math.random() * 4;
+                    other._socialTimer = npc._socialTimer;
+                    npc.waiting = true; npc.waitTimer = npc._socialTimer;
+                    other.waiting = true; other.waitTimer = npc._socialTimer;
+                    break;
+                }
+            }
+        }
+        // Socializing behavior: face partner, occasional gestures
+        if (npc._socialPartner && npc._socialTimer > 0) {
+            npc._socialTimer -= dt;
+            var partner = npc._socialPartner;
+            if (partner.alive && !partner._sleeping) {
+                var pdx = partner.char.group.position.x - npc.char.group.position.x;
+                var pdz = partner.char.group.position.z - npc.char.group.position.z;
+                npc.char.group.rotation.y = Math.atan2(pdx, pdz);
+                // gesticulate while talking
+                var gesturePhase = Math.sin(npc._socialTimer * 3);
+                npc.char.parts.rightArm.rotation.x = gesturePhase * 0.3;
+                npc.char.parts.leftArm.rotation.x = -gesturePhase * 0.15;
+            }
+            if (npc._socialTimer <= 0) {
+                if (npc._socialPartner) npc._socialPartner._socialPartner = null;
+                npc._socialPartner = null;
+            }
+        }
+
+        // NPC idle activity: when waiting long enough, do an idle animation
+        if (npc.waiting && !npc._socialPartner && !npc.stayNear && npc.speed > 0) {
+            if (!npc._idleActivity) {
+                if (npc.waitTimer < 1.5 && Math.random() < 0.3) {
+                    npc._idleActivity = Math.random() < 0.5 ? 'lookAround' : 'stretch';
+                    npc._idleTimer = 1.5;
+                }
+            }
+            if (npc._idleActivity) {
+                npc._idleTimer -= dt;
+                if (npc._idleActivity === 'lookAround') {
+                    npc.char.group.rotation.y += Math.sin(npc._idleTimer * 4) * 0.02;
+                } else if (npc._idleActivity === 'stretch') {
+                    var st = Math.sin(npc._idleTimer * 2);
+                    npc.char.parts.leftArm.rotation.x = -st * 0.8;
+                    npc.char.parts.rightArm.rotation.x = -st * 0.8;
+                }
+                if (npc._idleTimer <= 0) npc._idleActivity = null;
+            }
+        }
+
         if (npc.waiting) {
             npc.waitTimer -= dt;
             npc.char.parts.leftLeg.rotation.x *= 0.9; npc.char.parts.rightLeg.rotation.x *= 0.9;
-            npc.char.parts.leftArm.rotation.x *= 0.9; npc.char.parts.rightArm.rotation.x *= 0.9;
+            if (!npc._socialPartner && !npc._idleActivity) {
+                npc.char.parts.leftArm.rotation.x *= 0.9; npc.char.parts.rightArm.rotation.x *= 0.9;
+            }
             if (npc.waitTimer <= 0) {
                 var tx, tz, tries = 0;
                 if (LIFE.world.built && !LIFE.world.insideInterior && npc._zoneCenter) {
