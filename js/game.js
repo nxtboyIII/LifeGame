@@ -28,6 +28,8 @@ LIFE.state = {
     wantedLevel: 0, wantedTimer: 0, wantedCooldown: 0,
     criminalRecord: false, timesJailed: 0,
     bounty: 0, // Skyrim-style persistent bounty
+    // family violence tracking
+    familyAbuser: false, familyKiller: false, killedFamily: [],
     // day cycle (school ages)
     dayPhase: null, // 'classroom', 'schoolyard', 'home' or null
     timeSkipOpen: false,
@@ -38,7 +40,12 @@ LIFE.state = {
     // jail
     jailTimer: 0, jailYears: 0, jailFine: 0, jailEventTimer: 0,
     // execution
-    executionTimer: 0, executionPhase: 0
+    executionTimer: 0, executionPhase: 0,
+    // hospital
+    hospitalReason: null, // 'illness', 'injury', 'parentCheckin', 'nearDeath', 'foodPoisoning'
+    hospitalReturnStage: null,
+    hospitalReturnPos: null,
+    hospitalTimer: 0
 };
 
 // ============================================================
@@ -565,6 +572,12 @@ LIFE.getContextEvents = function() {
 LIFE.tryEnterExitHome = function() {
     var state = LIFE.state;
 
+    // EXIT HOSPITAL → back to where we were
+    if (state.currentStage === 'hospital') {
+        LIFE.exitHospital();
+        return;
+    }
+
     // EXIT HOME → back to city
     if (state.currentStage === 'playerhome') {
         var cityPos = state._cityReturnPos || { x: 0, z: 0 };
@@ -637,6 +650,80 @@ LIFE.spawnHomeNPCs = function() {
             LIFE.npcs.push(child);
         }
     }
+};
+
+// ============================================================
+// HOSPITAL SYSTEM
+// ============================================================
+LIFE.sendToHospital = function(reason) {
+    var state = LIFE.state;
+    if (state.gamePhase !== 'playing') return;
+    if (state.currentStage === 'hospital') return;
+
+    // save where we were
+    state.hospitalReason = reason;
+    state.hospitalReturnStage = state.currentStage;
+    state.hospitalReturnPos = {
+        x: LIFE.player.group.position.x,
+        z: LIFE.player.group.position.z
+    };
+    state.hospitalTimer = 0;
+
+    // transition to hospital
+    state.currentStage = 'hospital';
+    state.bounds = LIFE.getBoundsForStage('hospital');
+    LIFE.buildEnvironment('hospital');
+    LIFE.spawnNPCs('hospital');
+    LIFE.updatePlayerSize();
+    LIFE.player.group.position.set(0, 0, 3);
+
+    var msgs = {
+        nearDeath: 'Rushed to the hospital!',
+        illness: 'You feel sick... going to the hospital',
+        parentCheckin: 'Your parents took you to the hospital',
+        overdose: 'Rushed to the hospital!',
+        foodPoisoning: 'Going to the hospital...',
+        injury: 'Taken to the hospital',
+        carAccident: 'Ambulance to the hospital!'
+    };
+    LIFE.ui.showStageMessage(msgs[reason] || 'Admitted to hospital');
+
+    // doctor will talk based on reason
+    setTimeout(function() {
+        if (state.gamePhase === 'playing' && state.currentStage === 'hospital') {
+            LIFE.dialogue.openHospitalDialogue(reason);
+        }
+    }, 1500);
+};
+
+LIFE.exitHospital = function() {
+    var state = LIFE.state;
+    var returnStage = state.hospitalReturnStage || LIFE.getStageForAge(state.age);
+    var returnPos = state.hospitalReturnPos || { x: 0, z: 0 };
+
+    state.hospitalReason = null;
+    state.hospitalReturnStage = null;
+    state.hospitalReturnPos = null;
+    state.currentStage = returnStage;
+    state.bounds = LIFE.getBoundsForStage(returnStage);
+    LIFE.buildEnvironment(returnStage);
+    LIFE.spawnNPCs(returnStage);
+    LIFE.updatePlayerSize();
+    LIFE.player.group.position.set(returnPos.x, 0, returnPos.z);
+
+    // if school age, restore day phase
+    if (LIFE.isSchoolAge(state.age)) {
+        var dayTimer = state.yearTimer % LIFE.DAY_DURATION;
+        var phase = 'classroom';
+        for (var i = 0; i < LIFE.SCHOOL_PHASES.length; i++) {
+            var sp = LIFE.SCHOOL_PHASES[i];
+            if (dayTimer >= sp.start && dayTimer < sp.end) { phase = sp.name; break; }
+        }
+        state.dayPhase = phase;
+        LIFE.transitionDayPhase(phase);
+    }
+
+    LIFE.ui.showPopup('Discharged from hospital', '#4caf50');
 };
 
 // ============================================================
@@ -747,8 +834,8 @@ LIFE.updateSchoolDayCycle = function() {
         if (state.dayPhase) state.dayPhase = null;
         return;
     }
-    // don't run during player home visit or other special stages
-    if (state.currentStage === 'playerhome') return;
+    // don't run during player home visit, hospital, or other special stages
+    if (state.currentStage === 'playerhome' || state.currentStage === 'hospital') return;
 
     var dayTimer = state.yearTimer % LIFE.DAY_DURATION;
     var expectedPhase = null;
@@ -1066,6 +1153,42 @@ LIFE.advanceYear = function() {
                 LIFE.addWanted(Math.min(3, Math.ceil(state.bounty / 2000)));
             }
         }, 2000);
+    }
+
+    // HOSPITAL TRIGGERS
+    if (state.currentStage !== 'hospital' && state.wantedLevel === 0) {
+        // near death - emergency hospitalization
+        if (state.stats.health > 0 && state.stats.health <= 10 && Math.random() < 0.6) {
+            setTimeout(function() {
+                if (state.gamePhase === 'playing' && state.currentStage !== 'hospital') {
+                    LIFE.sendToHospital('nearDeath');
+                }
+            }, 1500);
+        }
+        // random illness (more likely as you age)
+        else if (state.age > 5 && Math.random() < (state.age > 50 ? 0.12 : 0.04)) {
+            setTimeout(function() {
+                if (state.gamePhase === 'playing' && state.currentStage !== 'hospital' && !LIFE.dialogue.active) {
+                    LIFE.sendToHospital('illness');
+                }
+            }, 2500);
+        }
+        // parents check in child for behavioral issues (low happiness + young)
+        else if (state.age >= 3 && state.age <= 12 && state.stats.happiness < 15 && Math.random() < 0.3) {
+            setTimeout(function() {
+                if (state.gamePhase === 'playing' && state.currentStage !== 'hospital') {
+                    LIFE.sendToHospital('parentCheckin');
+                }
+            }, 2000);
+        }
+        // drug use hospitalization
+        else if (state.drugUses > 2 && Math.random() < 0.15) {
+            setTimeout(function() {
+                if (state.gamePhase === 'playing' && state.currentStage !== 'hospital') {
+                    LIFE.sendToHospital('overdose');
+                }
+            }, 2000);
+        }
     }
 
     // health death check
@@ -1402,6 +1525,13 @@ LIFE.animate = function() {
                 state.stats.happiness = Math.max(0, state.stats.happiness - 0.02 * dt);
             if (state.married) state.stats.happiness = Math.min(100, state.stats.happiness + 0.008 * dt);
             if (state.hasKids) state.stats.happiness = Math.min(100, state.stats.happiness + 0.006 * dt);
+            // family violence permanent trauma
+            if (state.familyKiller) {
+                state.stats.happiness = Math.max(0, state.stats.happiness - 0.05 * dt);
+                state.stats.health = Math.max(0, state.stats.health - 0.02 * dt);
+            } else if (state.familyAbuser) {
+                state.stats.happiness = Math.max(0, state.stats.happiness - 0.02 * dt);
+            }
 
             // health death check
             if (state.stats.health <= 0 && !state.deathTriggered) {

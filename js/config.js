@@ -26,7 +26,9 @@ LIFE.STAGES = {
     death:      { ages: [80, 80], bg: 0x000000, fog: [0x000000, 1, 20],   ground: 0x111111 },
     // school day sub-stages (not age-mapped, used by day cycle)
     classroom:    { ages: [-5, -5], bg: 0xfff8e1, fog: [0xfff8e1, 10, 25], ground: 0xf5deb3 },
-    hsclassroom:  { ages: [-6, -6], bg: 0xf0f0f0, fog: [0xf0f0f0, 10, 25], ground: 0xbdbdbd }
+    hsclassroom:  { ages: [-6, -6], bg: 0xf0f0f0, fog: [0xf0f0f0, 10, 25], ground: 0xbdbdbd },
+    // hospital (teleported to, not age-mapped)
+    hospital:     { ages: [-7, -7], bg: 0xf5f5f5, fog: [0xf5f5f5, 12, 30], ground: 0xe0e0e0 }
 };
 
 // ============================================================
@@ -58,7 +60,8 @@ LIFE.NPC_NAMES = {
     city:       ['Stranger', 'Stranger', 'Stranger', 'Stranger', 'Stranger', 'Neighbor', 'Neighbor', 'Dealer'],
     retirement: ['Old Friend', 'Neighbor', 'Stranger', 'Grandchild'],
     classroom:  ['Teacher', 'Kid', 'Kid', 'Kid'],
-    hsclassroom:['Teacher', 'Student', 'Student', 'Student', 'Student']
+    hsclassroom:['Teacher', 'Student', 'Student', 'Student', 'Student'],
+    hospital:   ['Doctor', 'Nurse', 'Nurse']
 };
 
 // Job buildings placed in city (x, z, career, label)
@@ -86,15 +89,21 @@ LIFE.PROPERTY_BUILDINGS = [
     { x: -25, z: 35,  propIdx: 5, label: 'Commercial', color: 0x607d8b, w: 10, h: 7, d: 8 }
 ];
 
-// NPC first names (for individual identity)
-LIFE.NPC_FIRST_NAMES = [
-    'Alex', 'Sam', 'Jordan', 'Taylor', 'Casey', 'Riley', 'Morgan', 'Quinn',
-    'Jamie', 'Avery', 'Blake', 'Charlie', 'Drew', 'Emery', 'Frankie', 'Harper',
-    'Jesse', 'Kelly', 'Logan', 'Max', 'Noah', 'Parker', 'Reese', 'Sky',
-    'Tommy', 'Zoe', 'Mia', 'Leo', 'Ruby', 'Finn', 'Ivy', 'Kai',
-    'Luna', 'Owen', 'Ella', 'Jack', 'Lily', 'Ryan', 'Chloe', 'Ethan',
-    'Grace', 'Dylan', 'Sophie', 'Tyler', 'Maya', 'Luke', 'Nora', 'Cole'
+// NPC first names split by gender
+LIFE.MALE_NAMES = [
+    'Jack', 'Ethan', 'Noah', 'Logan', 'Ryan', 'Dylan', 'Owen', 'Cole',
+    'Leo', 'Finn', 'Luke', 'Tyler', 'Max', 'Kai', 'Tommy', 'Drew',
+    'Blake', 'Jesse', 'Parker', 'Reese', 'Alex', 'Sam', 'Charlie',
+    'Marcus', 'Daniel', 'James', 'Aiden', 'Caleb', 'Mason', 'Hunter'
 ];
+LIFE.FEMALE_NAMES = [
+    'Zoe', 'Mia', 'Ruby', 'Ivy', 'Luna', 'Ella', 'Lily', 'Chloe',
+    'Grace', 'Sophie', 'Maya', 'Nora', 'Riley', 'Harper', 'Avery',
+    'Quinn', 'Kelly', 'Sky', 'Emma', 'Olivia', 'Aria', 'Stella',
+    'Violet', 'Hazel', 'Clara', 'Willow', 'Ellie', 'Layla', 'Sadie'
+];
+// combined for backwards compat
+LIFE.NPC_FIRST_NAMES = LIFE.MALE_NAMES.concat(LIFE.FEMALE_NAMES);
 // Types that get individual first names (multiple NPCs of same type)
 LIFE.NPC_NEEDS_NAME = { Kid: true, Student: true, Stranger: true, Neighbor: true, Coworker: true, Inmate: true };
 
@@ -125,6 +134,21 @@ LIFE.STAGE_MESSAGES = {
 // ============================================================
 // AGE-BASED HELPER FUNCTIONS
 // ============================================================
+LIFE.getPunchDamage = function(age) {
+    // babies/toddlers do basically nothing
+    if (age <= 0) return 0;
+    if (age < 3)  return 1;
+    if (age < 6)  return 2;
+    if (age < 10) return 4;
+    if (age < 14) return 8;
+    if (age < 18) return 14;
+    if (age < 30) return 20; // peak damage
+    if (age < 50) return 18;
+    if (age < 65) return 14;
+    if (age < 75) return 10;
+    return 6; // elderly
+};
+
 LIFE.getActionsForAge = function(a) {
     if (a < 1)  return ['cry', 'laugh', 'punch'];
     if (a < 3)  return ['cry', 'punch', 'wave', 'laugh'];
@@ -173,7 +197,7 @@ LIFE.getStageForAge = function(a) {
 };
 
 LIFE.getBoundsForStage = function(s) {
-    var map = { womb: 3, nursery: 8, home: 20, school: 30, highschool: 35, college: 40, city: 50, retirement: 30, playerhome: 10, jail: 4, execution: 15, death: 15, classroom: 8, hsclassroom: 10 };
+    var map = { womb: 3, nursery: 8, home: 20, school: 30, highschool: 35, college: 40, city: 50, retirement: 30, playerhome: 10, jail: 4, execution: 15, death: 15, classroom: 8, hsclassroom: 10, hospital: 10 };
     return map[s] || 20;
 };
 
@@ -248,7 +272,7 @@ LIFE.RANDOM_EVENTS = [
     { text: "You got into a car accident!", minAge: 16, maxAge: 80, chance: 0.1,
       options: [
         { text: "It wasn't my fault! File insurance.", effects: { health: -10, happiness: -5 }, cost: 200 },
-        { text: "Accept blame and pay damages", effects: { health: -8, happiness: -3 }, cost: 500, rep: 5 },
+        { text: "Go to the hospital", effects: { health: -5, happiness: -3 }, hospital: 'carAccident' },
         { text: "Drive away before anyone sees", effects: { health: -5 }, rep: -15 }
       ]},
     { text: "You found a wallet on the ground with $500 inside!", minAge: 8, maxAge: 80, chance: 0.12,
@@ -274,7 +298,7 @@ LIFE.RANDOM_EVENTS = [
     { text: "You got food poisoning from a restaurant!", minAge: 10, maxAge: 80, chance: 0.12,
       options: [
         { text: "Rest and recover", effects: { health: -8, happiness: -3 } },
-        { text: "Go to the hospital ($300)", effects: { health: -3 }, cost: 300 },
+        { text: "Go to the hospital", effects: { health: -3 }, hospital: 'foodPoisoning' },
         { text: "Sue the restaurant!", effects: { health: -6 }, money: 1000, rep: -3 }
       ]},
     { text: "A mugger approaches you in a dark alley!", minAge: 16, maxAge: 80, chance: 0.1,
@@ -288,7 +312,7 @@ LIFE.RANDOM_EVENTS = [
     { text: "You had a health scare. The doctor says you need to take better care of yourself.", minAge: 45, maxAge: 80, chance: 0.15,
       options: [
         { text: "Start exercising and eating better", effects: { health: 8, happiness: 3 }, rep: 2 },
-        { text: "Get regular checkups ($500)", effects: { health: 12 }, cost: 500 },
+        { text: "Go to the hospital for a full checkup", effects: { health: 5 }, hospital: 'illness' },
         { text: "Ignore the doctor's advice", effects: { health: -5, happiness: 2 }, rep: -2 }
       ]},
     { text: "An old friend from school reached out to you!", minAge: 30, maxAge: 80, chance: 0.12,
@@ -393,5 +417,12 @@ LIFE.RANDOM_EVENTS = [
         { text: "Sure, I'll help sell! ($8 cut)", effects: { charisma: 3, happiness: 2 }, money: 8, rep: 5, friend: true },
         { text: "I'll buy one! ($3)", effects: { happiness: 2 }, cost: 3, rep: 3 },
         { text: "That's dumb", effects: {}, rep: -5 }
+      ]},
+    // KID SWITCHBLADE EVENTS
+    { text: "While snooping around your parents' closet, you found something hidden in a box... it's a switchblade!", minAge: 7, maxAge: 14, chance: 0.06,
+      options: [
+        { text: "Take it and hide it in your backpack", effects: { charisma: 1 }, rep: -3, giveSwitchblade: true },
+        { text: "Put it back, that's dangerous", effects: { intelligence: 2, happiness: 1 }, rep: 3 },
+        { text: "Tell Mom and Dad you found it", effects: { happiness: 1 }, rep: 5 }
       ]}
 ];

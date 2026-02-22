@@ -519,6 +519,11 @@ LIFE.economy.getLifeSummary = function() {
     else if (s.reputation <= -80) lines.push('Your name will be feared for generations.');
     else if (s.reputation <= -50) lines.push('Many breathed a sigh of relief.');
     else if (s.reputation <= -25) lines.push('You left behind a troubled legacy.');
+    if (s.familyKiller && s.killedFamily && s.killedFamily.length > 0) {
+        lines.push('You murdered your own family... ' + s.killedFamily.join(', ') + '.');
+    } else if (s.familyAbuser) {
+        lines.push('You were violent toward your own family.');
+    }
     if (s.kills > 0) lines.push('Blood stains your legacy... ' + s.kills + ' lives taken.');
     if (s.timesJailed > 0) lines.push('You spent years behind bars.');
     if (s.friends > 5) lines.push('You were surrounded by friends until the end.');

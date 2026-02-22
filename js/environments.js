@@ -29,6 +29,7 @@ LIFE.buildEnvironment = function(stage) {
         playerhome: LIFE.buildPlayerHome,
         jail: LIFE.buildJail,
         execution: LIFE.buildExecution,
+        hospital: LIFE.buildHospital,
         death: LIFE.buildDeath
     };
     if (builders[stage]) builders[stage]();
@@ -831,6 +832,142 @@ LIFE.buildRetirement = function() {
         flower.position.set(-20 + Math.random() * 40, 0.15, -20 + Math.random() * 40);
         LIFE.addEnv(flower);
     }
+};
+
+// ---------- HOSPITAL ----------
+LIFE.buildHospital = function() {
+    LIFE.makeGround(25, 0xe0e0e0);
+    LIFE.ambientLight.intensity = 0.7;
+    LIFE.dirLight.intensity = 0.9;
+
+    var roomW = 14, roomD = 12;
+    // linoleum floor
+    LIFE.addEnv(LIFE.makeBox(roomW, 0.1, roomD, 0xeeeeee, 0, 0.05, 0));
+    // walls
+    LIFE.addSolid(roomW, 3.5, 0.3, 0xfafafa, 0, 1.75, -roomD / 2);
+    LIFE.addSolid(0.3, 3.5, roomD, 0xfafafa, -roomW / 2, 1.75, 0);
+    LIFE.addSolid(0.3, 3.5, roomD, 0xfafafa, roomW / 2, 1.75, 0);
+    // front wall with door gap
+    LIFE.addSolid((roomW / 2 - 1.5), 3.5, 0.3, 0xfafafa, -(roomW / 4 + 0.75), 1.75, roomD / 2);
+    LIFE.addSolid((roomW / 2 - 1.5), 3.5, 0.3, 0xfafafa, (roomW / 4 + 0.75), 1.75, roomD / 2);
+    // door frame top
+    LIFE.addEnv(LIFE.makeBox(3, 0.5, 0.3, 0xfafafa, 0, 3.25, roomD / 2));
+    // ceiling
+    LIFE.addEnv(LIFE.makeBox(roomW + 0.6, 0.15, roomD + 0.6, 0xf5f5f5, 0, 3.5, 0));
+
+    // HOSPITAL BED (main patient bed, center-left)
+    // bed frame
+    LIFE.addSolid(3, 0.6, 1.5, 0xe0e0e0, -3, 0.3, -2);
+    // mattress
+    LIFE.addEnv(LIFE.makeBox(2.8, 0.15, 1.4, 0xfafafa, -3, 0.68, -2));
+    // pillow
+    LIFE.addEnv(LIFE.makeBox(0.7, 0.12, 0.4, 0xe3f2fd, -4.1, 0.75, -2));
+    // blanket
+    LIFE.addEnv(LIFE.makeBox(2.0, 0.05, 1.2, 0x90caf9, -2.5, 0.78, -2));
+    // bed rails
+    LIFE.addEnv(LIFE.makeBox(0.05, 0.4, 1.5, 0xbdbdbd, -4.5, 0.8, -2));
+    LIFE.addEnv(LIFE.makeBox(0.05, 0.4, 1.5, 0xbdbdbd, -1.5, 0.8, -2));
+
+    // SECOND BED (right side, empty)
+    LIFE.addSolid(3, 0.6, 1.5, 0xe0e0e0, 4, 0.3, -2);
+    LIFE.addEnv(LIFE.makeBox(2.8, 0.15, 1.4, 0xfafafa, 4, 0.68, -2));
+    LIFE.addEnv(LIFE.makeBox(0.7, 0.12, 0.4, 0xe3f2fd, 2.9, 0.75, -2));
+    LIFE.addEnv(LIFE.makeBox(0.05, 0.4, 1.5, 0xbdbdbd, 2.5, 0.8, -2));
+    LIFE.addEnv(LIFE.makeBox(0.05, 0.4, 1.5, 0xbdbdbd, 5.5, 0.8, -2));
+
+    // CURTAIN DIVIDER between beds
+    LIFE.addEnv(LIFE.makeBox(0.02, 2.5, 1.6, 0xbbdefb, 0.5, 1.5, -2));
+    // curtain rail
+    LIFE.addEnv(LIFE.makeBox(0.06, 0.06, 1.8, 0xbdbdbd, 0.5, 2.8, -2));
+
+    // IV STAND (next to patient bed)
+    LIFE.addEnv(LIFE.makeBox(0.06, 2.0, 0.06, 0xbdbdbd, -1.8, 1.0, -1.2));
+    // IV bag
+    LIFE.addEnv(LIFE.makeBox(0.15, 0.25, 0.08, 0xe3f2fd, -1.8, 2.1, -1.2));
+    // IV tube (thin line down)
+    LIFE.addEnv(LIFE.makeBox(0.02, 0.8, 0.02, 0x90caf9, -1.8, 1.6, -1.2));
+
+    // HEART MONITOR
+    LIFE.addSolid(0.6, 0.8, 0.3, 0x37474f, -1.8, 0.4, -3.2);
+    // screen
+    var monCanvas = document.createElement('canvas');
+    monCanvas.width = 128; monCanvas.height = 64;
+    var monCtx = monCanvas.getContext('2d');
+    monCtx.fillStyle = '#1a1a1a';
+    monCtx.fillRect(0, 0, 128, 64);
+    monCtx.strokeStyle = '#4caf50';
+    monCtx.lineWidth = 2;
+    monCtx.beginPath();
+    monCtx.moveTo(0, 32);
+    for (var i = 0; i < 128; i += 4) {
+        var y = 32 + Math.sin(i * 0.15) * 12 * (i % 32 < 8 ? 2 : 0.5);
+        monCtx.lineTo(i, y);
+    }
+    monCtx.stroke();
+    var monTex = new THREE.CanvasTexture(monCanvas);
+    var monSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: monTex, transparent: true }));
+    monSprite.position.set(-1.8, 1.0, -3.0);
+    monSprite.scale.set(0.5, 0.25, 1);
+    LIFE.addEnv(monSprite);
+
+    // MEDICAL CABINET (back wall)
+    LIFE.addSolid(2, 2, 0.5, 0xeceff1, 4, 1, -5.5);
+    // cabinet doors
+    LIFE.addEnv(LIFE.makeBox(0.9, 1.8, 0.05, 0xcfd8dc, 3.5, 1, -5.2));
+    LIFE.addEnv(LIFE.makeBox(0.9, 1.8, 0.05, 0xcfd8dc, 4.5, 1, -5.2));
+    // red cross on wall
+    LIFE.addEnv(LIFE.makeBox(0.6, 0.15, 0.05, 0xf44336, 0, 2.5, -5.8));
+    LIFE.addEnv(LIFE.makeBox(0.15, 0.6, 0.05, 0xf44336, 0, 2.5, -5.8));
+
+    // DESK (doctor's desk, right front)
+    LIFE.addSolid(2.5, 0.8, 1, 0x8d6e63, 4, 0.4, 3);
+    // chair
+    LIFE.addEnv(LIFE.makeBox(0.5, 0.5, 0.5, 0x424242, 4, 0.25, 4));
+    LIFE.addEnv(LIFE.makeBox(0.5, 0.6, 0.08, 0x424242, 4, 0.8, 4.22));
+    // clipboard on desk
+    LIFE.addEnv(LIFE.makeBox(0.3, 0.02, 0.4, 0xffecb3, 3.5, 0.82, 3));
+    // pen
+    LIFE.addEnv(LIFE.makeBox(0.02, 0.02, 0.2, 0x1565c0, 4.2, 0.82, 3));
+
+    // SINK (left wall)
+    LIFE.addEnv(LIFE.makeBox(0.1, 0.8, 0.1, 0xbdbdbd, -6.7, 0.4, 2));
+    LIFE.addEnv(LIFE.makeBox(0.6, 0.06, 0.4, 0xfafafa, -6.7, 0.85, 2));
+    LIFE.addCollider(-6.7, 2, 0.8, 0.6);
+
+    // FLUORESCENT LIGHTS
+    LIFE.addEnv(LIFE.makeBox(4, 0.05, 0.3, 0xffffff, -2, 3.4, 0));
+    LIFE.addEnv(LIFE.makeBox(4, 0.05, 0.3, 0xffffff, 3, 3.4, 0));
+    var hosLight1 = new THREE.PointLight(0xf5f5f5, 0.6, 12);
+    hosLight1.position.set(-2, 3.3, 0);
+    LIFE.addEnv(hosLight1);
+    var hosLight2 = new THREE.PointLight(0xf5f5f5, 0.6, 12);
+    hosLight2.position.set(3, 3.3, 0);
+    LIFE.addEnv(hosLight2);
+
+    // EXIT sign above door
+    var exitCanvas = document.createElement('canvas');
+    exitCanvas.width = 256; exitCanvas.height = 48;
+    var exitCtx = exitCanvas.getContext('2d');
+    exitCtx.fillStyle = 'rgba(76,175,80,0.9)';
+    exitCtx.fillRect(0, 0, 256, 48);
+    exitCtx.fillStyle = '#fff';
+    exitCtx.font = 'bold 20px Arial';
+    exitCtx.textAlign = 'center';
+    exitCtx.fillText('Press G to Leave Hospital', 128, 32);
+    var exitTex = new THREE.CanvasTexture(exitCanvas);
+    var exitSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: exitTex, transparent: true, depthTest: false }));
+    exitSprite.position.set(0, 3.8, roomD / 2 + 0.5);
+    exitSprite.scale.set(2.5, 0.5, 1);
+    LIFE.addEnv(exitSprite);
+
+    // WHEELCHAIR in corner
+    var wheelBase = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.4, 0.4, 0.05, 8),
+        new THREE.MeshPhongMaterial({ color: 0x424242 })
+    );
+    wheelBase.position.set(-5.5, 0.3, 4.5);
+    LIFE.addEnv(wheelBase);
+    LIFE.addEnv(LIFE.makeBox(0.5, 0.7, 0.08, 0x424242, -5.5, 0.65, 4.8));
 };
 
 // ---------- DEATH ----------

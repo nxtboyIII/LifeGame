@@ -168,6 +168,11 @@ LIFE.NPC_DIALOGUES = {
         { text: "Tag! You're it!", options: [
             { text: "Hey! Come back here!", effects: { health: 1, happiness: 2 }, rep: 3 },
             { text: "I don't play stupid games", effects: {}, rep: -5 }
+        ]},
+        { text: "Psst... check this out. I found this in my brother's room.", options: [
+            { text: "Whoa, is that a switchblade? Can I have it?", effects: { charisma: 1 }, rep: -3, giveSwitchblade: true },
+            { text: "That's dangerous! Put it away!", effects: { intelligence: 1 }, rep: 5 },
+            { text: "Cool! Let me see!", effects: { happiness: 1 }, rep: -1 }
         ]}
     ],
     'Student': [
@@ -185,6 +190,11 @@ LIFE.NPC_DIALOGUES = {
             { text: "I'll be there!", effects: { happiness: 3, charisma: 2 }, rep: 3, cost: 20 },
             { text: "I need to study", effects: { intelligence: 2 }, rep: -1 },
             { text: "Parties are lame", effects: {}, rep: -4 }
+        ]},
+        { text: "Yo, look what I got from my cousin... don't tell anyone.", options: [
+            { text: "A switchblade?! Give it to me!", effects: { charisma: 1 }, rep: -5, giveSwitchblade: true },
+            { text: "Dude, you'll get expelled!", effects: { intelligence: 1 }, rep: 3 },
+            { text: "That's sick! Can I hold it?", effects: { happiness: 1 }, rep: -2 }
         ]}
     ],
     'Professor': [
@@ -430,6 +440,35 @@ LIFE.dialogue.selectOption = function(idx) {
             if (LIFE.state.gamePhase === 'playing') LIFE.ui.openInvestmentShop();
         }, 100);
         return;
+    }
+    if (opt.hospital) {
+        // send player to hospital after dialogue closes
+        setTimeout(function() {
+            if (LIFE.state.gamePhase === 'playing' && LIFE.state.currentStage !== 'hospital') {
+                LIFE.sendToHospital(opt.hospital);
+            }
+        }, 2000);
+    }
+    if (opt.hospitalExit) {
+        // exit hospital after dialogue closes
+        setTimeout(function() {
+            if (LIFE.state.currentStage === 'hospital' && LIFE.state.gamePhase === 'playing') {
+                LIFE.exitHospital();
+            }
+        }, 2000);
+    }
+    if (opt.rehab) {
+        // rehab reduces drug uses
+        LIFE.state.drugUses = Math.max(0, LIFE.state.drugUses - 2);
+    }
+    if (opt.giveSwitchblade) {
+        if (!LIFE.state.hasSwitchblade) {
+            LIFE.state.hasSwitchblade = true;
+            if (LIFE.state.inventory.indexOf('Switchblade') < 0) LIFE.state.inventory.push('Switchblade');
+            LIFE.ui.showPopup('Switchblade acquired! Punch damage increased.', '#ff9800');
+        } else {
+            LIFE.ui.showPopup('You already have a switchblade.', '#ff9800');
+        }
     }
     if (opt.careerChange) {
         var careers = ['teacher', 'artist', 'worker'];
@@ -833,6 +872,121 @@ LIFE.dialogue.openChildNaming = function(childNum) {
         { text: name4, effects: { happiness: 3 }, childName: name4 }
     ], true);
 };
+
+// Hospital dialogue - varies by reason
+LIFE.dialogue.openHospitalDialogue = function(reason) {
+    if (LIFE.dialogue.active) return;
+    var state = LIFE.state;
+    var speaker = 'Doctor';
+    var text, options;
+
+    switch (reason) {
+        case 'nearDeath':
+            text = "You were brought in on an emergency stretcher. Your vitals are dangerously low. We need to stabilize you immediately.";
+            options = [
+                { text: "Do whatever you need to, doc.", effects: { health: 25, happiness: -5 }, cost: 500, hospitalExit: true },
+                { text: "I can't afford treatment...", effects: { health: 10 }, hospitalExit: true },
+                { text: "Am I going to be okay?", effects: { health: 20, happiness: -3 }, cost: 300, hospitalExit: true }
+            ];
+            break;
+
+        case 'illness':
+            var illnesses = [
+                "You've developed a high fever and severe chills. Looks like a bad infection.",
+                "We ran some tests. You have a serious respiratory infection.",
+                "Your bloodwork shows signs of a viral illness. You need rest and medication.",
+                "You've come down with pneumonia. We need to treat this aggressively."
+            ];
+            text = illnesses[Math.floor(Math.random() * illnesses.length)];
+            options = [
+                { text: "Give me the full treatment ($300)", effects: { health: 15, happiness: -2 }, cost: 300, hospitalExit: true },
+                { text: "Just give me some pills", effects: { health: 8 }, cost: 50, hospitalExit: true },
+                { text: "I'll tough it out", effects: { health: -5, happiness: -3 }, hospitalExit: true }
+            ];
+            break;
+
+        case 'parentCheckin':
+            speaker = 'Doctor';
+            if (state.stats.happiness < 5) {
+                text = "Your parents brought you in because they're worried about you. You seem very unhappy. Let's talk about what's going on.";
+            } else {
+                text = "Your parents brought you in for a checkup. They say you've been acting differently lately. Let's make sure everything is okay.";
+            }
+            options = [
+                { text: "I'm fine... can I go home?", effects: { happiness: 2 }, hospitalExit: true },
+                { text: "I guess I have been feeling down...", effects: { happiness: 8, health: 3 }, hospitalExit: true },
+                { text: "My parents are overreacting!", effects: { happiness: -2, charisma: 1 }, hospitalExit: true }
+            ];
+            break;
+
+        case 'overdose':
+            text = "You were brought in after collapsing. The tests show dangerous levels of substances in your system. This is very serious.";
+            options = [
+                { text: "I need to quit... help me ($500)", effects: { health: 15, happiness: 5 }, cost: 500, hospitalExit: true, rehab: true },
+                { text: "I didn't take that much...", effects: { health: 8, happiness: -5 }, cost: 200, hospitalExit: true },
+                { text: "Just patch me up and let me go", effects: { health: 5, happiness: -3 }, hospitalExit: true }
+            ];
+            break;
+
+        case 'foodPoisoning':
+            text = "Looks like a nasty case of food poisoning. We'll get you hydrated and feeling better.";
+            options = [
+                { text: "Thanks doc, give me the IV drip ($100)", effects: { health: 10, happiness: 2 }, cost: 100, hospitalExit: true },
+                { text: "Ugh, I'm never eating there again", effects: { health: 5, happiness: -1 }, hospitalExit: true }
+            ];
+            break;
+
+        case 'injury':
+            text = "You've sustained some injuries. Let me take a look at the damage. We may need to do some stitching.";
+            options = [
+                { text: "Fix me up, doc ($200)", effects: { health: 20, happiness: 2 }, cost: 200, hospitalExit: true },
+                { text: "Just bandage it up", effects: { health: 8 }, cost: 50, hospitalExit: true },
+                { text: "Is it bad?", effects: { health: 12, happiness: -2 }, cost: 100, hospitalExit: true }
+            ];
+            break;
+
+        case 'carAccident':
+            text = "You were brought in after a car accident. You have some bruising and we need to check for internal injuries.";
+            options = [
+                { text: "Run all the tests ($400)", effects: { health: 18, happiness: -3 }, cost: 400, hospitalExit: true },
+                { text: "I feel okay, just sore", effects: { health: 8 }, cost: 100, hospitalExit: true },
+                { text: "Will I be alright?", effects: { health: 12, happiness: -2 }, cost: 200, hospitalExit: true }
+            ];
+            break;
+
+        default:
+            text = "Let's take a look at you. How are you feeling?";
+            options = [
+                { text: "Not great, doc.", effects: { health: 10 }, cost: 100, hospitalExit: true },
+                { text: "I'll be fine", effects: { health: 3 }, hospitalExit: true }
+            ];
+    }
+
+    LIFE.dialogue.open(speaker, text, options, true);
+};
+
+// NPC dialogues for Doctor and Nurse (when talking to them manually)
+LIFE.NPC_DIALOGUES['Doctor'] = [
+    { text: "How are you feeling? Any pain or discomfort?", options: [
+        { text: "A little sore, but okay", effects: { health: 3, happiness: 1 }, rep: 1 },
+        { text: "When can I leave?", effects: { happiness: 2 }, hospitalExit: true },
+        { text: "Can you give me something for the pain? ($50)", effects: { health: 5, happiness: 3 }, cost: 50 }
+    ]},
+    { text: "Your vitals are looking better. Rest is the best medicine.", options: [
+        { text: "Thanks, doc", effects: { health: 2, happiness: 2 }, rep: 2 },
+        { text: "I feel ready to go", effects: { happiness: 1 }, hospitalExit: true }
+    ]}
+];
+LIFE.NPC_DIALOGUES['Nurse'] = [
+    { text: "Can I get you anything? Water? An extra blanket?", options: [
+        { text: "Some water would be great", effects: { health: 2, happiness: 2 }, rep: 2 },
+        { text: "I'm good, thanks", effects: { happiness: 1 }, rep: 1 }
+    ]},
+    { text: "Time for your medication!", options: [
+        { text: "Okay, give it here", effects: { health: 5 }, rep: 1 },
+        { text: "Do I have to?", effects: { health: 2, happiness: -1 }, rep: -1 }
+    ]}
+];
 
 LIFE.dialogue.triggerDecision = function(age) {
     var dec = LIFE.DECISIONS[age];

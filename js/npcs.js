@@ -21,7 +21,9 @@ LIFE.NPC_CHAT = {
     'Dealer':    ["Psst... got the goods.", "Looking for something?", "I got what you need...", "Keep it quiet."],
     'Coworker':  ["Coffee break?", "Meetings all day...", "The boss is coming!", "TGIF!"],
     'Boss':      ["Get back to work!", "Good job today.", "Need that report ASAP.", "Let's discuss your performance."],
-    'Inmate':    ["Don't mess with me.", "How long you in for?", "Keep your head down.", "First time?"]
+    'Inmate':    ["Don't mess with me.", "How long you in for?", "Keep your head down.", "First time?"],
+    'Doctor':    ["Let me check your vitals.", "How are you feeling?", "Deep breaths now.", "We'll get you sorted out."],
+    'Nurse':     ["Are you comfortable?", "Need anything?", "Rest up!", "Doctor will be with you shortly."]
 };
 
 LIFE.getNPCChatMessage = function(npc) {
@@ -88,7 +90,7 @@ LIFE.drawChatBubble = function(npc, text) {
     npc.chatTexture.needsUpdate = true;
 };
 
-LIFE.createNPC = function(type, x, z, npcName) {
+LIFE.createNPC = function(type, x, z, npcName, forceGender) {
     var isChild = type.includes('Kid') || type.includes('Grandchild') || type === 'Sibling';
     var isStudent = type.includes('Student');
     var isPolice = type === 'Police';
@@ -102,23 +104,33 @@ LIFE.createNPC = function(type, x, z, npcName) {
         : 1.6 + Math.random() * 0.2);
     if (isPolice) h = 1.8;
     var skin = LIFE.SKIN_COLORS[Math.floor(Math.random() * LIFE.SKIN_COLORS.length)];
+    var isDoctor = type === 'Doctor';
+    var isNurse = type === 'Nurse';
     var clothes = isPolice ? 0x1a237e
         : isDealer ? 0x212121
         : isHiring ? 0x1565c0
         : isInmate ? 0xff6f00
+        : isDoctor ? 0xfafafa
+        : isNurse ? 0x90caf9
         : LIFE.CLOTHES_COLORS[Math.floor(Math.random() * LIFE.CLOTHES_COLORS.length)];
     // determine gender for hair
-    var isFemale = false;
-    if (type === 'Mom' || type === 'Spouse' || type === 'Your Child') {
-        // Mom is always female; Spouse gender opposite to player; children 50/50
-        if (type === 'Mom') isFemale = true;
-        else if (type === 'Spouse') isFemale = LIFE.state.playerGender !== 'F';
-        else isFemale = Math.random() < 0.5;
+    var isFemale;
+    if (forceGender !== undefined) {
+        isFemale = forceGender;
+    } else if (type === 'Mom') {
+        isFemale = true;
     } else if (type === 'Dad') {
         isFemale = false;
+    } else if (type === 'Spouse') {
+        isFemale = LIFE.state.playerGender !== 'F';
+    } else if (type === 'Your Child') {
+        isFemale = Math.random() < 0.5;
+    } else if (isPolice || isDealer || isInmate) {
+        isFemale = false;
+    } else if (isNurse) {
+        isFemale = Math.random() < 0.7; // nurses mostly female
     } else {
-        // random 50/50 for generic NPCs (except police/dealer/inmate)
-        if (!isPolice && !isDealer && !isInmate) isFemale = Math.random() < 0.5;
+        isFemale = Math.random() < 0.5;
     }
     var ch = LIFE.createCharacter(h, skin, clothes, false, { female: isFemale && h > 0.5 });
     ch.group.position.set(x, 0, z);
@@ -161,6 +173,8 @@ LIFE.createNPC = function(type, x, z, npcName) {
         : isDealer ? 'rgba(33,33,33,0.8)'
         : isHiring ? 'rgba(21,101,192,0.7)'
         : isInmate ? 'rgba(255,111,0,0.7)'
+        : isDoctor ? 'rgba(76,175,80,0.7)'
+        : isNurse ? 'rgba(33,150,243,0.7)'
         : 'rgba(0,0,0,0.5)';
     ctx.fillRect(4, 4, 248, 56);
     ctx.fillStyle = '#ffffff';
@@ -269,30 +283,57 @@ LIFE.killNPC = function(npc) {
     npc.char.group.rotation.x = -Math.PI / 2;
     npc.char.group.position.y = 0.2;
 
+    var state = LIFE.state;
+    var isFamily = (npc.type === 'Mom' || npc.type === 'Dad' || npc.type === 'Sibling' ||
+        npc.type === 'Spouse' || npc.type === 'Your Child');
+
     var repLoss = -20;
     if (npc.isPolice) {
         repLoss = -10;
         LIFE.addWanted(3);
         var idx = LIFE.police.indexOf(npc);
         if (idx >= 0) LIFE.police.splice(idx, 1);
-    } else if (npc.type === 'Mom' || npc.type === 'Dad' || npc.type === 'Sibling' ||
-        npc.type === 'Spouse' || npc.type === 'Your Child') {
-        repLoss = -50;
-        LIFE.state.stats.happiness = Math.max(0, LIFE.state.stats.happiness - 25);
-        LIFE.addWanted(4);
+    } else if (isFamily) {
+        repLoss = -60;
+        state.stats.happiness = Math.max(0, state.stats.happiness - 35);
+        state.stats.charisma = Math.max(0, state.stats.charisma - 10);
+        LIFE.addWanted(5); // max wanted for killing family
+
+        // permanent trauma
+        state.familyKiller = true;
+        state.familyAbuser = true;
+
+        // track which family members were killed
+        if (!state.killedFamily) state.killedFamily = [];
+        state.killedFamily.push(npc.type);
+
+        // specific consequences
+        if (npc.type === 'Mom' || npc.type === 'Dad') {
+            state.friends = 0;
+            state.enemies += 3;
+        } else if (npc.type === 'Spouse') {
+            state.married = false;
+            state.spouseName = null;
+            state.enemies += 2;
+        } else if (npc.type === 'Your Child') {
+            state.friends = 0;
+            state.enemies += 5;
+            state.stats.happiness = 0;
+        }
     } else if (npc.type === 'Kid' || npc.type === 'Grandchild') {
-        repLoss = -40;
+        repLoss = -50;
+        state.stats.happiness = Math.max(0, state.stats.happiness - 20);
         LIFE.addWanted(5);
     } else {
         LIFE.addWanted(3);
     }
-    LIFE.state.reputation = Math.max(-100, LIFE.state.reputation + repLoss);
+    state.reputation = Math.max(-100, state.reputation + repLoss);
     LIFE.ui.showRepChange(repLoss);
-    LIFE.state.enemies++;
+    state.enemies++;
     LIFE.sounds.npcDeath();
     LIFE.ui.showPopup(npc.name + ' has died!', '#ff1744');
     LIFE.updateRelationship(npc.name, -100);
-    if (LIFE.state.nearestNPC === npc) LIFE.state.nearestNPC = null;
+    if (state.nearestNPC === npc) state.nearestNPC = null;
 
     // nearby NPCs witness the kill and flee
     LIFE.checkWitnesses(npc);
@@ -324,7 +365,7 @@ LIFE.spawnNPCs = function(stage) {
         }
     }
 
-    // spawn regular NPCs with individual names
+    // spawn regular NPCs with individual names (gendered)
     var usedNames = {};
     var childIndex = 0;
     names.forEach(function(npcType) {
@@ -333,7 +374,6 @@ LIFE.spawnNPCs = function(stage) {
             x = (Math.random()-0.5)*b*2;
             z = (Math.random()-0.5)*b*2;
             safe = Math.sqrt(x*x+z*z) >= 3;
-            // check NPC won't spawn inside a collider
             if (safe) {
                 for (var ci = 0; ci < LIFE.colliders.length; ci++) {
                     var c = LIFE.colliders[ci];
@@ -344,6 +384,16 @@ LIFE.spawnNPCs = function(stage) {
             }
             tries++;
         } while (!safe && tries < 30);
+
+        // pre-determine gender for name selection
+        var npcFemale;
+        if (npcType === 'Mom') npcFemale = true;
+        else if (npcType === 'Dad') npcFemale = false;
+        else if (npcType === 'Spouse') npcFemale = LIFE.state.playerGender !== 'F';
+        else if (npcType === 'Your Child') npcFemale = Math.random() < 0.5;
+        else if (npcType === 'Police' || npcType === 'Dealer' || npcType === 'Inmate') npcFemale = false;
+        else npcFemale = Math.random() < 0.5;
+
         var individualName = npcType;
         if (npcType === 'Spouse' && LIFE.state.spouseName) {
             individualName = LIFE.state.spouseName;
@@ -351,7 +401,8 @@ LIFE.spawnNPCs = function(stage) {
             individualName = LIFE.state.childNames[childIndex];
             childIndex++;
         } else if (LIFE.NPC_NEEDS_NAME[npcType]) {
-            var pool = LIFE.NPC_FIRST_NAMES;
+            // pick from gendered name pool
+            var pool = npcFemale ? LIFE.FEMALE_NAMES : LIFE.MALE_NAMES;
             var attempts = 0;
             do {
                 individualName = pool[Math.floor(Math.random() * pool.length)];
@@ -359,7 +410,7 @@ LIFE.spawnNPCs = function(stage) {
             } while (usedNames[individualName] && attempts < 50);
             usedNames[individualName] = true;
         }
-        LIFE.npcs.push(LIFE.createNPC(npcType, x, z, individualName));
+        LIFE.npcs.push(LIFE.createNPC(npcType, x, z, individualName, npcFemale));
     });
 
     // spawn Hiring Manager NPCs near job buildings in city

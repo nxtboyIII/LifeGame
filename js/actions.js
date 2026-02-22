@@ -10,12 +10,13 @@ LIFE.performAction = function(idx) {
     // in jail only allow punch (idx 0 = punch)
     if (state.gamePhase === 'jail') {
         if (idx !== 0) return;
-        // force punch action
+        var jailDmg = LIFE.getPunchDamage(state.age);
+        var jailEquip = LIFE.getEquipped();
+        if (jailEquip === 'Switchblade') jailDmg = Math.floor(jailDmg * 2);
         LIFE.sounds.punch();
-        LIFE.ui.showPopup('POW!', '#ef5350');
+        LIFE.ui.showPopup(jailDmg > 0 ? 'POW! (-' + jailDmg + ')' : '*flails weakly*', jailDmg > 0 ? '#ef5350' : '#999');
         state.actionCooldown = 0.8;
         state.actionAnim = { type: 'punch', timer: 0.6 };
-        // hit nearby inmates/NPCs
         var allTargets = LIFE.npcs.concat(LIFE.police);
         allTargets.forEach(function(npc) {
             if (!npc.alive) return;
@@ -26,9 +27,8 @@ LIFE.performAction = function(idx) {
                 var pushDir = new THREE.Vector3(dx, 0, dz).normalize();
                 npc.char.group.position.x += pushDir.x * 1.5;
                 npc.char.group.position.z += pushDir.z * 1.5;
-                LIFE.damageNPC(npc, 20);
+                if (jailDmg > 0) LIFE.damageNPC(npc, jailDmg);
                 npc.reacting = 1.5;
-                // inmate fights back harder
                 setTimeout(function() {
                     if (state.gamePhase === 'jail' && npc.alive) {
                         LIFE.damagePlayer(12, 'inmate fought back');
@@ -90,41 +90,63 @@ LIFE.performAction = function(idx) {
                 npc.char.group.position.z += pushDir.z * 2;
                 LIFE.sounds.punch();
 
-                // damage based on equipment
+                // age-based damage
                 var equipped = LIFE.getEquipped();
-                var dmg = 20;
-                if (equipped === 'Switchblade') dmg = 40;
-                LIFE.damageNPC(npc, dmg);
+                var dmg = LIFE.getPunchDamage(state.age);
+                if (equipped === 'Switchblade') dmg = Math.floor(dmg * 2);
 
-                // wanted level
+                if (dmg <= 0) {
+                    LIFE.ui.showPopup('*flails weakly*', '#999');
+                } else {
+                    LIFE.damageNPC(npc, dmg);
+                }
+
+                // family member detection
+                var isFamily = (npc.type === 'Mom' || npc.type === 'Dad' || npc.type === 'Sibling' ||
+                    npc.type === 'Spouse' || npc.type === 'Your Child');
+                var isVulnerable = (npc.type === 'Kid' || npc.type === 'Grandchild');
+
+                // wanted level - harsher for family/kids
                 if (npc.isPolice) {
+                    LIFE.addWanted(2);
+                } else if (isFamily) {
+                    LIFE.addWanted(2);
+                } else if (isVulnerable) {
                     LIFE.addWanted(2);
                 } else {
                     LIFE.addWanted(1);
                 }
 
-                // reputation
+                // reputation - family violence is devastating
                 var repLoss = -5;
-                if (npc.type === 'Mom' || npc.type === 'Dad' || npc.type === 'Sibling' ||
-                    npc.type === 'Spouse' || npc.type === 'Your Child' || npc.type === 'Old Friend') {
-                    repLoss = -12;
-                    state.stats.happiness = Math.max(0, state.stats.happiness - 3);
+                if (isFamily) {
+                    repLoss = -20;
+                    state.stats.happiness = Math.max(0, state.stats.happiness - 8);
+                    state.stats.charisma = Math.max(0, state.stats.charisma - 2);
+                    // family trauma flag
+                    if (!state.familyAbuser) state.familyAbuser = true;
                 }
-                if (npc.type === 'Kid' || npc.type === 'Grandchild') repLoss = -15;
+                if (isVulnerable) {
+                    repLoss = -25;
+                    state.stats.happiness = Math.max(0, state.stats.happiness - 5);
+                }
                 state.reputation = Math.max(-100, state.reputation + repLoss);
                 LIFE.ui.showRepChange(repLoss);
-                LIFE.updateRelationship(npc.name, -20);
+                LIFE.updateRelationship(npc.name, -25);
 
                 if (Math.random() < 0.4) state.enemies++;
 
-                // NPC FIGHTS BACK
-                if (npc.alive && Math.random() < 0.5) {
+                // NPC FIGHTS BACK - family less likely to fight back
+                var fightBackChance = isFamily ? 0.2 : 0.5;
+                if (npc.alive && Math.random() < fightBackChance) {
                     var retalDmg = 5;
                     if (npc.type === 'Boss') retalDmg = 12;
                     else if (npc.type === 'Police') retalDmg = 15;
-                    else if (npc.type === 'Kid' || npc.type === 'Grandchild') retalDmg = 2;
+                    else if (isVulnerable) retalDmg = 1;
                     else if (npc.type === 'Stranger') retalDmg = 8;
                     else if (npc.type === 'Coworker') retalDmg = 7;
+                    else if (npc.type === 'Mom' || npc.type === 'Dad') retalDmg = 6;
+                    else if (npc.type === 'Spouse') retalDmg = 7;
                     setTimeout(function() {
                         if (state.gamePhase === 'playing') {
                             LIFE.damagePlayer(retalDmg, npc.type + ' fought back');
@@ -300,10 +322,23 @@ LIFE.updateBullets = function(dt) {
                     LIFE.sounds.bulletImpact();
                     LIFE.ui.showPopup('Hit ' + npc.type + '! (-' + Math.floor(dmg) + ')', '#ff1744');
 
-                    // rep/wanted
+                    // rep/wanted - much worse for family
+                    var shotFamily = (npc.type === 'Mom' || npc.type === 'Dad' || npc.type === 'Sibling' ||
+                        npc.type === 'Spouse' || npc.type === 'Your Child');
                     var repLoss = -15;
                     if (npc.isPolice) { LIFE.addWanted(3); repLoss = -8; }
-                    else { LIFE.addWanted(2); }
+                    else if (shotFamily) {
+                        LIFE.addWanted(4);
+                        repLoss = -30;
+                        LIFE.state.stats.happiness = Math.max(0, LIFE.state.stats.happiness - 15);
+                        LIFE.state.familyAbuser = true;
+                        // silent trauma
+                    } else if (npc.type === 'Kid' || npc.type === 'Grandchild') {
+                        LIFE.addWanted(4);
+                        repLoss = -25;
+                    } else {
+                        LIFE.addWanted(2);
+                    }
                     LIFE.state.reputation = Math.max(-100, LIFE.state.reputation + repLoss);
                     LIFE.ui.showRepChange(repLoss);
                     LIFE.state.enemies++;

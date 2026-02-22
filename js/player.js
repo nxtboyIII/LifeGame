@@ -38,8 +38,19 @@ LIFE.damagePlayer = function(amount, source) {
     LIFE.ui.showPopup('-' + amount + ' HP', '#ef5350');
     LIFE.ui.flashDamage();
     if (state.stats.health <= 0 && !state.deathTriggered) {
-        state.deathCause = source || 'injuries';
-        LIFE.triggerDeath();
+        // chance to survive via hospital if not in jail/execution and not being chased
+        if (state.gamePhase === 'playing' && state.wantedLevel === 0 &&
+            state.currentStage !== 'hospital' && Math.random() < 0.4) {
+            state.stats.health = 3; // barely alive
+            setTimeout(function() {
+                if (state.gamePhase === 'playing' && !state.deathTriggered) {
+                    LIFE.sendToHospital('nearDeath');
+                }
+            }, 500);
+        } else {
+            state.deathCause = source || 'injuries';
+            LIFE.triggerDeath();
+        }
     }
 };
 

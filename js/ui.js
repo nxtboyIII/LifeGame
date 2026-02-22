@@ -431,6 +431,8 @@ LIFE.ui.renderOverviewTab = function(container) {
     if (state.bounty > 0) rows.push(['Bounty', '$' + state.bounty]);
     if (state.kills > 0) rows.push(['Kills', state.kills]);
     if (state.timesJailed > 0) rows.push(['Times Jailed', state.timesJailed]);
+    if (state.familyKiller) rows.push(['Trauma', 'Family Killer - haunted by guilt']);
+    else if (state.familyAbuser) rows.push(['Trauma', 'Family Abuser - wracked with guilt']);
 
     rows.forEach(function(r) {
         if (r[0] === '---') {
@@ -621,11 +623,12 @@ LIFE.ui.openTimeSkip = function() {
     opts.innerHTML = '';
 
     var presets = [
-        { label: 'Skip 1 Day', days: 1 },
-        { label: 'Skip 1 Week', days: 7 },
-        { label: 'Skip 1 Month', days: 30 },
-        { label: 'Skip 3 Months', days: 90 },
-        { label: 'Skip to Next Year', days: -1 }
+        { label: 'Skip 1 Hour', hours: 1 },
+        { label: 'Skip 6 Hours', hours: 6 },
+        { label: 'Skip 1 Day', hours: 24 },
+        { label: 'Skip 1 Week', hours: 168 },
+        { label: 'Skip 1 Month', hours: 720 },
+        { label: 'Skip to Next Year', hours: -1 }
     ];
 
     presets.forEach(function(p) {
@@ -633,30 +636,44 @@ LIFE.ui.openTimeSkip = function() {
         btn.className = 'skipBtn';
         btn.textContent = p.label;
         btn.onclick = function() {
-            if (p.days === -1) {
+            if (p.hours === -1) {
                 LIFE.ui.closeTimeSkip();
                 LIFE.advanceYear();
             } else {
-                LIFE.skipTime(p.days);
+                LIFE.skipTime(p.hours / 24); // convert hours to days
             }
         };
         opts.appendChild(btn);
     });
 
-    // slider
+    // slider in hours (1 hour to 4320 hours = ~6 months)
     var slider = document.getElementById('skipSlider');
     var label = document.getElementById('skipSliderLabel');
     var skipBtn = document.getElementById('skipSliderBtn');
+    slider.min = 1;
+    slider.max = 4320;
     slider.value = 1;
-    label.textContent = '1 day';
+    label.textContent = '1 hour';
     slider.oninput = function() {
-        var v = parseInt(slider.value);
-        if (v < 7) label.textContent = v + ' day' + (v > 1 ? 's' : '');
-        else if (v < 30) label.textContent = Math.floor(v / 7) + ' week' + (Math.floor(v / 7) > 1 ? 's' : '') + ' ' + (v % 7) + 'd';
-        else label.textContent = Math.floor(v / 30) + ' mo ' + (v % 30) + 'd';
+        var h = parseInt(slider.value);
+        if (h < 24) {
+            label.textContent = h + ' hour' + (h > 1 ? 's' : '');
+        } else if (h < 168) {
+            var d = Math.floor(h / 24);
+            var rh = h % 24;
+            label.textContent = d + ' day' + (d > 1 ? 's' : '') + (rh > 0 ? ' ' + rh + 'h' : '');
+        } else if (h < 720) {
+            var w = Math.floor(h / 168);
+            var rd = Math.floor((h % 168) / 24);
+            label.textContent = w + ' week' + (w > 1 ? 's' : '') + (rd > 0 ? ' ' + rd + 'd' : '');
+        } else {
+            var mo = Math.floor(h / 720);
+            var rdm = Math.floor((h % 720) / 24);
+            label.textContent = mo + ' month' + (mo > 1 ? 's' : '') + (rdm > 0 ? ' ' + rdm + 'd' : '');
+        }
     };
     skipBtn.onclick = function() {
-        LIFE.skipTime(parseInt(slider.value));
+        LIFE.skipTime(parseInt(slider.value) / 24); // convert hours to days
     };
 
     // close button
