@@ -741,14 +741,18 @@ LIFE.killNPC = function(npc) {
     var isFamily = (npc.type === 'Mom' || npc.type === 'Dad' || npc.type === 'Sibling' ||
         npc.type === 'Spouse' || npc.type === 'Your Child');
 
+    // Check for witnesses with line-of-sight
+    var killWitness = LIFE.checkWitnesses(npc);
+    var killSeen = killWitness.witnessed;
+
     var repLoss = -20;
     if (npc.isPolice) {
+        // Police kills are always known (radio dispatch)
         repLoss = npc.isSWAT ? -15 : -10;
         LIFE.logCrime('Murder of a ' + (npc.isSWAT ? 'SWAT officer' : 'police officer'));
         LIFE.addWanted(3);
         var idx = LIFE.police.indexOf(npc);
         if (idx >= 0) LIFE.police.splice(idx, 1);
-        // Mark persistent cop as dead so respawn timer starts
         if (LIFE.world.policeCops) {
             for (var pci = 0; pci < LIFE.world.policeCops.length; pci++) {
                 if (LIFE.world.policeCops[pci].npc === npc) {
@@ -762,49 +766,68 @@ LIFE.killNPC = function(npc) {
         state.stats.happiness = Math.max(0, state.stats.happiness - 35);
         state.stats.charisma = Math.max(0, state.stats.charisma - 10);
         LIFE.logCrime('Murder of ' + npc.type);
-        LIFE.addWanted(5);
-
-        // permanent trauma
+        if (killSeen) LIFE.addWanted(5);
         state.familyKiller = true;
         state.familyAbuser = true;
-
-        // track which family members were killed
         if (!state.killedFamily) state.killedFamily = [];
         state.killedFamily.push(npc.type);
-
-        // specific consequences
         if (npc.type === 'Mom' || npc.type === 'Dad') {
-            state.friends = 0;
-            state.enemies += 3;
+            state.friends = 0; state.enemies += 3;
         } else if (npc.type === 'Spouse') {
-            state.married = false;
-            state.spouseName = null;
-            state.enemies += 2;
+            state.married = false; state.spouseName = null; state.enemies += 2;
         } else if (npc.type === 'Your Child') {
-            state.friends = 0;
-            state.enemies += 5;
-            state.stats.happiness = 0;
+            state.friends = 0; state.enemies += 5; state.stats.happiness = 0;
+        }
+        // Unwitnessed family murder — body discovered later
+        if (!killSeen) {
+            repLoss = Math.ceil(repLoss * 0.4);
+            setTimeout(function() {
+                if (state.gamePhase === 'playing') {
+                    LIFE.ui.showPopup(npc.type + '\'s body has been discovered!', '#ff1744');
+                    LIFE.addWanted(3);
+                    if (LIFE.news) LIFE.news.add('Missing ' + npc.type.toLowerCase() + ' found dead. Police launch investigation.', 'crime');
+                }
+            }, 15000 + Math.random() * 20000); // discovered 15-35 seconds later
         }
     } else if (npc.type === 'Kid' || npc.type === 'Grandchild') {
         repLoss = -50;
         state.stats.happiness = Math.max(0, state.stats.happiness - 20);
         LIFE.logCrime('Murder of a child');
-        LIFE.addWanted(5);
+        if (killSeen) LIFE.addWanted(5);
+        if (!killSeen) {
+            repLoss = Math.ceil(repLoss * 0.4);
+            setTimeout(function() {
+                if (state.gamePhase === 'playing') {
+                    LIFE.ui.showPopup('A child\'s body has been discovered!', '#ff1744');
+                    LIFE.addWanted(4);
+                    if (LIFE.news) LIFE.news.add('Child found dead. Community in shock. Police investigating.', 'crime');
+                }
+            }, 10000 + Math.random() * 15000);
+        }
     } else {
         LIFE.logCrime('Murder');
-        LIFE.addWanted(3);
+        if (killSeen) {
+            LIFE.addWanted(3);
+        } else {
+            // Unwitnessed murder — body found later
+            repLoss = Math.ceil(repLoss * 0.3);
+            setTimeout(function() {
+                if (state.gamePhase === 'playing') {
+                    LIFE.ui.showPopup('A body has been discovered nearby...', '#ff9800');
+                    LIFE.addWanted(2);
+                    if (LIFE.news) LIFE.news.add('Body found in ' + (LIFE.world._currentZone || 'local area') + '. Police investigating.', 'crime');
+                }
+            }, 20000 + Math.random() * 30000); // discovered 20-50 seconds later
+        }
     }
     state.reputation = Math.max(-100, state.reputation + repLoss);
     LIFE.ui.showRepChange(repLoss);
     state.enemies++;
     LIFE.sounds.npcDeath();
     LIFE.ui.showPopup(npc.name + ' has died!', '#ff1744');
-    if (LIFE.news) LIFE.news.add('Tragedy strikes - ' + npc.type + ' found dead in ' + (LIFE.world._currentZone || 'local area') + '.', 'crime');
+    if (killSeen && LIFE.news) LIFE.news.add('Tragedy strikes - ' + npc.type + ' found dead in ' + (LIFE.world._currentZone || 'local area') + '.', 'crime');
     LIFE.updateRelationship(npc.name, -100);
     if (state.nearestNPC === npc) state.nearestNPC = null;
-
-    // nearby NPCs witness the kill and flee
-    LIFE.checkWitnesses(npc);
 };
 
 LIFE.spawnNPCs = function(stage) {
@@ -1060,8 +1083,61 @@ LIFE.updateNPCs = function(dt) {
             if (player) {
                 var fPos = npc.char.group.position;
                 var fprevX = fPos.x, fprevZ = fPos.z;
-                // If NPC has a flee path, follow waypoints
-                if (npc._fleePath && npc._fleePathIdx < npc._fleePath.length) {
+
+                // SEEKING HELP: run toward another NPC to report the crime
+                if (npc._seekingHelp && npc._helpTarget && npc._helpTarget.alive) {
+                    var htPos = npc._helpTarget.char.group.position;
+                    var htdx = htPos.x - fPos.x, htdz = htPos.z - fPos.z;
+                    var htDist = Math.sqrt(htdx * htdx + htdz * htdz);
+
+                    if (htDist < 3) {
+                        // Reached the helper NPC — they witness the crime and call police!
+                        npc._seekingHelp = false;
+                        npc._helpTarget.fleeing = true;
+                        npc._helpTarget.fleeTimer = 5 + Math.random() * 3;
+                        LIFE.ui.showPopup(npc._helpTarget.name + ' calls the police!', '#f44336');
+                        LIFE.addWanted(2);
+                        if (LIFE.news) LIFE.news.add('Assault reported after victim seeks help from bystander.', 'crime');
+                        npc._helpTarget = null;
+                        npc._fleeToward = null;
+                        // Now flee randomly away from player
+                        npc.fleeTimer = 5 + Math.random() * 3;
+                    } else {
+                        // Use A* to path toward helper
+                        if (!npc._fleePath) {
+                            npc._fleePath = LIFE.pathfinding.findPath(fPos.x, fPos.z, htPos.x, htPos.z);
+                            npc._fleePathIdx = 0;
+                        }
+                        if (npc._fleePath && npc._fleePathIdx < npc._fleePath.length) {
+                            var hwp = npc._fleePath[npc._fleePathIdx];
+                            var hwdx = hwp.x - fPos.x, hwdz = hwp.z - fPos.z;
+                            var hwDist = Math.sqrt(hwdx * hwdx + hwdz * hwdz);
+                            if (hwDist < 1.5) {
+                                npc._fleePathIdx++;
+                                if (npc._fleePathIdx >= npc._fleePath.length) npc._fleePath = null;
+                            } else {
+                                var hfs = 5 * dt; // run fast
+                                fPos.x += (hwdx / hwDist) * hfs;
+                                fPos.z += (hwdz / hwDist) * hfs;
+                                npc.char.group.rotation.y = Math.atan2(hwdx, hwdz);
+                            }
+                        } else {
+                            // Direct run toward helper
+                            var hfs2 = 5 * dt;
+                            fPos.x += (htdx / htDist) * hfs2;
+                            fPos.z += (htdz / htDist) * hfs2;
+                            npc.char.group.rotation.y = Math.atan2(htdx, htdz);
+                        }
+                    }
+                    // Timeout: if they can't reach help, just flee randomly
+                    npc._helpTimer = (npc._helpTimer || 15) - dt;
+                    if (npc._helpTimer <= 0) {
+                        npc._seekingHelp = false;
+                        npc._helpTarget = null;
+                        npc._fleePath = null;
+                    }
+                } else if (npc._fleePath && npc._fleePathIdx < npc._fleePath.length) {
+                    // If NPC has a flee path, follow waypoints
                     var fwp = npc._fleePath[npc._fleePathIdx];
                     var fwdx = fwp.x - fPos.x, fwdz = fwp.z - fPos.z;
                     var fwdist = Math.sqrt(fwdx * fwdx + fwdz * fwdz);
@@ -1094,15 +1170,13 @@ LIFE.updateNPCs = function(dt) {
                 npc.char.parts.rightArm.rotation.x = fswing * 0.5;
                 LIFE._clampNPCBounds(npc);
                 LIFE.resolveCollisions(fPos);
-                // If stuck while fleeing, compute a flee path around obstacles
-                if (Math.abs(fPos.x - fprevX) < 0.01 && Math.abs(fPos.z - fprevZ) < 0.01 && !npc._fleePath) {
+                // If stuck while fleeing (not seeking help), compute a flee path around obstacles
+                if (!npc._seekingHelp && Math.abs(fPos.x - fprevX) < 0.01 && Math.abs(fPos.z - fprevZ) < 0.01 && !npc._fleePath) {
                     var fleeDir = Math.atan2(fPos.z - player.group.position.z, fPos.x - player.group.position.x);
-                    // Try a flee target 15 units away from player, offset sideways if blocked
                     var fleeTX = fPos.x + Math.cos(fleeDir) * 15;
                     var fleeTZ = fPos.z + Math.sin(fleeDir) * 15;
                     var fleePath = LIFE.pathfinding.findPath(fPos.x, fPos.z, fleeTX, fleeTZ);
                     if (!fleePath) {
-                        // Try a different angle
                         fleeTX = fPos.x + Math.cos(fleeDir + 1.2) * 12;
                         fleeTZ = fPos.z + Math.sin(fleeDir + 1.2) * 12;
                         fleePath = LIFE.pathfinding.findPath(fPos.x, fPos.z, fleeTX, fleeTZ);
@@ -1113,7 +1187,7 @@ LIFE.updateNPCs = function(dt) {
                     }
                 }
             }
-            if (npc.fleeTimer <= 0) { npc.fleeing = false; npc._fleePath = null; }
+            if (npc.fleeTimer <= 0) { npc.fleeing = false; npc._fleePath = null; npc._seekingHelp = false; npc._helpTarget = null; }
             return;
         }
 

@@ -26,6 +26,10 @@ LIFE.updatePlayerSize = function() {
         LIFE.player.group.position.copy(pos);
         LIFE.player.group.rotation.y = rot;
         LIFE.scene.add(LIFE.player.group);
+        // Reattach held weapon visual after player recreation
+        LIFE._weaponMesh = null;
+        LIFE._currentWeaponType = null;
+        if (LIFE.updateHeldWeapon) LIFE.updateHeldWeapon();
     }
 };
 
@@ -213,24 +217,32 @@ LIFE.updatePlayer = function(dt) {
 
     // walk animation
     var animSpeed = sprinting ? 2.2 : (isCrawling ? 2 : 1.5);
+    var equipped = LIFE.getEquipped ? LIFE.getEquipped() : 'Fists';
+    var holdingWeapon = equipped !== 'Fists' && equipped;
     if (isMoving && state.isGrounded) {
         state.walkTime += dt * speed * animSpeed;
         var swing = Math.sin(state.walkTime);
         if (state.age < 1) {
             player.parts.leftLeg.rotation.x = swing*0.2; player.parts.rightLeg.rotation.x = -swing*0.2;
-            player.parts.leftArm.rotation.x = -swing*0.4; player.parts.rightArm.rotation.x = swing*0.4;
+            player.parts.leftArm.rotation.x = -swing*0.4;
+            if (!holdingWeapon) player.parts.rightArm.rotation.x = swing*0.4;
         } else if (isCrawling) {
             player.parts.leftLeg.rotation.x = swing*0.3; player.parts.rightLeg.rotation.x = -swing*0.3;
-            player.parts.leftArm.rotation.x = -swing*0.5; player.parts.rightArm.rotation.x = swing*0.5;
+            player.parts.leftArm.rotation.x = -swing*0.5;
+            if (!holdingWeapon) player.parts.rightArm.rotation.x = swing*0.5;
         } else {
             var armSwing = sprinting ? 0.6 : 0.35;
             player.parts.leftLeg.rotation.x = swing*0.5; player.parts.rightLeg.rotation.x = -swing*0.5;
-            player.parts.leftArm.rotation.x = -swing*armSwing; player.parts.rightArm.rotation.x = swing*armSwing;
+            player.parts.leftArm.rotation.x = -swing*armSwing;
+            if (!holdingWeapon) player.parts.rightArm.rotation.x = swing*armSwing;
         }
     } else if (!state.actionAnim.type) {
         player.parts.leftLeg.rotation.x *= 0.9; player.parts.rightLeg.rotation.x *= 0.9;
-        player.parts.leftArm.rotation.x *= 0.9; player.parts.rightArm.rotation.x *= 0.9;
+        player.parts.leftArm.rotation.x *= 0.9;
+        if (!holdingWeapon) player.parts.rightArm.rotation.x *= 0.9;
     }
+    // Apply weapon arm pose after walk animation
+    if (holdingWeapon && LIFE.updateHeldWeapon) LIFE.updateHeldWeapon();
 
     if (state.age >= 1 && state.age < 3 && isMoving) player.group.rotation.z = Math.sin(state.walkTime * 2) * 0.12;
     else player.group.rotation.z *= 0.9;

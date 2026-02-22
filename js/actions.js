@@ -54,14 +54,12 @@ LIFE.performAction = function(idx) {
         if (state.nearestNPC) { LIFE.dialogue.talkToNPC(state.nearestNPC); state.actionCooldown = 0.5; return; }
         LIFE.sounds.talk();
     } else if (actName === 'work') {
-        // Try regular career work first
         var earned = LIFE.economy.doWork();
         if (earned > 0) {
             var career = LIFE.economy.getCareer();
             LIFE.ui.showPopup('+$' + earned + ' ' + (career ? career.workText : ''), '#4caf50');
             LIFE.sounds.work(); LIFE.sounds.money();
         } else {
-            // No career / too young - try kid jobs
             var kidResult = LIFE.economy.doKidJob();
             if (kidResult && kidResult.earned > 0) {
                 LIFE.ui.showPopup('+$' + kidResult.earned + ' ' + kidResult.job.text, '#4caf50');
@@ -116,30 +114,42 @@ LIFE.performAction = function(idx) {
                     npc.type === 'Spouse' || npc.type === 'Your Child');
                 var isVulnerable = (npc.type === 'Kid' || npc.type === 'Grandchild');
 
-                // wanted level - scaled by age and target
+                // Check for witnesses FIRST (line-of-sight aware)
+                var witnessResult = LIFE.checkWitnesses(npc);
+                var witnessed = witnessResult.witnessed;
+
+                // wanted level - only if witnessed OR attacking police
                 var isChild = state.age < 13;
                 var hasWeapon = equipped === 'Switchblade';
                 if (npc.isPolice) {
+                    // Police ALWAYS know — they are the witness
                     LIFE.logCrime('Assaulting a police officer');
                     LIFE.addWanted(2);
-                } else if (isFamily) {
-                    LIFE.logCrime('Domestic violence');
-                    LIFE.addWanted(isChild && !hasWeapon ? 1 : 2);
-                } else if (isVulnerable) {
-                    LIFE.logCrime('Assault on a minor');
-                    LIFE.addWanted(isChild && !hasWeapon ? 0 : 2);
-                } else {
-                    LIFE.logCrime('Assault');
-                    LIFE.addWanted(isChild && !hasWeapon ? 0 : 1);
+                } else if (witnessed) {
+                    // Someone saw it — police get called
+                    if (isFamily) {
+                        LIFE.logCrime('Domestic violence');
+                        LIFE.addWanted(isChild && !hasWeapon ? 1 : 2);
+                    } else if (isVulnerable) {
+                        LIFE.logCrime('Assault on a minor');
+                        LIFE.addWanted(isChild && !hasWeapon ? 0 : 2);
+                    } else {
+                        LIFE.logCrime('Assault');
+                        LIFE.addWanted(isChild && !hasWeapon ? 0 : 1);
+                    }
+                }
+                // Always log the crime type even if unwitnessed
+                if (!npc.isPolice && !witnessed) {
+                    if (isFamily) LIFE.logCrime('Domestic violence');
+                    else if (isVulnerable) LIFE.logCrime('Assault on a minor');
+                    else LIFE.logCrime('Assault');
                 }
 
                 // reputation - babies/toddlers can't really hurt anyone
                 var repLoss = -5;
                 if (state.age < 5 && !hasWeapon) {
-                    // baby/toddler punching is harmless, no rep loss at all
                     repLoss = 0;
                 } else if (isChild && !hasWeapon) {
-                    // kids fighting kids/others without weapons - minor rep hit
                     repLoss = -1;
                     if (isFamily) {
                         repLoss = -2;
@@ -148,7 +158,6 @@ LIFE.performAction = function(idx) {
                         repLoss = -1;
                     }
                 } else {
-                    // adults or anyone with weapons
                     if (isFamily) {
                         repLoss = -20;
                         state.stats.happiness = Math.max(0, state.stats.happiness - 8);
@@ -160,20 +169,22 @@ LIFE.performAction = function(idx) {
                         state.stats.happiness = Math.max(0, state.stats.happiness - 5);
                     }
                 }
+                // Rep loss reduced if nobody saw it (but still some guilt)
+                if (!witnessed && !npc.isPolice) repLoss = Math.ceil(repLoss * 0.3);
                 state.reputation = Math.max(-100, state.reputation + repLoss);
-                LIFE.ui.showRepChange(repLoss);
+                if (repLoss !== 0) LIFE.ui.showRepChange(repLoss);
                 LIFE.updateRelationship(npc.name, -25);
 
                 if (Math.random() < 0.4) state.enemies++;
 
-                // NPC FIGHTS BACK - depends on type, relationship, and how many times attacked
+                // NPC FIGHTS BACK or FLEES FOR HELP
                 var fightBackChance = isFamily ? 0.2 : 0.6;
                 if (npc.type === 'Inmate') fightBackChance = 0.85;
                 if (npc.type === 'Dealer') fightBackChance = 0.7;
-                // NPCs you've attacked before are more likely to fight back
                 var prevRel = LIFE.state.relationships[npc.name];
                 if (prevRel && prevRel.level <= -30) fightBackChance = Math.min(0.9, fightBackChance + 0.3);
                 if (npc.alive && Math.random() < fightBackChance) {
+                    // NPC fights back
                     var retalDmg = 5;
                     if (npc.type === 'Boss') retalDmg = 12;
                     else if (npc.type === 'Police') retalDmg = 15;
@@ -187,54 +198,120 @@ LIFE.performAction = function(idx) {
                     else if (npc.type === 'Spouse') retalDmg = 7;
                     else if (npc.type === 'Old Friend') retalDmg = 6;
                     else if (npc.type === 'Neighbor') retalDmg = 7;
-                    // Stronger retaliation if NPC has been attacked before
                     if (prevRel && prevRel.level <= -50) retalDmg = Math.floor(retalDmg * 1.5);
                     setTimeout(function() {
                         if (state.gamePhase === 'playing' && npc.alive) {
                             LIFE.damagePlayer(retalDmg, npc.name + ' fought back');
-                            // Attacked NPC might call for help
-                            if (!npc.isPolice && Math.random() < 0.3) {
-                                LIFE.ui.showPopup(npc.name + ' screams for help!', '#ff9800');
-                                LIFE.addWanted(1);
-                            }
                         }
                     }, 400);
+                } else if (npc.alive && !npc.isPolice && !witnessed) {
+                    // NPC didn't fight back and nobody saw — they flee to seek help
+                    LIFE.makeVictimSeekHelp(npc);
+                    if (!isVulnerable) {
+                        LIFE.ui.showPopup(npc.name + ' is running for help!', '#ff9800');
+                    } else {
+                        LIFE.ui.showPopup(npc.name + ' is crying and running away!', '#ff9800');
+                    }
+                } else if (npc.alive && !npc.isPolice) {
+                    // Someone saw it already, NPC just flees
+                    npc.fleeing = true;
+                    npc.fleeTimer = 5 + Math.random() * 3;
                 }
-
-                // witnesses nearby add more wanted
-                LIFE.checkWitnesses(npc);
             }
         }
     });
 };
 
 // ============================================================
-// WITNESS SYSTEM
+// WITNESS SYSTEM (line-of-sight aware)
 // ============================================================
+
+// Check if a straight line from (ax,az) to (bx,bz) is blocked by any collider
+LIFE.hasLineOfSight = function(ax, az, bx, bz) {
+    var colliders = (LIFE.world.built && !LIFE.world.insideInterior)
+        ? LIFE.world.getActiveColliders()
+        : LIFE.colliders;
+    var dx = bx - ax, dz = bz - az;
+    var len = Math.sqrt(dx * dx + dz * dz);
+    if (len < 0.5) return true; // too close to matter
+    // Step along line checking for collider intersection
+    var steps = Math.ceil(len / 0.8); // check every 0.8 units
+    var sx = dx / steps, sz = dz / steps;
+    for (var s = 1; s < steps; s++) {
+        var px = ax + sx * s, pz = az + sz * s;
+        for (var c = 0; c < colliders.length; c++) {
+            var col = colliders[c];
+            if (px >= col.minX && px <= col.maxX && pz >= col.minZ && pz <= col.maxZ) {
+                return false; // blocked by wall/building
+            }
+        }
+    }
+    return true;
+};
+
+// Returns the number of NPCs who can see the crime (with line-of-sight check)
+// Also makes witnesses flee and tracks relationships
+// Returns { count, witnessed } where witnessed = true if anyone saw it
 LIFE.checkWitnesses = function(victim) {
     var player = LIFE.player;
-    if (!player) return;
+    if (!player) return { count: 0, witnessed: false };
+    var px = player.group.position.x, pz = player.group.position.z;
     var witnessCount = 0;
     var allNPCs = LIFE.getAllNPCs();
     for (var i = 0; i < allNPCs.length; i++) {
         var npc = allNPCs[i];
         if (!npc.alive || npc === victim) continue;
-        var dx = npc.char.group.position.x - player.group.position.x;
-        var dz = npc.char.group.position.z - player.group.position.z;
+        var nx = npc.char.group.position.x, nz = npc.char.group.position.z;
+        var dx = nx - px, dz = nz - pz;
         var dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist < 15) {
+        if (dist < 18 && LIFE.hasLineOfSight(px, pz, nx, nz)) {
             witnessCount++;
             if (!npc.isPolice) {
                 npc.fleeing = true;
                 npc.fleeTimer = 5 + Math.random() * 3;
             }
-            // Witnesses remember: relationship drops
             LIFE.updateRelationship(npc.name, -10);
         }
     }
     if (witnessCount > 0 && !victim.isPolice) {
         var extra = Math.min(3, Math.floor(witnessCount / 2));
         if (extra > 0) LIFE.addWanted(extra);
+    }
+    return { count: witnessCount, witnessed: witnessCount > 0 };
+};
+
+// Make a victim NPC seek help from another NPC (flee toward nearest NPC)
+// If they reach another NPC, that NPC becomes a witness and calls police
+LIFE.makeVictimSeekHelp = function(victim) {
+    if (!victim || !victim.alive) return;
+    var vx = victim.char.group.position.x, vz = victim.char.group.position.z;
+    // Find nearest alive NPC that isn't the victim
+    var nearest = null, nearDist = Infinity;
+    var allNPCs = LIFE.getAllNPCs();
+    for (var i = 0; i < allNPCs.length; i++) {
+        var npc = allNPCs[i];
+        if (!npc.alive || npc === victim) continue;
+        var dx = npc.char.group.position.x - vx;
+        var dz = npc.char.group.position.z - vz;
+        var d = Math.sqrt(dx * dx + dz * dz);
+        if (d < nearDist && d > 2) { nearDist = d; nearest = npc; }
+    }
+    if (nearest && nearDist < 60) {
+        // Set victim to flee TOWARD the nearest NPC to seek help
+        victim._seekingHelp = true;
+        victim._helpTarget = nearest;
+        victim._helpTimer = 15; // max time to reach help
+        victim.fleeing = true;
+        victim.fleeTimer = 15;
+        // Override flee direction toward the helper NPC
+        victim._fleeToward = {
+            x: nearest.char.group.position.x,
+            z: nearest.char.group.position.z
+        };
+    } else {
+        // Nobody nearby to seek help from — just flee randomly
+        victim.fleeing = true;
+        victim.fleeTimer = 5 + Math.random() * 3;
     }
 };
 
@@ -316,6 +393,7 @@ LIFE.updateBullets = function(dt) {
     // update bullets
     for (var i = LIFE.bullets.length - 1; i >= 0; i--) {
         var b = LIFE.bullets[i];
+        if (!b) continue;
         b.life -= dt;
         if (b.life <= 0 || b.hit) {
             LIFE.scene.remove(b.mesh);
@@ -375,32 +453,59 @@ LIFE.updateBullets = function(dt) {
                     LIFE.sounds.bulletImpact();
                     LIFE.ui.showPopup('Hit ' + npc.type + '! (-' + Math.floor(dmg) + ')', '#ff1744');
 
+                    // Check witnesses with line-of-sight
+                    var shotWitness = LIFE.checkWitnesses(npc);
+                    var shotSeen = shotWitness.witnessed;
+
                     // rep/wanted - much worse for family
                     var shotFamily = (npc.type === 'Mom' || npc.type === 'Dad' || npc.type === 'Sibling' ||
                         npc.type === 'Spouse' || npc.type === 'Your Child');
                     var repLoss = -15;
-                    if (npc.isPolice) { LIFE.logCrime('Shooting at a police officer'); LIFE.addWanted(3); repLoss = -8; }
-                    else if (shotFamily) {
-                        LIFE.logCrime('Shooting a family member');
-                        LIFE.addWanted(4);
-                        repLoss = -30;
-                        LIFE.state.stats.happiness = Math.max(0, LIFE.state.stats.happiness - 15);
-                        LIFE.state.familyAbuser = true;
-                    } else if (npc.type === 'Kid' || npc.type === 'Grandchild') {
-                        LIFE.logCrime('Shooting a minor');
-                        LIFE.addWanted(4);
-                        repLoss = -25;
+                    if (npc.isPolice) {
+                        LIFE.logCrime('Shooting at a police officer');
+                        LIFE.addWanted(3); repLoss = -8;
+                    } else if (shotSeen) {
+                        // Witnessed — police get called
+                        if (shotFamily) {
+                            LIFE.logCrime('Shooting a family member');
+                            LIFE.addWanted(4);
+                            repLoss = -30;
+                            LIFE.state.stats.happiness = Math.max(0, LIFE.state.stats.happiness - 15);
+                            LIFE.state.familyAbuser = true;
+                        } else if (npc.type === 'Kid' || npc.type === 'Grandchild') {
+                            LIFE.logCrime('Shooting a minor');
+                            LIFE.addWanted(4);
+                            repLoss = -25;
+                        } else {
+                            LIFE.logCrime('Shooting a civilian');
+                            LIFE.addWanted(2);
+                        }
                     } else {
-                        LIFE.logCrime('Shooting a civilian');
-                        LIFE.addWanted(2);
+                        // Unwitnessed shooting — log crime but no police yet
+                        if (shotFamily) {
+                            LIFE.logCrime('Shooting a family member');
+                            repLoss = -30;
+                            LIFE.state.stats.happiness = Math.max(0, LIFE.state.stats.happiness - 15);
+                            LIFE.state.familyAbuser = true;
+                        } else if (npc.type === 'Kid' || npc.type === 'Grandchild') {
+                            LIFE.logCrime('Shooting a minor');
+                            repLoss = -25;
+                        } else {
+                            LIFE.logCrime('Shooting a civilian');
+                        }
+                        repLoss = Math.ceil(repLoss * 0.3); // reduced rep loss if unseen
+                        // Gunshot SOUND can attract attention — 40% chance someone hears
+                        if (Math.random() < 0.4) {
+                            LIFE.addWanted(1);
+                            LIFE.ui.showPopup('Someone heard the gunshot!', '#ff9800');
+                        }
+                        // Victim flees for help if alive
+                        if (npc.alive) LIFE.makeVictimSeekHelp(npc);
                     }
                     LIFE.state.reputation = Math.max(-100, LIFE.state.reputation + repLoss);
                     LIFE.ui.showRepChange(repLoss);
                     LIFE.state.enemies++;
                     LIFE.updateRelationship(npc.name, -40);
-
-                    // witnesses
-                    LIFE.checkWitnesses(npc);
                     break;
                 }
             }
@@ -461,12 +566,210 @@ LIFE.shootGun = function() {
     LIFE.createBullet(origin, direction, false);
     LIFE.createMuzzleFlash(origin);
 
-    // firing gun always adds wanted (unless already high)
+    // firing gun — check if anyone nearby can hear/see
     if (state.wantedLevel < 1) {
         LIFE.logCrime('Illegal discharge of a firearm');
-        LIFE.addWanted(1);
+        // Check if any NPC is within earshot (gunshots are LOUD — 25 unit range)
+        var heardGunshot = false;
+        var allGunNPCs = LIFE.getAllNPCs();
+        for (var gi = 0; gi < allGunNPCs.length; gi++) {
+            var gnpc = allGunNPCs[gi];
+            if (!gnpc.alive) continue;
+            var gdx = gnpc.char.group.position.x - player.group.position.x;
+            var gdz = gnpc.char.group.position.z - player.group.position.z;
+            if (Math.sqrt(gdx * gdx + gdz * gdz) < 25) { heardGunshot = true; break; }
+        }
+        if (heardGunshot) LIFE.addWanted(1);
     }
-    state.reputation = Math.max(-100, state.reputation - 3);
+    if (state.wantedLevel > 0) state.reputation = Math.max(-100, state.reputation - 3);
+};
+
+// ============================================================
+// CRIME ACTIONS (triggered via dialogue/events, not buttons)
+// ============================================================
+LIFE.performSteal = function() {
+    var state = LIFE.state;
+    var npc = state.nearestNPC;
+    if (!npc || !npc.alive) { LIFE.ui.showPopup('Nobody to steal from!', '#999'); state.actionCooldown = 1; return; }
+    var dist = 0;
+    if (LIFE.player) {
+        var dx = npc.char.group.position.x - LIFE.player.group.position.x;
+        var dz = npc.char.group.position.z - LIFE.player.group.position.z;
+        dist = Math.sqrt(dx * dx + dz * dz);
+    }
+    if (dist > 4) { LIFE.ui.showPopup('Too far away!', '#999'); state.actionCooldown = 1; return; }
+
+    // Success chance based on charisma (stealth/cunning) and target type
+    var baseChance = 0.4 + state.stats.charisma * 0.004;
+    if (npc.isPolice) baseChance -= 0.3;
+    if (npc.isVendor) baseChance += 0.1;
+    if (npc.type === 'Kid' || npc.type === 'Grandchild') baseChance += 0.2;
+    if (npc.type === 'Dealer') baseChance -= 0.15;
+
+    state.actionCooldown = 2.0;
+    state.actionAnim = { type: 'punch', timer: 0.4 };
+    state.totalThefts = (state.totalThefts || 0) + 1;
+
+    if (Math.random() < baseChance) {
+        // Success
+        var loot = Math.floor(Math.random() * 80) + 10;
+        if (npc.isVendor) loot = Math.floor(Math.random() * 150) + 30;
+        if (npc.type === 'Kid') loot = Math.floor(Math.random() * 5) + 1;
+        state.money += loot;
+        LIFE.ui.showPopup('Stole $' + loot + '!', '#b71c1c');
+        LIFE.sounds.money();
+        state.reputation = Math.max(-100, state.reputation - 3);
+        LIFE.ui.showRepChange(-3);
+        LIFE.logCrime('Theft');
+        LIFE.updateRelationship(npc.name, -30);
+        // Vendor notices eventually
+        if (npc.isVendor && Math.random() < 0.3) {
+            LIFE.addWanted(1);
+            LIFE.ui.showPopup(npc.type + ' noticed!', '#ff9800');
+        }
+    } else {
+        // Caught
+        LIFE.ui.showPopup('Caught stealing!', '#f44336');
+        state.reputation = Math.max(-100, state.reputation - 8);
+        LIFE.ui.showRepChange(-8);
+        LIFE.logCrime('Attempted theft');
+        LIFE.addWanted(1);
+        LIFE.updateRelationship(npc.name, -50);
+        npc.reacting = 2;
+        // NPC fights back
+        if (!npc.isPolice && npc.alive && Math.random() < 0.5) {
+            LIFE.damagePlayer(8, npc.name + ' caught you stealing');
+        }
+        if (LIFE.news) LIFE.news.add(LIFE.state.playerName + ' caught stealing in ' + (LIFE.world._currentZone || 'local area') + '.', 'crime');
+    }
+    LIFE.ui.updateStats();
+};
+
+LIFE.performPickpocket = function() {
+    var state = LIFE.state;
+    var npc = state.nearestNPC;
+    if (!npc || !npc.alive) { LIFE.ui.showPopup('Nobody nearby!', '#999'); state.actionCooldown = 1; return; }
+    var dist = 0;
+    if (LIFE.player) {
+        var dx = npc.char.group.position.x - LIFE.player.group.position.x;
+        var dz = npc.char.group.position.z - LIFE.player.group.position.z;
+        dist = Math.sqrt(dx * dx + dz * dz);
+    }
+    if (dist > 2.5) { LIFE.ui.showPopup('Need to get closer!', '#999'); state.actionCooldown = 1; return; }
+
+    var baseChance = 0.35 + state.stats.charisma * 0.005;
+    // Skill improves with practice
+    baseChance += Math.min(0.2, (state.totalThefts || 0) * 0.02);
+    if (npc.isPolice) baseChance -= 0.25;
+
+    state.actionCooldown = 2.5;
+    state.actionAnim = { type: 'work', timer: 0.4 };
+    state.totalThefts = (state.totalThefts || 0) + 1;
+
+    if (Math.random() < baseChance) {
+        var loot = Math.floor(Math.random() * 200) + 20;
+        state.money += loot;
+        LIFE.ui.showPopup('Pickpocketed $' + loot + '!', '#d32f2f');
+        LIFE.sounds.money();
+        state.reputation = Math.max(-100, state.reputation - 2);
+        LIFE.ui.showRepChange(-2);
+        LIFE.logCrime('Pickpocketing');
+    } else {
+        LIFE.ui.showPopup('Caught! ' + npc.name + ' grabbed your wrist!', '#f44336');
+        state.reputation = Math.max(-100, state.reputation - 10);
+        LIFE.ui.showRepChange(-10);
+        LIFE.logCrime('Attempted pickpocketing');
+        LIFE.addWanted(1);
+        LIFE.updateRelationship(npc.name, -60);
+        npc.reacting = 2;
+        if (npc.alive) LIFE.damagePlayer(10, npc.name + ' caught you');
+        LIFE.checkWitnesses(npc);
+    }
+    LIFE.ui.updateStats();
+};
+
+LIFE.performIntimidate = function() {
+    var state = LIFE.state;
+    var npc = state.nearestNPC;
+    if (!npc || !npc.alive) { LIFE.ui.showPopup('Nobody to intimidate!', '#999'); state.actionCooldown = 1; return; }
+    if (npc.isPolice) { LIFE.ui.showPopup("That's a bad idea...", '#999'); state.actionCooldown = 1; return; }
+
+    var success = 0.3 + state.stats.charisma * 0.003;
+    if (state.reputation <= -30) success += 0.2; // feared people intimidate better
+    if (LIFE.getEquipped() === 'Switchblade') success += 0.15;
+    if (LIFE.getEquipped() === 'Pistol') success += 0.3;
+    if (npc.type === 'Kid' || npc.type === 'Grandchild') success += 0.3;
+    if (npc.type === 'Dealer' || npc.type === 'Inmate') success -= 0.2;
+
+    state.actionCooldown = 2.0;
+    state.actionAnim = { type: 'punch', timer: 0.5 };
+
+    if (Math.random() < success) {
+        var extorted = Math.floor(Math.random() * 100) + 20;
+        if (npc.isVendor) extorted = Math.floor(Math.random() * 200) + 50;
+        state.money += extorted;
+        LIFE.ui.showPopup(npc.name + ' hands over $' + extorted + ' in fear', '#880e4f');
+        LIFE.sounds.money();
+        state.reputation = Math.max(-100, state.reputation - 5);
+        LIFE.ui.showRepChange(-5);
+        LIFE.logCrime('Extortion');
+        LIFE.updateRelationship(npc.name, -40);
+        npc.fleeing = true; npc.fleeTimer = 5;
+        state.totalExtortions = (state.totalExtortions || 0) + 1;
+        if (Math.random() < 0.3) LIFE.addWanted(1);
+    } else {
+        var responses = [
+            npc.name + " doesn't flinch: 'You don't scare me.'",
+            npc.name + " laughs: 'Get lost, kid.'",
+            npc.name + " stands their ground."
+        ];
+        LIFE.ui.showPopup(responses[Math.floor(Math.random() * responses.length)], '#999');
+        state.reputation = Math.max(-100, state.reputation - 2);
+        LIFE.ui.showRepChange(-2);
+        LIFE.updateRelationship(npc.name, -20);
+        // Might fight back
+        if (Math.random() < 0.4 && npc.alive) {
+            LIFE.damagePlayer(12, npc.name + ' fought back');
+        }
+    }
+    LIFE.ui.updateStats();
+};
+
+// ============================================================
+// VIRTUE ACTIONS (triggered via dialogue/events)
+// ============================================================
+LIFE.performPreach = function() {
+    var state = LIFE.state;
+    // Inspire nearby NPCs — requires charisma
+    var nearbyCount = 0;
+    var allNPCs = LIFE.getAllNPCs();
+    for (var i = 0; i < allNPCs.length; i++) {
+        var npc = allNPCs[i];
+        if (!npc.alive || npc.isPolice || npc.isDealer) continue;
+        if (!LIFE.player) continue;
+        var dx = npc.char.group.position.x - LIFE.player.group.position.x;
+        var dz = npc.char.group.position.z - LIFE.player.group.position.z;
+        if (Math.sqrt(dx * dx + dz * dz) < 10) {
+            nearbyCount++;
+            LIFE.updateRelationship(npc.name, 5);
+        }
+    }
+    if (nearbyCount > 0) {
+        var repGain = 2 + nearbyCount;
+        // Better speeches with high charisma
+        if (state.stats.charisma > 60) repGain += 3;
+        state.reputation = Math.min(100, state.reputation + repGain);
+        state.stats.charisma = Math.min(100, state.stats.charisma + 1);
+        LIFE.ui.showPopup('Inspired ' + nearbyCount + ' people! (+' + repGain + ' rep)', '#ffd54f');
+        LIFE.ui.showRepChange(repGain);
+        state.totalSpeeches = (state.totalSpeeches || 0) + 1;
+        if (LIFE.news && nearbyCount >= 3) LIFE.news.add(LIFE.state.playerName + ' delivers inspiring speech to local community.', 'social');
+    } else {
+        LIFE.ui.showPopup('Nobody around to hear you...', '#999');
+    }
+    state.actionCooldown = 4.0;
+    state.actionAnim = { type: 'wave', timer: 0.6 };
+    LIFE.ui.updateStats();
 };
 
 // ============================================================
@@ -480,6 +783,8 @@ LIFE.updateActionAnim = function(dt) {
         state.actionAnim.type = null;
         if (player.parts.rightArm) { player.parts.rightArm.rotation.x = 0; player.parts.rightArm.rotation.z = 0; }
         if (player.parts.leftArm) player.parts.leftArm.rotation.x = 0;
+        // Restore weapon pose after action animation
+        if (LIFE.updateHeldWeapon) LIFE.updateHeldWeapon();
         return;
     }
     var t = state.actionAnim.timer;

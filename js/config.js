@@ -37,17 +37,26 @@ LIFE.STAGES = {
 // ACTION DEFINITIONS
 // ============================================================
 LIFE.ACTION_DEFS = {
-    cry:    { label: 'Cry',    text: 'WAAHH!!',     color: '#64b5f6' },
-    laugh:  { label: 'Laugh',  text: 'Hahaha!',     color: '#fff176' },
-    talk:   { label: 'Talk',   text: 'Hello!',      color: '#fff' },
-    babble: { label: 'Babble', text: 'Goo goo!',    color: '#f8bbd0' },
-    punch:  { label: 'Punch',  text: 'POW!',        color: '#ef5350' },
-    dance:  { label: 'Dance',  text: '♪♫♪',        color: '#ce93d8' },
-    wave:   { label: 'Wave',   text: '*waves*',     color: '#81c784' },
-    work:   { label: 'Work',   text: '*working*',   color: '#90a4ae' },
-    sit:    { label: 'Sit',    text: '*sits down*',  color: '#a1887f' },
-    play:   { label: 'Play',   text: 'Wheee!',      color: '#ffab40' },
-    shop:   { label: 'Shop',   text: 'Shopping...',  color: '#ab47bc' }
+    cry:        { label: 'Cry',        text: 'WAAHH!!',         color: '#64b5f6' },
+    laugh:      { label: 'Laugh',      text: 'Hahaha!',         color: '#fff176' },
+    talk:       { label: 'Talk',       text: 'Hello!',          color: '#fff' },
+    babble:     { label: 'Babble',     text: 'Goo goo!',        color: '#f8bbd0' },
+    punch:      { label: 'Punch',      text: 'POW!',            color: '#ef5350' },
+    dance:      { label: 'Dance',      text: '♪♫♪',            color: '#ce93d8' },
+    wave:       { label: 'Wave',       text: '*waves*',         color: '#81c784' },
+    work:       { label: 'Work',       text: '*working*',       color: '#90a4ae' },
+    sit:        { label: 'Sit',        text: '*sits down*',     color: '#a1887f' },
+    play:       { label: 'Play',       text: 'Wheee!',          color: '#ffab40' },
+    shop:       { label: 'Shop',       text: 'Shopping...',     color: '#ab47bc' },
+    study:      { label: 'Study',      text: '*studying...*',   color: '#42a5f5' },
+    exercise:   { label: 'Exercise',   text: '*working out*',   color: '#66bb6a' },
+    volunteer:  { label: 'Volunteer',  text: '*helping out*',   color: '#ffb74d' },
+    steal:      { label: 'Steal',      text: '*sneaking...*',   color: '#b71c1c' },
+    intimidate: { label: 'Threaten',   text: '*glares*',        color: '#880e4f' },
+    meditate:   { label: 'Meditate',   text: '*meditating...*', color: '#80cbc4' },
+    beg:        { label: 'Beg',        text: 'Spare change?',   color: '#bcaaa4' },
+    pickpocket: { label: 'Pickpocket', text: '*reaches in...*', color: '#d32f2f' },
+    preach:     { label: 'Inspire',    text: '*speaks up*',     color: '#ffd54f' }
 };
 
 // ============================================================
@@ -190,7 +199,7 @@ LIFE.getActionsForAge = function(a) {
     if (a < 1)  return ['cry', 'laugh', 'punch'];
     if (a < 3)  return ['cry', 'punch', 'wave', 'laugh'];
     if (a < 5)  return ['talk', 'punch', 'play', 'wave'];
-    if (a < 6)  return ['talk', 'punch', 'play', 'work']; // chores at 5
+    if (a < 6)  return ['talk', 'punch', 'play', 'work'];
     if (a < 12) return ['talk', 'punch', 'work', 'dance'];
     if (a < 14) return ['talk', 'punch', 'work', 'dance'];
     if (a < 18) return ['talk', 'punch', 'work', 'shop'];
@@ -264,9 +273,11 @@ LIFE.RANDOM_EVENTS = [
       ]},
     { text: "A bully is picking on a smaller kid at school!", minAge: 6, maxAge: 14, chance: 0.2,
       options: [
-        { text: "Stand up to the bully!", effects: { charisma: 5, health: -3 }, rep: 15, friend: true },
+        { text: "Stand up to the bully!", effects: { charisma: 5, health: -3 }, rep: 15, friend: true,
+            onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Stood up to a bully to protect another kid', 'good'); }},
         { text: "Tell a teacher", effects: { intelligence: 2 }, rep: 5 },
-        { text: "Join the bully", effects: { charisma: -3 }, rep: -15, enemy: true },
+        { text: "Join the bully", effects: { charisma: -3 }, rep: -15, enemy: true,
+            onSelect: function() { LIFE.state.innocentsHarmed++; LIFE.logMilestone('Joined a bully in tormenting a smaller kid', 'bad'); }},
         { text: "Walk away", effects: {}, rep: -3 }
       ]},
     { text: "You won a spelling bee at school!", minAge: 6, maxAge: 12, chance: 0.15,
@@ -296,9 +307,12 @@ LIFE.RANDOM_EVENTS = [
     // YOUNG ADULT (18-30)
     { text: "A stranger just collapsed on the street! They need help!", minAge: 16, maxAge: 80, chance: 0.12,
       options: [
-        { text: "Rush over and help immediately!", effects: { happiness: 5 }, rep: 20 },
-        { text: "Call 911 and stay with them", effects: { happiness: 3 }, rep: 12 },
-        { text: "Someone else will help them", effects: {}, rep: -5 }
+        { text: "Rush over and help immediately!", effects: { happiness: 5 }, rep: 20,
+            onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Rushed to help a stranger who collapsed on the street', 'good'); }},
+        { text: "Call 911 and stay with them", effects: { happiness: 3 }, rep: 12,
+            onSelect: function() { LIFE.state.livesHelped++; }},
+        { text: "Someone else will help them", effects: {}, rep: -5,
+            onSelect: function() { LIFE.state.innocentsHarmed++; }}
       ]},
     { text: "You've been offered a promotion at work!", minAge: 25, maxAge: 60, chance: 0.15,
       options: [
@@ -314,8 +328,10 @@ LIFE.RANDOM_EVENTS = [
       ]},
     { text: "You found a wallet on the ground with $500 inside!", minAge: 8, maxAge: 80, chance: 0.12,
       options: [
-        { text: "Return it to the owner", effects: { happiness: 5 }, rep: 15 },
-        { text: "Keep the cash", effects: {}, money: 500, rep: -3 },
+        { text: "Return it to the owner", effects: { happiness: 5 }, rep: 15,
+            onSelect: function() { LIFE.logMilestone('Returned a wallet with $500 to the owner', 'good'); }},
+        { text: "Keep the cash", effects: {}, money: 500, rep: -3,
+            onSelect: function() { LIFE.state.totalThefts++; }},
         { text: "Turn it into the police", effects: { happiness: 2 }, rep: 10 }
       ]},
     // ADULT (30-60)
@@ -329,7 +345,8 @@ LIFE.RANDOM_EVENTS = [
     { text: "You received a surprise inheritance from a distant relative! $2,000!", minAge: 20, maxAge: 80, chance: 0.08,
       options: [
         { text: "Save it for the future", effects: { intelligence: 2 }, money: 2000 },
-        { text: "Donate half to charity", effects: { happiness: 5 }, money: 1000, rep: 15 },
+        { text: "Donate half to charity", effects: { happiness: 5 }, money: 1000, rep: 15,
+            onSelect: function() { LIFE.state.charitableDonations += 1000; LIFE.logMilestone('Donated half of a $2000 inheritance to charity', 'good'); }},
         { text: "Spend it all on a party!", effects: { happiness: 8, charisma: 3 }, money: 2000, rep: 3 }
       ]},
     { text: "You got food poisoning from a restaurant!", minAge: 10, maxAge: 80, chance: 0.12,
@@ -378,8 +395,10 @@ LIFE.RANDOM_EVENTS = [
       ]},
     { text: "A charity asked you to volunteer this weekend.", minAge: 14, maxAge: 80, chance: 0.12,
       options: [
-        { text: "Absolutely! I'd love to help!", effects: { happiness: 5, charisma: 3 }, rep: 15 },
-        { text: "Donate money instead ($200)", effects: { happiness: 3 }, cost: 200, rep: 10 },
+        { text: "Absolutely! I'd love to help!", effects: { happiness: 5, charisma: 3 }, rep: 15,
+            onSelect: function() { LIFE.state.volunteerHours++; LIFE.logMilestone('Volunteered for charity work', 'good'); }},
+        { text: "Donate money instead ($200)", effects: { happiness: 3 }, cost: 200, rep: 10,
+            onSelect: function() { LIFE.state.charitableDonations += 200; }},
         { text: "I don't have time for that", effects: {}, rep: -3 }
       ]},
     // FAME EVENTS
@@ -474,9 +493,11 @@ LIFE.RANDOM_EVENTS = [
     { text: "A coworker confided in you about embezzlement at work.", minAge: 23, maxAge: 60, chance: 0.08,
       reqAnyCareer: true,
       options: [
-        { text: "Report it to the authorities", effects: { intelligence: 2 }, rep: 15, money: 1000 },
+        { text: "Report it to the authorities", effects: { intelligence: 2 }, rep: 15, money: 1000,
+            onSelect: function() { LIFE.logMilestone('Reported workplace embezzlement to authorities', 'good'); }},
         { text: "Confront the embezzler", effects: { charisma: 3 }, rep: 5 },
-        { text: "Get a cut of the action", effects: { charisma: -3 }, rep: -15, money: 5000 },
+        { text: "Get a cut of the action", effects: { charisma: -3 }, rep: -15, money: 5000,
+            onSelect: function() { LIFE.state.totalThefts++; LIFE.logCrime('Embezzlement'); LIFE.logMilestone('Participated in workplace embezzlement', 'bad'); }},
         { text: "Mind your own business", effects: {}, rep: -3 }
       ]},
     // HEALTH SCARES
@@ -495,7 +516,8 @@ LIFE.RANDOM_EVENTS = [
     // NEIGHBORHOOD / SOCIAL
     { text: "Your neighbor's house was broken into last night. They're shaken up.", minAge: 18, maxAge: 80, chance: 0.1,
       options: [
-        { text: "Bring them food and offer to help", effects: { happiness: 3, charisma: 2 }, rep: 10 },
+        { text: "Bring them food and offer to help", effects: { happiness: 3, charisma: 2 }, rep: 10,
+            onSelect: function() { LIFE.state.livesHelped++; }},
         { text: "Install security cameras on your own house ($300)", effects: { intelligence: 1 }, cost: 300, rep: 2 },
         { text: "Offer to patrol the neighborhood", effects: { health: -2, charisma: 3 }, rep: 12 },
         { text: "Not my problem", effects: {}, rep: -5 }
@@ -553,14 +575,96 @@ LIFE.RANDOM_EVENTS = [
     { text: "Your grandchild asked you to teach them something you're good at.", minAge: 55, maxAge: 80, chance: 0.12,
       reqKids: true,
       options: [
-        { text: "Spend the whole afternoon teaching them", effects: { happiness: 10, charisma: 3 }, rep: 5 },
+        { text: "Spend the whole afternoon teaching them", effects: { happiness: 10, charisma: 3 }, rep: 5,
+            onSelect: function() { LIFE.state.peopleMentored++; }},
         { text: "Buy them a book about it ($20)", effects: { happiness: 3 }, cost: 20, rep: 2 },
         { text: "I'm too tired today...", effects: { happiness: -3 }, rep: -2 }
       ]},
     { text: "A young person asked for your life advice. They look up to you.", minAge: 50, maxAge: 80, chance: 0.1,
       options: [
-        { text: "Share everything you've learned", effects: { happiness: 8, charisma: 5 }, rep: 10 },
+        { text: "Share everything you've learned", effects: { happiness: 8, charisma: 5 }, rep: 10,
+            onSelect: function() { LIFE.state.peopleMentored++; LIFE.logMilestone('Mentored a young person who looked up to you', 'good'); }},
         { text: "Tell them to figure it out themselves", effects: { charisma: -2 }, rep: -3 },
-        { text: "Warn them about the mistakes you made", effects: { happiness: 3, intelligence: 2 }, rep: 8 }
+        { text: "Warn them about the mistakes you made", effects: { happiness: 3, intelligence: 2 }, rep: 8,
+            onSelect: function() { LIFE.state.peopleMentored++; }}
+      ]},
+    // DEEP MORAL EVENTS
+    { text: "A house is on fire down the street! You can hear screaming from inside!", minAge: 14, maxAge: 70, chance: 0.05,
+      options: [
+        { text: "Run inside to help them!", effects: { health: -20, charisma: 5 }, rep: 30,
+            onSelect: function() { LIFE.state.livesHelped += 2; LIFE.logMilestone('Ran into a burning building to save a family', 'good'); if (LIFE.news) LIFE.news.add('Local hero rushes into burning building, saves trapped residents.', 'social'); }},
+        { text: "Call 911 and try to guide them out from the door", effects: { health: -5, charisma: 3 }, rep: 18,
+            onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Helped rescue people from a house fire', 'good'); }},
+        { text: "Call 911 and wait for the firefighters", effects: {}, rep: 5 },
+        { text: "It's not my problem. Walk away.", effects: {}, rep: -15,
+            onSelect: function() { LIFE.state.innocentsHarmed++; LIFE.logMilestone('Walked away while people were trapped in a fire', 'bad'); }}
+      ]},
+    { text: "You witnessed a hit-and-run. The driver is fleeing and the victim is on the ground bleeding.", minAge: 16, maxAge: 80, chance: 0.06,
+      options: [
+        { text: "Run to the victim, apply pressure, call an ambulance!", effects: { health: -3, charisma: 3, happiness: 5 }, rep: 25,
+            onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Saved a hit-and-run victim by applying first aid', 'good'); if (LIFE.news) LIFE.news.add('Bystander saves hit-and-run victim with quick first aid response.', 'social'); }},
+        { text: "Chase after the driver and get their plate number", effects: { health: -5, charisma: 2 }, rep: 20,
+            onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Chased down a hit-and-run driver and reported them', 'good'); }},
+        { text: "Call 911 from a distance", effects: {}, rep: 8 },
+        { text: "Keep walking. You don't want to get involved.", effects: {}, rep: -12,
+            onSelect: function() { LIFE.state.innocentsHarmed++; }}
+      ]},
+    { text: "An elderly woman is being scammed by a fake charity door-to-door salesman. You overhear him pressuring her.", minAge: 16, maxAge: 80, chance: 0.07,
+      options: [
+        { text: "Intervene! 'Ma'am, this is a scam. Sir, leave now.'", effects: { charisma: 5, happiness: 3 }, rep: 18,
+            onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Protected an elderly woman from a scammer', 'good'); }},
+        { text: "Call the police on the scammer", effects: { intelligence: 2 }, rep: 12,
+            onSelect: function() { LIFE.state.livesHelped++; }},
+        { text: "It's none of my business", effects: {}, rep: -5 },
+        { text: "Learn the scam technique for later use", effects: { intelligence: 2, charisma: -3 }, rep: -10,
+            onSelect: function() { LIFE.logMilestone('Learned scam techniques from watching an elderly woman get conned', 'bad'); }}
+      ]},
+    { text: "You found a stash of drugs hidden behind a dumpster. Looks worth thousands.", minAge: 16, maxAge: 60, chance: 0.05,
+      options: [
+        { text: "Call the police and report it", effects: { intelligence: 2 }, rep: 12,
+            onSelect: function() { LIFE.logMilestone('Reported a drug stash to police', 'good'); }},
+        { text: "Leave it alone. Not worth the risk.", effects: { intelligence: 1 } },
+        { text: "Take it and sell it ($3000)", effects: {}, money: 3000, rep: -20,
+            onSelect: function() { LIFE.state.totalThefts++; LIFE.logCrime('Drug dealing'); LIFE.logMilestone('Sold a found drug stash for $3000', 'bad'); if (Math.random() < 0.3) { LIFE.addWanted(3); }}},
+        { text: "Destroy it so nobody gets hurt", effects: { happiness: 3 }, rep: 8,
+            onSelect: function() { LIFE.logMilestone('Destroyed a drug stash to protect the community', 'good'); }}
+      ]},
+    { text: "A homeless veteran is sitting outside the store, holding a sign that says 'Please help. God bless.'", minAge: 14, maxAge: 80, chance: 0.08,
+      options: [
+        { text: "Sit down and talk to them. Buy them a meal.", effects: { happiness: 5, charisma: 3 }, rep: 12, cost: 15,
+            onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Sat with a homeless veteran and bought them a meal', 'good'); }},
+        { text: "Give them $50 and thank them for their service", effects: { happiness: 3 }, rep: 8, cost: 50,
+            onSelect: function() { LIFE.state.charitableDonations += 50; LIFE.state.livesHelped++; }},
+        { text: "Walk past", effects: {} },
+        { text: "Tell them to get a job", effects: { charisma: -2 }, rep: -8,
+            onSelect: function() { LIFE.state.innocentsHarmed++; }}
+      ]},
+    { text: "A neighbor kid is crying outside. Their parents are screaming and throwing things inside.", minAge: 16, maxAge: 80, chance: 0.05,
+      options: [
+        { text: "Take the child somewhere safe and call child services", effects: { charisma: 5, happiness: 3 }, rep: 20,
+            onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Rescued a child from a violent household', 'good'); }},
+        { text: "Call the police", effects: { intelligence: 1 }, rep: 10,
+            onSelect: function() { LIFE.state.livesHelped++; }},
+        { text: "Comfort the child until things calm down", effects: { charisma: 2, happiness: 2 }, rep: 8,
+            onSelect: function() { LIFE.state.livesHelped++; }},
+        { text: "Not my family, not my problem", effects: {}, rep: -10,
+            onSelect: function() { LIFE.state.innocentsHarmed++; LIFE.logMilestone('Ignored a child being abused next door', 'bad'); }}
+      ]},
+    { text: "You found an envelope full of cash — $2,000 — in a bathroom stall. No one's around.", minAge: 16, maxAge: 80, chance: 0.05,
+      options: [
+        { text: "Turn it in to management. Someone is devastated right now.", effects: { happiness: 5, charisma: 3 }, rep: 18,
+            onSelect: function() { LIFE.logMilestone('Returned $2000 found in a bathroom', 'good'); }},
+        { text: "Wait around to see if someone comes looking", effects: { charisma: 2 }, rep: 10 },
+        { text: "Keep it. Finders keepers.", effects: {}, money: 2000, rep: -5,
+            onSelect: function() { LIFE.state.totalThefts++; }},
+        { text: "Take some, leave some. Split the difference.", effects: {}, money: 1000, rep: -3,
+            onSelect: function() { LIFE.state.totalThefts++; }}
+      ]},
+    { text: "At the grocery store, the cashier accidentally gave you $50 too much in change.", minAge: 12, maxAge: 80, chance: 0.08,
+      options: [
+        { text: "Point out the mistake and return the $50", effects: { happiness: 3, charisma: 2 }, rep: 10,
+            onSelect: function() { LIFE.logMilestone('Returned extra change to an honest cashier', 'good'); }},
+        { text: "Keep it. Their mistake.", effects: {}, money: 50, rep: -3 },
+        { text: "Tell them... but only because someone was watching", effects: { intelligence: 1 }, rep: 2 }
       ]}
 ];

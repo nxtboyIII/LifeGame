@@ -59,7 +59,25 @@ LIFE.state = {
     inCar: false,
     carStallTimer: 0, // time car has been stationary (for police arrest check)
     carParkedAt: null, // { x, z } world position where car is parked
-    purchasedOnce: [] // one-time purchase tracking
+    purchasedOnce: [], // one-time purchase tracking
+    // life achievement tracking
+    livesHelped: 0,        // people you directly helped/saved
+    charitableDonations: 0,// total $ donated to charity
+    volunteerHours: 0,     // how many times you volunteered
+    peopleMentored: 0,     // people you taught/mentored
+    livesImproved: 0,      // indirect positive impact
+    totalThefts: 0,        // theft attempts
+    totalExtortions: 0,    // times you extorted someone
+    arsonCount: 0,         // buildings burned
+    totalBribery: 0,       // times you bribed someone
+    innocentsHarmed: 0,    // non-criminal NPCs hurt
+    organsBlackMarket: 0,  // dark economy participation
+    speechesGiven: 0,      // inspirational speeches
+    scholarshipsGiven: 0,  // education funded
+    addictionRecoveries: 0,// times beaten addiction
+    betrayals: 0,          // people you betrayed
+    // life milestones (set as they happen)
+    milestones: []         // array of {age, text, type:'good'|'bad'|'neutral'}
 };
 
 // ============================================================
@@ -325,6 +343,12 @@ LIFE.swat = []; // active SWAT units
 LIFE.logCrime = function(crime) {
     if (!LIFE.state.crimeLog) LIFE.state.crimeLog = [];
     LIFE.state.crimeLog.push(crime);
+};
+
+// Log a life milestone (shown on death screen)
+LIFE.logMilestone = function(text, type) {
+    if (!LIFE.state.milestones) LIFE.state.milestones = [];
+    LIFE.state.milestones.push({ age: LIFE.state.age, text: text, type: type || 'neutral' });
 };
 
 LIFE.addWanted = function(amount) {
@@ -639,21 +663,44 @@ LIFE.updatePolice = function(dt) {
             // Return to patrol position
             if (pcop.aiState === 'returning') {
                 pcop.returnTimer = (pcop.returnTimer || 0) + dt;
-                var rdx = pcop.patrolPos.x - pcop.npc.char.group.position.x;
-                var rdz = pcop.patrolPos.z - pcop.npc.char.group.position.z;
+                var rPos = pcop.npc.char.group.position;
+                var rdx = pcop.patrolPos.x - rPos.x;
+                var rdz = pcop.patrolPos.z - rPos.z;
                 var rDist = Math.sqrt(rdx * rdx + rdz * rdz);
                 if (rDist > 2) {
-                    var rs = 4 * dt;
-                    pcop.npc.char.group.position.x += (rdx / rDist) * rs;
-                    pcop.npc.char.group.position.z += (rdz / rDist) * rs;
-                    pcop.npc.char.group.rotation.y = Math.atan2(rdx, rdz);
-                    pcop.npc.walkTime += dt * 6;
-                    var rsw = Math.sin(pcop.npc.walkTime) * 0.5;
-                    pcop.npc.char.parts.leftLeg.rotation.x = rsw;
-                    pcop.npc.char.parts.rightLeg.rotation.x = -rsw;
+                    // Use A* pathfinding for returning
+                    if (!pcop._returnPath) {
+                        pcop._returnPath = LIFE.pathfinding.findPath(rPos.x, rPos.z, pcop.patrolPos.x, pcop.patrolPos.z);
+                        pcop._returnPathIdx = 0;
+                    }
+                    var rTarget = null;
+                    if (pcop._returnPath && pcop._returnPathIdx < pcop._returnPath.length) {
+                        rTarget = pcop._returnPath[pcop._returnPathIdx];
+                        var rwdx = rTarget.x - rPos.x, rwdz = rTarget.z - rPos.z;
+                        var rwDist = Math.sqrt(rwdx * rwdx + rwdz * rwdz);
+                        if (rwDist < 1.5) {
+                            pcop._returnPathIdx++;
+                            if (pcop._returnPathIdx >= pcop._returnPath.length) rTarget = null;
+                            else rTarget = pcop._returnPath[pcop._returnPathIdx];
+                        }
+                    }
+                    if (rTarget) { rdx = rTarget.x - rPos.x; rdz = rTarget.z - rPos.z; }
+                    var rnDist = Math.sqrt(rdx * rdx + rdz * rdz);
+                    if (rnDist > 0.5) {
+                        var rs = 4 * dt;
+                        rPos.x += (rdx / rnDist) * rs;
+                        rPos.z += (rdz / rnDist) * rs;
+                        LIFE.resolveCollisions(rPos);
+                        pcop.npc.char.group.rotation.y = Math.atan2(rdx, rdz);
+                        pcop.npc.walkTime += dt * 6;
+                        var rsw = Math.sin(pcop.npc.walkTime) * 0.5;
+                        pcop.npc.char.parts.leftLeg.rotation.x = rsw;
+                        pcop.npc.char.parts.rightLeg.rotation.x = -rsw;
+                    }
                 } else {
                     pcop.aiState = 'idle';
                     pcop.npc.speed = 0;
+                    pcop._returnPath = null;
                 }
             }
             // Idle patrol wander near patrol position
@@ -666,15 +713,33 @@ LIFE.updatePolice = function(dt) {
                         x: pcop.patrolPos.x + (Math.random() - 0.5) * 16,
                         z: pcop.patrolPos.z + (Math.random() - 0.5) * 16
                     };
+                    pcop._patrolPath = null; // clear old path for new target
                 }
                 if (pcop.aiState === 'patrolling' && pcop._patrolTarget) {
-                    var ptdx = pcop._patrolTarget.x - pcop.npc.char.group.position.x;
-                    var ptdz = pcop._patrolTarget.z - pcop.npc.char.group.position.z;
+                    var ptPos = pcop.npc.char.group.position;
+                    // Use A* pathfinding for patrol
+                    if (!pcop._patrolPath) {
+                        pcop._patrolPath = LIFE.pathfinding.findPath(ptPos.x, ptPos.z, pcop._patrolTarget.x, pcop._patrolTarget.z);
+                        pcop._patrolPathIdx = 0;
+                    }
+                    var ptWp = null;
+                    if (pcop._patrolPath && pcop._patrolPathIdx < pcop._patrolPath.length) {
+                        ptWp = pcop._patrolPath[pcop._patrolPathIdx];
+                        var ptwdx = ptWp.x - ptPos.x, ptwdz = ptWp.z - ptPos.z;
+                        if (Math.sqrt(ptwdx * ptwdx + ptwdz * ptwdz) < 1.5) {
+                            pcop._patrolPathIdx++;
+                            ptWp = pcop._patrolPathIdx < pcop._patrolPath.length ? pcop._patrolPath[pcop._patrolPathIdx] : null;
+                        }
+                    }
+                    var ptdx, ptdz;
+                    if (ptWp) { ptdx = ptWp.x - ptPos.x; ptdz = ptWp.z - ptPos.z; }
+                    else { ptdx = pcop._patrolTarget.x - ptPos.x; ptdz = pcop._patrolTarget.z - ptPos.z; }
                     var ptDist = Math.sqrt(ptdx * ptdx + ptdz * ptdz);
                     if (ptDist > 1) {
                         var ps = 2 * dt;
-                        pcop.npc.char.group.position.x += (ptdx / ptDist) * ps;
-                        pcop.npc.char.group.position.z += (ptdz / ptDist) * ps;
+                        ptPos.x += (ptdx / ptDist) * ps;
+                        ptPos.z += (ptdz / ptDist) * ps;
+                        LIFE.resolveCollisions(ptPos);
                         pcop.npc.char.group.rotation.y = Math.atan2(ptdx, ptdz);
                         pcop.npc.walkTime += dt * 4;
                         var psw = Math.sin(pcop.npc.walkTime) * 0.35;
@@ -684,6 +749,7 @@ LIFE.updatePolice = function(dt) {
                         pcop.npc.char.parts.rightArm.rotation.x = psw * 0.3;
                     } else {
                         pcop.aiState = 'idle';
+                        pcop._patrolPath = null;
                         pcop.npc.char.parts.leftLeg.rotation.x *= 0.8;
                         pcop.npc.char.parts.rightLeg.rotation.x *= 0.8;
                     }
@@ -899,15 +965,44 @@ LIFE.updatePolice = function(dt) {
     // Chase logic for all active pursuing cops
     LIFE.police.forEach(function(cop) {
         if (!cop.alive) return;
-        var dx = player.group.position.x - cop.char.group.position.x;
-        var dz = player.group.position.z - cop.char.group.position.z;
+        var copPos = cop.char.group.position;
+        var dx = player.group.position.x - copPos.x;
+        var dz = player.group.position.z - copPos.z;
         var dist = Math.sqrt(dx * dx + dz * dz);
 
         if (dist > 1.8) {
-            var s = cop.speed * dt;
-            cop.char.group.position.x += (dx / dist) * s;
-            cop.char.group.position.z += (dz / dist) * s;
-            cop.char.group.rotation.y = Math.atan2(dx, dz);
+            // Recompute A* path periodically (player is moving)
+            cop._chasePathTimer = (cop._chasePathTimer || 0) + dt;
+            if (!cop._chasePath || cop._chasePathTimer > 1.0) {
+                cop._chasePathTimer = 0;
+                cop._chasePath = LIFE.pathfinding.findPath(copPos.x, copPos.z, player.group.position.x, player.group.position.z);
+                cop._chasePathIdx = 0;
+            }
+            // Follow A* waypoints
+            var chaseDx = dx, chaseDz = dz;
+            if (cop._chasePath && cop._chasePathIdx < cop._chasePath.length) {
+                var cwp = cop._chasePath[cop._chasePathIdx];
+                var cwdx = cwp.x - copPos.x, cwdz = cwp.z - copPos.z;
+                var cwDist = Math.sqrt(cwdx * cwdx + cwdz * cwdz);
+                if (cwDist < 1.5) {
+                    cop._chasePathIdx++;
+                    if (cop._chasePathIdx < cop._chasePath.length) {
+                        cwp = cop._chasePath[cop._chasePathIdx];
+                        cwdx = cwp.x - copPos.x; cwdz = cwp.z - copPos.z;
+                    }
+                }
+                if (cop._chasePathIdx < cop._chasePath.length) {
+                    chaseDx = cwdx; chaseDz = cwdz;
+                }
+            }
+            var chaseNorm = Math.sqrt(chaseDx * chaseDx + chaseDz * chaseDz);
+            if (chaseNorm > 0.1) {
+                var s = cop.speed * dt;
+                copPos.x += (chaseDx / chaseNorm) * s;
+                copPos.z += (chaseDz / chaseNorm) * s;
+                LIFE.resolveCollisions(copPos);
+                cop.char.group.rotation.y = Math.atan2(chaseDx, chaseDz);
+            }
             cop.walkTime += dt * cop.speed * 3;
             var sw = Math.sin(cop.walkTime) * 0.5;
             cop.char.parts.leftLeg.rotation.x = sw;
@@ -987,6 +1082,7 @@ LIFE.arrestPlayer = function() {
         state.equippedIndex = 0;
         state.hasGun = false;
         state.hasSwitchblade = false;
+        LIFE.updateHeldWeapon();
 
         // enter execution phase
         state.gamePhase = 'execution';
@@ -1086,6 +1182,7 @@ LIFE.arrestPlayer = function() {
     state.equippedIndex = 0;
     state.hasGun = false;
     state.hasSwitchblade = false;
+    LIFE.updateHeldWeapon();
 
     // clean up bullets
     LIFE.cleanupBullets();
@@ -1270,10 +1367,106 @@ LIFE.cycleInventory = function() {
     if (inv.length <= 1) return;
     LIFE.state.equippedIndex = (LIFE.state.equippedIndex + 1) % inv.length;
     LIFE.ui.showPopup('Equipped: ' + inv[LIFE.state.equippedIndex], '#4fc3f7');
+    LIFE.updateHeldWeapon();
 };
 
 LIFE.getEquipped = function() {
     return LIFE.state.inventory[LIFE.state.equippedIndex] || 'Fists';
+};
+
+// ============================================================
+// HELD WEAPON VISUALS
+// ============================================================
+LIFE._weaponMesh = null;
+LIFE._currentWeaponType = null;
+
+LIFE.createWeaponMesh = function(type, playerHeight) {
+    var group = new THREE.Group();
+    var h = playerHeight || 1.7;
+    var armH = h * 0.28;
+    if (type === 'Switchblade') {
+        // Blade: thin flat rectangle
+        var blade = new THREE.Mesh(
+            new THREE.BoxGeometry(0.02, h * 0.12, 0.04),
+            new THREE.MeshPhongMaterial({ color: 0xcccccc, shininess: 80 })
+        );
+        blade.position.y = -h * 0.06;
+        group.add(blade);
+        // Handle: small dark rectangle
+        var handle = new THREE.Mesh(
+            new THREE.BoxGeometry(0.03, h * 0.05, 0.05),
+            new THREE.MeshPhongMaterial({ color: 0x333333 })
+        );
+        handle.position.y = h * 0.025;
+        group.add(handle);
+        // Position at end of arm, pointing down
+        group.position.set(0, -armH - h * 0.02, 0);
+        group.rotation.x = -0.3; // slight tilt forward
+    } else if (type === 'Pistol') {
+        // Gun body: blocky rectangle
+        var body = new THREE.Mesh(
+            new THREE.BoxGeometry(0.035, 0.04, h * 0.1),
+            new THREE.MeshPhongMaterial({ color: 0x222222 })
+        );
+        body.position.z = h * 0.04;
+        group.add(body);
+        // Barrel: thin cylinder-ish box
+        var barrel = new THREE.Mesh(
+            new THREE.BoxGeometry(0.025, 0.025, h * 0.06),
+            new THREE.MeshPhongMaterial({ color: 0x111111 })
+        );
+        barrel.position.set(0, 0.01, h * 0.1);
+        group.add(barrel);
+        // Grip: angled handle
+        var grip = new THREE.Mesh(
+            new THREE.BoxGeometry(0.03, h * 0.05, 0.035),
+            new THREE.MeshPhongMaterial({ color: 0x333333 })
+        );
+        grip.position.set(0, -h * 0.02, h * 0.01);
+        grip.rotation.x = 0.2;
+        group.add(grip);
+        // Position at end of arm, pointing forward
+        group.position.set(0, -armH * 0.9, 0.02);
+    }
+    return group;
+};
+
+LIFE.updateHeldWeapon = function() {
+    var player = LIFE.player;
+    if (!player || !player.parts || !player.parts.rightArm) return;
+    var equipped = LIFE.getEquipped();
+
+    // Remove current weapon mesh if type changed
+    if (LIFE._weaponMesh && LIFE._currentWeaponType !== equipped) {
+        player.parts.rightArm.remove(LIFE._weaponMesh);
+        LIFE._weaponMesh = null;
+        LIFE._currentWeaponType = null;
+    }
+
+    // Fists = no weapon
+    if (equipped === 'Fists' || !equipped) {
+        // Reset right arm rotation to default
+        player.parts.rightArm.rotation.x = 0;
+        return;
+    }
+
+    // Create new weapon mesh
+    if (!LIFE._weaponMesh) {
+        LIFE._weaponMesh = LIFE.createWeaponMesh(equipped, player.height);
+        LIFE._currentWeaponType = equipped;
+        player.parts.rightArm.add(LIFE._weaponMesh);
+    }
+
+    // Arm pose based on weapon
+    if (equipped === 'Switchblade') {
+        // Hold arm slightly out and down
+        player.parts.rightArm.rotation.x = -0.4;
+        player.parts.rightArm.rotation.z = -0.15;
+    } else if (equipped === 'Pistol') {
+        // Hold arm forward, pointing gun ahead
+        player.parts.rightArm.rotation.x = -1.4; // arm extended forward
+        player.parts.rightArm.rotation.z = -0.1;
+    }
 };
 
 // ============================================================

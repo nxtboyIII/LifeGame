@@ -700,6 +700,470 @@ LIFE.NPC_DIALOGUES['Inmate'] = [
 ];
 
 // ============================================================
+// DEEP MORAL CHOICE DIALOGUES
+// These create the ascent-to-greatness and descent-to-depravity paths
+// ============================================================
+
+// Stranger encounters that present real moral weight
+LIFE.NPC_DIALOGUES['Stranger'].push(
+    { text: "Please... I just lost my job and I can't feed my kids. Can you help?", minAge: 18, options: [
+        { text: "Here's $100. Get your family a good meal.", effects: { happiness: 5 }, cost: 100, rep: 12, response: {
+            text: "Oh god, thank you... you have no idea what this means. My kids — they haven't eaten since yesterday.", options: [
+                { text: "Here's another $100. And take my number — I'll help you find work.", effects: { happiness: 5, charisma: 3 }, cost: 100, rep: 15,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.state.charitableDonations += 200; LIFE.logMilestone('Helped a desperate parent feed their family', 'good'); }},
+                { text: "I hope things get better for you. Stay strong.", effects: { happiness: 3 }, rep: 5,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.state.charitableDonations += 100; }}
+            ]
+        }},
+        { text: "I don't have any cash, but I know a shelter nearby.", effects: { charisma: 2 }, rep: 8, response: {
+            text: "Really? Where is it? I've been sleeping in my car with the kids...", options: [
+                { text: "I'll walk you there. Come on.", effects: { happiness: 3, charisma: 2 }, rep: 10,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Guided a homeless family to shelter', 'good'); }},
+                { text: "Just head down Main Street. You'll see it.", effects: { charisma: 1 }, rep: 3 }
+            ]
+        }},
+        { text: "Sounds like a 'you' problem.", effects: {}, rep: -8, response: {
+            text: "...Please. I'm not asking for me. My children are hungry.", options: [
+                { text: "Fine. Here's $20. Now leave me alone.", effects: {}, cost: 20, rep: 2 },
+                { text: "Not my responsibility.", effects: {}, rep: -5,
+                    onSelect: function() { LIFE.state.innocentsHarmed++; }}
+            ]
+        }},
+        { text: "Give me your watch first.", effects: { charisma: -2 }, rep: -15, response: {
+            text: "What?! I'm begging you for food and you want to rob me?!", options: [
+                { text: "Hand it over or I walk away.", effects: {}, rep: -10, money: 50,
+                    onSelect: function() { LIFE.state.totalExtortions++; LIFE.logCrime('Extortion'); LIFE.logMilestone('Extorted a desperate parent', 'bad'); }},
+                { text: "...I'm sorry. That was wrong. Here, take $50.", effects: { happiness: 2 }, cost: 50, rep: 10,
+                    onSelect: function() { LIFE.state.livesHelped++; }}
+            ]
+        }}
+    ]},
+    { text: "Hey! Someone just stole that old lady's purse! He ran that way!", minAge: 14, options: [
+        { text: "I'll get him!", effects: { health: -5, charisma: 3 }, rep: 20, response: {
+            text: "You caught him?! Oh my god, you're a hero! The lady is crying with relief!", options: [
+                { text: "Just doing what anyone would do.", effects: { happiness: 5, charisma: 3 }, rep: 10,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Chased down a purse snatcher and saved an elderly woman', 'good'); if (LIFE.news) LIFE.news.add('Local hero catches purse snatcher, returns belongings to elderly victim.', 'social'); }},
+                { text: "Someone should call the police.", effects: { happiness: 3 }, rep: 5 }
+            ]
+        }},
+        { text: "Call the police!", effects: { intelligence: 1 }, rep: 8 },
+        { text: "Not my problem.", effects: {}, rep: -5 },
+        { text: "Which way? Maybe I can 'find' the purse...", effects: {}, rep: -12, money: 80,
+            onSelect: function() { LIFE.state.totalThefts++; LIFE.logCrime('Theft'); LIFE.logMilestone('Stole from an elderly woman through deception', 'bad'); }}
+    ]},
+    { text: "Excuse me... I think that man over there is following that woman. She looks scared.", minAge: 16, options: [
+        { text: "I'll go check on her.", effects: { charisma: 3 }, rep: 15, response: {
+            text: "Thank god you stepped in! He ran off when he saw you coming. She's shaking.", options: [
+                { text: "Are you okay? Can I walk you somewhere safe?", effects: { happiness: 5, charisma: 3 }, rep: 12,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Protected a woman from a stalker', 'good'); }},
+                { text: "He's gone now. Be careful out there.", effects: { happiness: 2 }, rep: 5 }
+            ]
+        }},
+        { text: "That's scary... I should call the police.", effects: { intelligence: 1 }, rep: 8 },
+        { text: "None of my business.", effects: {}, rep: -3 }
+    ]},
+    { text: "I heard you're quite well-known around here. I could use someone like you for a... business opportunity.", minAge: 20, options: [
+        { text: "What kind of business?", effects: {}, rep: 0, response: {
+            text: "Let's just say it's not exactly legal. But the money is very, very good. $5,000 for one night's work.", options: [
+                { text: "I'm in. What do I need to do?", effects: {}, rep: -15, money: 5000,
+                    onSelect: function() { LIFE.state.totalThefts++; LIFE.logCrime('Accessory to organized crime'); LIFE.logMilestone('Participated in organized crime', 'bad'); LIFE.addWanted(1); }},
+                { text: "No amount of money is worth my soul.", effects: { happiness: 2, intelligence: 1 }, rep: 8,
+                    onSelect: function() { LIFE.logMilestone('Rejected a lucrative criminal offer', 'good'); }},
+                { text: "I should report you to the police.", effects: { intelligence: 1 }, rep: 12,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Reported organized crime to authorities', 'good'); if (LIFE.news) LIFE.news.add('Anonymous tip leads to investigation of local criminal ring.', 'social'); }}
+            ]
+        }},
+        { text: "I don't do 'business' with strangers.", effects: { intelligence: 1 }, rep: 2 },
+        { text: "You picked the wrong person. Get out of here.", effects: { charisma: 2 }, rep: 5 }
+    ]},
+    { text: "Did you see that car accident?! Someone's trapped inside! The car is smoking!", minAge: 14, options: [
+        { text: "I'm going to help! Call 911!", effects: { health: -10 }, rep: 25, response: {
+            text: "You pulled them out just before the car caught fire! The ambulance is on the way!", options: [
+                { text: "Is everyone okay? Are there others inside?", effects: { happiness: 8, charisma: 5 }, rep: 15,
+                    onSelect: function() { LIFE.state.livesHelped += 2; LIFE.logMilestone('Pulled a person from a burning car, saving their life', 'good'); if (LIFE.news) LIFE.news.add('Heroic bystander pulls victim from burning vehicle!', 'social'); LIFE.state.fame = Math.min(100, (LIFE.state.fame || 0) + 5); }},
+                { text: "Thank god... I thought we were going to lose them.", effects: { happiness: 5 }, rep: 8,
+                    onSelect: function() { LIFE.state.livesHelped++; }}
+            ]
+        }},
+        { text: "Someone should help them... but it looks dangerous.", effects: {}, rep: -2 },
+        { text: "Check their pockets while they're unconscious.", effects: {}, rep: -20, money: 150,
+            onSelect: function() { LIFE.state.totalThefts++; LIFE.logCrime('Theft from an accident victim'); LIFE.logMilestone('Robbed an unconscious car accident victim', 'bad'); if (LIFE.news) LIFE.news.add('Reports of looting at car accident scene.', 'crime'); }}
+    ]}
+);
+
+// Teacher dialogues with moral depth
+LIFE.NPC_DIALOGUES['Teacher'].push(
+    { text: "I noticed a student is being bullied in class. What would you do?", minAge: 6, options: [
+        { text: "Stand up for them! That's not right!", effects: { charisma: 3, happiness: 2 }, rep: 10, response: {
+            text: "That's very brave of you! The student came to thank you after class.", options: [
+                { text: "Nobody deserves to be treated like that.", effects: { happiness: 3, charisma: 2 }, rep: 5,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.state.friends++; LIFE.logMilestone('Stood up to bullies to protect a classmate', 'good'); }},
+                { text: "Just looking out for my friends.", effects: { happiness: 2 }, rep: 3 }
+            ]
+        }},
+        { text: "I'll tell a teacher.", effects: { intelligence: 1 }, rep: 5 },
+        { text: "Not my problem.", effects: {}, rep: -3 },
+        { text: "Join in. It's funny.", effects: {}, rep: -12,
+            onSelect: function() { LIFE.state.innocentsHarmed++; LIFE.logMilestone('Joined bullies in tormenting a classmate', 'bad'); }}
+    ]},
+    { text: "Class, today we have a special opportunity — we can volunteer at the local food bank this weekend. Who's interested?", minAge: 8, options: [
+        { text: "I'd love to help!", effects: { happiness: 3, charisma: 2 }, rep: 10, response: {
+            text: "You spent the whole Saturday sorting donations and serving meals. The organizer personally thanked you.", options: [
+                { text: "When's the next one? I want to keep helping!", effects: { happiness: 3, charisma: 2 }, rep: 8,
+                    onSelect: function() { LIFE.state.volunteerHours++; LIFE.state.livesHelped += 3; LIFE.logMilestone('Volunteered at food bank for the first time', 'good'); }},
+                { text: "It felt really good to help.", effects: { happiness: 2 }, rep: 5,
+                    onSelect: function() { LIFE.state.volunteerHours++; }}
+            ]
+        }},
+        { text: "I guess... if there's nothing else to do.", effects: { charisma: 1 }, rep: 3,
+            onSelect: function() { LIFE.state.volunteerHours++; }},
+        { text: "Sounds boring. No thanks.", effects: {}, rep: -2 }
+    ]}
+);
+
+// Neighbor dialogues with moral choices
+LIFE.NPC_DIALOGUES['Neighbor'].push(
+    { text: "I'm organizing a neighborhood watch. We've had break-ins lately. Want to help?", minAge: 18, options: [
+        { text: "Absolutely! I'll help keep everyone safe.", effects: { charisma: 3, happiness: 2 }, rep: 12, response: {
+            text: "Great! With your help, we've already scared off two suspicious characters this week.", options: [
+                { text: "Happy to help. This community matters to me.", effects: { happiness: 3 }, rep: 8,
+                    onSelect: function() { LIFE.state.livesHelped += 2; LIFE.logMilestone('Helped organize neighborhood watch', 'good'); }},
+                { text: "We should get more people involved.", effects: { charisma: 2 }, rep: 5 }
+            ]
+        }},
+        { text: "I'm too busy, sorry.", effects: {}, rep: -2 },
+        { text: "Why would I? Maybe I AM the one breaking in.", effects: {}, rep: -15,
+            onSelect: function() { LIFE.logMilestone('Threatened neighbor about break-ins', 'bad'); }}
+    ]},
+    { text: "My elderly mother needs someone to check on her while I'm at work. Could you look in on her sometimes?", minAge: 16, options: [
+        { text: "Of course! I'd be happy to.", effects: { happiness: 3, charisma: 2 }, rep: 10, response: {
+            text: "You've been visiting her every week. She says you're the highlight of her week now.", options: [
+                { text: "She reminds me of my own family. It's no trouble.", effects: { happiness: 5 }, rep: 8,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.state.peopleMentored++; LIFE.logMilestone('Regularly visited an elderly neighbor, became her close companion', 'good'); }},
+                { text: "She's great company!", effects: { happiness: 3 }, rep: 5 }
+            ]
+        }},
+        { text: "Only if you pay me.", effects: {}, rep: -5, money: 30 },
+        { text: "I don't have time for old people.", effects: {}, rep: -8 }
+    ]}
+);
+
+// Gym Trainer virtue path
+LIFE.NPC_DIALOGUES['Gym Trainer'] = LIFE.NPC_DIALOGUES['Gym Trainer'] || [];
+LIFE.NPC_DIALOGUES['Gym Trainer'].push(
+    { text: "You look like you could use a workout. Want me to train you?", minAge: 14, options: [
+        { text: "Let's do it! Push me hard!", effects: { health: 5, happiness: 2 }, rep: 3, response: {
+            text: "Great session! You know, I run a free fitness class for underprivileged kids on weekends. We could use a helper.", options: [
+                { text: "I'd love to help with that!", effects: { happiness: 4, charisma: 3, health: 2 }, rep: 12,
+                    onSelect: function() { LIFE.state.volunteerHours++; LIFE.state.peopleMentored += 3; LIFE.logMilestone('Mentored underprivileged kids through fitness classes', 'good'); }},
+                { text: "That sounds nice, but I'm busy.", effects: {}, rep: 0 }
+            ]
+        }},
+        { text: "How much does it cost?", effects: {}, rep: 0, response: {
+            text: "$30 for a session. But honestly, just being consistent is what matters.", options: [
+                { text: "Deal! Let's get started. ($30)", effects: { health: 5 }, cost: 30, rep: 2 },
+                { text: "Too expensive.", effects: {}, rep: -1 }
+            ]
+        }}
+    ]}
+);
+
+// Coworker moral paths
+LIFE.NPC_DIALOGUES['Coworker'].push(
+    { text: "Hey, I know a way to skim money from the company accounts. Nobody would notice. You in?", minAge: 23, options: [
+        { text: "Are you insane? I'm reporting this.", effects: { intelligence: 2 }, rep: 15, response: {
+            text: "Wait, wait! I was just joking! Don't tell anyone, please!", options: [
+                { text: "I won't report you, but don't ever do something like that.", effects: { charisma: 2 }, rep: 5,
+                    onSelect: function() { LIFE.logMilestone('Talked a coworker out of embezzlement', 'good'); }},
+                { text: "You need to do the right thing and confess.", effects: { intelligence: 1 }, rep: 8 }
+            ]
+        }},
+        { text: "How much are we talking?", effects: {}, rep: -10, response: {
+            text: "About $10,000. Split fifty-fifty. We just alter a few invoices. Easy money.", options: [
+                { text: "I'm in. Let's do it.", effects: {}, rep: -15, money: 5000,
+                    onSelect: function() { LIFE.state.totalThefts++; LIFE.logCrime('Embezzlement'); LIFE.logMilestone('Embezzled thousands from employer', 'bad'); if (Math.random() < 0.3) { LIFE.addWanted(2); LIFE.ui.showPopup('An audit reveals the missing funds!', '#f44336'); } }},
+                { text: "On second thought, this is too risky.", effects: { intelligence: 1 }, rep: 3 }
+            ]
+        }},
+        { text: "No way. That's stealing.", effects: { intelligence: 1 }, rep: 8 }
+    ]},
+    { text: "There's a new intern who's struggling really badly. They might get fired.", minAge: 23, options: [
+        { text: "I'll mentor them. Everyone deserves a chance.", effects: { charisma: 3, happiness: 2 }, rep: 10, response: {
+            text: "A year later, that intern got promoted and publicly thanked you in their speech. The whole office applauded.", options: [
+                { text: "Seeing them succeed is reward enough.", effects: { happiness: 8, charisma: 3 }, rep: 10,
+                    onSelect: function() { LIFE.state.peopleMentored++; LIFE.state.livesHelped++; LIFE.logMilestone('Mentored a struggling intern who later succeeded', 'good'); }},
+                { text: "I'm glad I could help.", effects: { happiness: 5 }, rep: 5,
+                    onSelect: function() { LIFE.state.peopleMentored++; }}
+            ]
+        }},
+        { text: "Not my problem. Sink or swim.", effects: {}, rep: -3 },
+        { text: "Good. Less competition for me.", effects: {}, rep: -5, response: {
+            text: "Wow... cold. They got fired the next week. You could hear them crying in the break room.", options: [
+                { text: "That's business.", effects: {}, rep: -3,
+                    onSelect: function() { LIFE.state.innocentsHarmed++; }},
+                { text: "...maybe I should have helped.", effects: { happiness: -3 }, rep: 2 }
+            ]
+        }}
+    ]}
+);
+
+// Boss moral paths
+LIFE.NPC_DIALOGUES['Boss'].push(
+    { text: "We need to let someone go. Budget cuts. Any suggestions?", minAge: 23, options: [
+        { text: "Maybe we can find another way? Cut costs elsewhere?", effects: { intelligence: 3 }, rep: 8, response: {
+            text: "You actually found a way to save the position! The person you saved came to thank you personally.", options: [
+                { text: "Nobody should lose their livelihood if we can help it.", effects: { happiness: 5, charisma: 3 }, rep: 10,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Saved a coworker from being laid off', 'good'); }},
+                { text: "I just did the math. It made sense.", effects: { intelligence: 1 }, rep: 3 }
+            ]
+        }},
+        { text: "Fire the new guy. Last in, first out.", effects: {}, rep: -3 },
+        { text: "Fire [coworker name]. They've been slacking.", effects: {}, rep: -8,
+            onSelect: function() { LIFE.state.betrayals++; LIFE.state.enemies++; LIFE.logMilestone('Got a coworker fired to protect yourself', 'bad'); }}
+    ]}
+);
+
+// Student moral dialogues (school/college)
+LIFE.NPC_DIALOGUES['Student'] = LIFE.NPC_DIALOGUES['Student'] || [];
+LIFE.NPC_DIALOGUES['Student'].push(
+    { text: "Hey... can I copy your homework? I'll fail if I don't turn something in.", minAge: 6, maxAge: 17, options: [
+        { text: "Sure, here you go.", effects: { charisma: 1 }, rep: -3, response: {
+            text: "You're a lifesaver! ...Wait, the teacher is looking at us.", options: [
+                { text: "Act natural. We're fine.", effects: {} },
+                { text: "Actually, let me help you understand it instead.", effects: { intelligence: 2, charisma: 2 }, rep: 8,
+                    onSelect: function() { LIFE.state.peopleMentored++; LIFE.logMilestone('Tutored a struggling student', 'good'); }}
+            ]
+        }},
+        { text: "No, but I can help you learn it.", effects: { intelligence: 2, charisma: 3 }, rep: 10, response: {
+            text: "Really? You'd do that? Nobody ever helps me with this stuff...", options: [
+                { text: "Everyone needs help sometimes. Let's start.", effects: { happiness: 3, charisma: 2 }, rep: 8,
+                    onSelect: function() { LIFE.state.peopleMentored++; LIFE.logMilestone('Mentored a classmate who had no one else', 'good'); }},
+                { text: "Sure, but you owe me a favor.", effects: { charisma: 1 }, rep: 3 }
+            ]
+        }},
+        { text: "It'll cost you $20.", effects: {}, rep: -5, money: 20,
+            onSelect: function() { LIFE.state.totalExtortions++; }},
+        { text: "No. Figure it out yourself.", effects: {}, rep: -2 }
+    ]},
+    { text: "Those kids keep picking on me at lunch. I don't know what to do anymore.", minAge: 6, maxAge: 17, options: [
+        { text: "I'll stick with you. They won't bother you when I'm around.", effects: { charisma: 3, happiness: 3 }, rep: 12, response: {
+            text: "Y-you'd really do that? Nobody ever stands up for me...", options: [
+                { text: "That's what friends are for.", effects: { happiness: 5, charisma: 2 }, rep: 10,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.state.friends++; LIFE.logMilestone('Stood up for a bullied student', 'good'); }},
+                { text: "Just stay close. They're cowards.", effects: { happiness: 2, charisma: 1 }, rep: 5 }
+            ]
+        }},
+        { text: "You should tell a teacher.", effects: { intelligence: 1 }, rep: 3 },
+        { text: "Just hit them back. Hard.", effects: { charisma: -1 }, rep: -3 },
+        { text: "Maybe they pick on you for a reason.", effects: {}, rep: -10,
+            onSelect: function() { LIFE.state.innocentsHarmed++; }}
+    ]},
+    { text: "I found Professor Miller's exam answers in the hallway. Want to split them?", minAge: 18, options: [
+        { text: "No, we should return them to the professor.", effects: { intelligence: 3, charisma: 2 }, rep: 15, response: {
+            text: "Seriously? We could ace this test... but yeah, you're right.", options: [
+                { text: "Integrity matters more than grades.", effects: { happiness: 3, intelligence: 2 }, rep: 10,
+                    onSelect: function() { LIFE.logMilestone('Returned stolen exam answers — chose integrity over easy grades', 'good'); }},
+                { text: "Besides, if we got caught we'd get expelled.", effects: { intelligence: 1 }, rep: 5 }
+            ]
+        }},
+        { text: "Yeah, send me a copy!", effects: { intelligence: -2 }, rep: -8,
+            onSelect: function() { LIFE.logCrime('Academic fraud'); LIFE.logMilestone('Used stolen exam answers to cheat', 'bad'); }},
+        { text: "Give me all of them. I'll sell copies.", effects: { intelligence: -3 }, rep: -15, money: 200,
+            onSelect: function() { LIFE.state.totalThefts++; LIFE.logCrime('Academic fraud ring'); LIFE.logMilestone('Ran an exam answer selling operation', 'bad'); }}
+    ]}
+);
+
+// Kid dialogues (school age)
+LIFE.NPC_DIALOGUES['Kid'] = LIFE.NPC_DIALOGUES['Kid'] || [];
+LIFE.NPC_DIALOGUES['Kid'].push(
+    { text: "I lost my lunch money and I'm really hungry...", minAge: 6, maxAge: 17, options: [
+        { text: "Here, take mine. I'm not that hungry anyway.", effects: { happiness: 5 }, cost: 5, rep: 8,
+            onSelect: function() { LIFE.state.livesHelped++; }},
+        { text: "Let's go tell a teacher. They'll help.", effects: { intelligence: 1, charisma: 1 }, rep: 5 },
+        { text: "Sucks to be you.", effects: {}, rep: -5,
+            onSelect: function() { LIFE.state.innocentsHarmed++; }}
+    ]},
+    { text: "Dare you to throw a rock at the teacher's car!", minAge: 6, maxAge: 17, options: [
+        { text: "That's stupid. No.", effects: { intelligence: 2 }, rep: 3 },
+        { text: "You first!", effects: { charisma: 1 } },
+        { text: "Watch this!", effects: { intelligence: -2 }, rep: -8,
+            onSelect: function() { LIFE.logCrime('Vandalism'); LIFE.logMilestone('Vandalized a teacher\'s car on a dare', 'bad'); }}
+    ]}
+);
+
+// Professor dialogues (college)
+LIFE.NPC_DIALOGUES['Professor'] = LIFE.NPC_DIALOGUES['Professor'] || [];
+LIFE.NPC_DIALOGUES['Professor'].push(
+    { text: "Your thesis shows real promise. I could recommend you for the research grant — $5000 and a publication credit.", minAge: 18, options: [
+        { text: "That would mean the world to me. I'll work hard.", effects: { intelligence: 5, happiness: 5 }, rep: 10, money: 5000, response: {
+            text: "I see real potential in you. This could launch your career.", options: [
+                { text: "I won't let you down, Professor.", effects: { intelligence: 3, charisma: 2 }, rep: 8,
+                    onSelect: function() { LIFE.state.scholarshipsGiven++; LIFE.logMilestone('Received a research grant for academic excellence', 'good'); }},
+                { text: "Thank you for believing in me.", effects: { happiness: 3 }, rep: 5 }
+            ]
+        }},
+        { text: "Can I just get the money without doing the research?", effects: { intelligence: -2, charisma: -2 }, rep: -12 },
+        { text: "No thanks. I have other plans.", effects: {} }
+    ]},
+    { text: "I caught your classmate plagiarizing their paper. They're begging me not to report it. What would you do?", minAge: 18, options: [
+        { text: "Everyone deserves a second chance. Let them rewrite it.", effects: { charisma: 3, happiness: 2 }, rep: 8, response: {
+            text: "Hmm. Compassionate answer. Perhaps you're right — they've been struggling since their mother's illness.", options: [
+                { text: "I could help them with the rewrite. Nobody should fail over a mistake.", effects: { charisma: 3, happiness: 3 }, rep: 12,
+                    onSelect: function() { LIFE.state.peopleMentored++; LIFE.state.livesHelped++; LIFE.logMilestone('Helped a classmate avoid expulsion and mentored them', 'good'); }},
+                { text: "Just give them the chance. They'll learn.", effects: { charisma: 1 }, rep: 5 }
+            ]
+        }},
+        { text: "Rules are rules. Report them.", effects: { intelligence: 2 }, rep: 3 },
+        { text: "I'll keep quiet... for a favor from you.", effects: { charisma: -2 }, rep: -10,
+            onSelect: function() { LIFE.state.totalExtortions++; LIFE.logCrime('Blackmail'); LIFE.logMilestone('Blackmailed a professor', 'bad'); }}
+    ]}
+);
+
+// Dealer dark expansion (beyond just buying drugs)
+LIFE.NPC_DIALOGUES['Dealer'].push(
+    { text: "Yo, I need someone to hold a package for me. Cops are sniffing around. $500 just to hold it for a day.", minAge: 16, options: [
+        { text: "I'm in. Easy money.", effects: {}, rep: -8, money: 500, response: {
+            text: "Smart. Now listen — if anyone asks, you don't know me. And DON'T open the package.", options: [
+                { text: "My lips are sealed.", effects: {}, rep: -5,
+                    onSelect: function() { LIFE.logCrime('Drug trafficking'); LIFE.logMilestone('Held drugs for a dealer', 'bad'); if (Math.random() < 0.25) { LIFE.addWanted(2); LIFE.ui.showPopup('Police found the drugs on you!', '#f44336'); }}},
+                { text: "Wait... what's actually in it?", effects: {}, rep: -3,
+                    onSelect: function() { LIFE.logCrime('Drug possession'); }}
+            ]
+        }},
+        { text: "No way. I'm not getting involved in that.", effects: { intelligence: 2 }, rep: 5 },
+        { text: "I should report you to the police.", effects: { charisma: 2 }, rep: 12,
+            onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Reported a drug dealer to police', 'good'); }}
+    ]},
+    { text: "I got a kid hooked on my stuff. He's only 14. Keeps coming back crying for more. Business is business, right?", minAge: 18, options: [
+        { text: "That's disgusting. Where is this kid?", effects: { charisma: 3 }, rep: 15, response: {
+            text: "Whoa, chill out. What are you gonna do, play hero?", options: [
+                { text: "I'm getting that kid help. You should be ashamed.", effects: { happiness: 5, charisma: 3 }, rep: 20,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.state.addictionRecoveries++; LIFE.logMilestone('Saved a child from drug addiction', 'good'); }},
+                { text: "If I ever see you near that kid again...", effects: { charisma: 2 }, rep: 10,
+                    onSelect: function() { LIFE.state.livesHelped++; }}
+            ]
+        }},
+        { text: "Not my problem.", effects: {}, rep: -8,
+            onSelect: function() { LIFE.state.innocentsHarmed++; }},
+        { text: "Smart business move.", effects: {}, rep: -20,
+            onSelect: function() { LIFE.state.innocentsHarmed++; LIFE.logMilestone('Approved of a dealer hooking a child on drugs', 'bad'); }}
+    ]}
+);
+
+// Doctor moral dialogues
+LIFE.NPC_DIALOGUES['Doctor'] = LIFE.NPC_DIALOGUES['Doctor'] || [];
+LIFE.NPC_DIALOGUES['Doctor'].push(
+    { text: "We have a patient who can't afford their medication. Technically I'm not supposed to give free samples, but...", minAge: 18, options: [
+        { text: "I'll cover the cost. How much is it?", effects: { happiness: 5 }, rep: 15, cost: 200, response: {
+            text: "That's incredibly generous. This medication will literally save their life.", options: [
+                { text: "Everyone deserves a chance at health.", effects: { happiness: 5, charisma: 3 }, rep: 12,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.state.charitableDonations += 200; LIFE.logMilestone('Paid for a stranger\'s life-saving medication', 'good'); }},
+                { text: "Just make sure they get it.", effects: { happiness: 3 }, rep: 5,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.state.charitableDonations += 200; }}
+            ]
+        }},
+        { text: "That's between you and the hospital.", effects: {} },
+        { text: "Maybe I can sell it to them at a markup...", effects: { charisma: -2 }, rep: -12,
+            onSelect: function() { LIFE.state.totalExtortions++; LIFE.logMilestone('Tried to profit from someone\'s medical desperation', 'bad'); }}
+    ]}
+);
+
+// Spouse dialogues
+LIFE.NPC_DIALOGUES['Spouse'] = LIFE.NPC_DIALOGUES['Spouse'] || [];
+LIFE.NPC_DIALOGUES['Spouse'].push(
+    { text: "I've been thinking... we should start volunteering at the community center together.", options: [
+        { text: "I'd love that. Let's sign up.", effects: { happiness: 5, charisma: 2 }, rep: 10,
+            onSelect: function() { LIFE.state.volunteerHours++; LIFE.logMilestone('Started volunteering with spouse', 'good'); }},
+        { text: "Maybe sometime. I'm pretty busy.", effects: { happiness: -2 } },
+        { text: "Volunteering is a waste of time.", effects: { happiness: -5 }, rep: -3 }
+    ]},
+    { text: "Honey, I found this wallet on the street. There's $500 cash in it. Should we return it?", options: [
+        { text: "Of course. Someone is probably panicking right now.", effects: { happiness: 5, charisma: 3 }, rep: 15, response: {
+            text: "You're right. I'll look for an ID... There's an address. Let's bring it back.", options: [
+                { text: "Let's go together.", effects: { happiness: 5, charisma: 2 }, rep: 10,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Returned a lost wallet with $500 to its owner', 'good'); }},
+                { text: "You go ahead. I trust you.", effects: { happiness: 2 }, rep: 5 }
+            ]
+        }},
+        { text: "Finders keepers.", effects: { happiness: -3 }, rep: -5, money: 500,
+            onSelect: function() { LIFE.state.totalThefts++; }},
+        { text: "Take the cash, return the wallet.", effects: {}, rep: -8, money: 500,
+            onSelect: function() { LIFE.state.totalThefts++; LIFE.logMilestone('Kept cash from a found wallet', 'bad'); }}
+    ]},
+    { text: "I think we should donate to the children's hospital. They're doing a fundraiser.", options: [
+        { text: "Absolutely. Let's donate $500.", effects: { happiness: 5 }, rep: 12, cost: 500,
+            onSelect: function() { LIFE.state.charitableDonations += 500; LIFE.logMilestone('Donated to children\'s hospital', 'good'); }},
+        { text: "Sure, $100 sounds right.", effects: { happiness: 3 }, rep: 5, cost: 100,
+            onSelect: function() { LIFE.state.charitableDonations += 100; }},
+        { text: "We can't afford to just give money away.", effects: { happiness: -3 }, rep: -2 }
+    ]}
+);
+
+// Your Child dialogues
+LIFE.NPC_DIALOGUES['Your Child'] = LIFE.NPC_DIALOGUES['Your Child'] || [];
+LIFE.NPC_DIALOGUES['Your Child'].push(
+    { text: "Dad/Mom, a kid at school is being really mean to everyone. Should I stand up to them?", options: [
+        { text: "Yes, always stand up for what's right. I'm proud of you for caring.", effects: { happiness: 5, charisma: 3 }, rep: 8, response: {
+            text: "Really? But what if they're bigger than me?", options: [
+                { text: "Being brave doesn't mean not being scared. It means doing the right thing anyway.", effects: { happiness: 5, charisma: 3 }, rep: 5,
+                    onSelect: function() { LIFE.state.peopleMentored++; LIFE.logMilestone('Taught your child to stand up against bullying', 'good'); }},
+                { text: "Tell a teacher if it gets dangerous. But always speak up.", effects: { happiness: 3, intelligence: 2 }, rep: 3 }
+            ]
+        }},
+        { text: "Stay out of it. Mind your own business.", effects: { happiness: -3 }, rep: -3 },
+        { text: "Hit them first before they hit you.", effects: { charisma: -2 }, rep: -5,
+            onSelect: function() { LIFE.logMilestone('Taught your child to solve problems with violence', 'bad'); }}
+    ]},
+    { text: "I don't want to go to school anymore. The other kids make fun of me...", options: [
+        { text: "Come here. Tell me everything. We'll figure this out together.", effects: { happiness: 5, charisma: 3 }, rep: 5, response: {
+            text: "*sniffles* They call me names and nobody wants to sit with me at lunch...", options: [
+                { text: "I love you no matter what. Tomorrow I'm coming to talk to your teacher.", effects: { happiness: 8, charisma: 3 }, rep: 8,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Supported your child through bullying', 'good'); }},
+                { text: "You are amazing just the way you are. Those kids are wrong.", effects: { happiness: 5, charisma: 2 }, rep: 5,
+                    onSelect: function() { LIFE.state.peopleMentored++; }}
+            ]
+        }},
+        { text: "Toughen up. Life isn't fair.", effects: { happiness: -8 }, rep: -5,
+            onSelect: function() { LIFE.state.innocentsHarmed++; }},
+        { text: "I don't have time for this.", effects: { happiness: -10 }, rep: -8,
+            onSelect: function() { LIFE.state.innocentsHarmed++; LIFE.logMilestone('Ignored your child\'s cry for help', 'bad'); }}
+    ]}
+);
+
+// Inmate expanded dialogues
+LIFE.NPC_DIALOGUES['Inmate'].push(
+    { text: "Listen man, I been in here 12 years. Got nobody on the outside. You seem like a decent person — first one I met in here.", options: [
+        { text: "Everyone makes mistakes. What happened?", effects: { charisma: 2 }, rep: 5, response: {
+            text: "I was 19, robbed a store for drug money. Worst decision of my life. I've been clean for 8 years now but nobody cares.", options: [
+                { text: "When you get out, I'll help you get on your feet.", effects: { happiness: 5, charisma: 3 }, rep: 10,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.state.friends++; LIFE.logMilestone('Befriended a reformed prisoner and promised to help', 'good'); }},
+                { text: "I hope you get a second chance.", effects: { happiness: 2, charisma: 1 }, rep: 5 }
+            ]
+        }},
+        { text: "You're in here for a reason.", effects: {}, rep: -3 },
+        { text: "12 years? What'd you do? I need tips.", effects: { charisma: -1 }, rep: -5 }
+    ]}
+);
+
+// Pharmacist dialogues
+LIFE.NPC_DIALOGUES['Pharmacist'] = LIFE.NPC_DIALOGUES['Pharmacist'] || [];
+LIFE.NPC_DIALOGUES['Pharmacist'].push(
+    { text: "That elderly gentleman can't afford his heart medication. He's been cutting pills in half to make them last.", minAge: 18, options: [
+        { text: "How much does he need? I'll cover it.", effects: { happiness: 5 }, rep: 15, cost: 150, response: {
+            text: "That's... three months of heart medication. You might be saving his life.", options: [
+                { text: "It's just money. His life is worth more.", effects: { happiness: 5, charisma: 3 }, rep: 12,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.state.charitableDonations += 150; LIFE.logMilestone('Paid for an elderly man\'s heart medication', 'good'); }},
+                { text: "Tell him to stay healthy.", effects: { happiness: 3 }, rep: 5,
+                    onSelect: function() { LIFE.state.livesHelped++; LIFE.state.charitableDonations += 150; }}
+            ]
+        }},
+        { text: "That's sad, but I can't help everyone.", effects: {} },
+        { text: "Sell me whatever he can't afford. I'll resell it.", effects: { charisma: -3 }, rep: -15,
+            onSelect: function() { LIFE.state.totalThefts++; LIFE.logMilestone('Tried to profit from an old man\'s medical need', 'bad'); }}
+    ]}
+);
+
+// ============================================================
 // DIALOGUE FUNCTIONS
 // ============================================================
 LIFE.dialogue.open = function(speaker, text, options, isDecision) {
@@ -1034,6 +1498,11 @@ LIFE.dialogue.selectOption = function(idx) {
         } else {
             LIFE.ui.showPopup("Not yet, but keep trying!", '#ff9800');
         }
+    }
+
+    // Execute custom callback for moral choice tracking
+    if (opt.onSelect && typeof opt.onSelect === 'function') {
+        try { opt.onSelect(); } catch(e) {}
     }
 
     if (dlg.isDecision) {
@@ -1908,13 +2377,20 @@ LIFE.dialogue.talkToNPC = function(npc) {
         return;
     }
 
-    // default dialogues by type
+    // default dialogues by type (filter by age if minAge specified)
     var dialogues = LIFE.NPC_DIALOGUES[type];
     if (!dialogues || dialogues.length === 0) {
         dialogues = [{ text: "...", options: [{ text: "Wave and smile", effects: { charisma: 1 }, rep: 1 }] }];
     }
+    var eligible = dialogues.filter(function(d) {
+        if (d.minAge && age < d.minAge) return false;
+        if (d.maxAge && age > d.maxAge) return false;
+        return true;
+    });
+    if (eligible.length === 0) eligible = dialogues.filter(function(d) { return !d.minAge; });
+    if (eligible.length === 0) eligible = dialogues;
 
-    var dlg = dialogues[Math.floor(Math.random() * dialogues.length)];
+    var dlg = eligible[Math.floor(Math.random() * eligible.length)];
     var finalOpts = dlg.options.slice();
 
     // add flirt options to eligible NPCs
