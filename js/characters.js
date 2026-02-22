@@ -118,8 +118,9 @@ LIFE.createCharacter = function(height, skinColor, clothesColor, isPlayer, opts)
     body.castShadow = true;
     ch.group.add(body);
 
-    // Legs
-    var legColor = isPlayer ? 0x1a237e : new THREE.Color(clothesColor).multiplyScalar(0.7);
+    // Legs - skin colored if naked (womb), otherwise pants
+    var isNaked = (skinColor === clothesColor);
+    var legColor = isNaked ? skinColor : (isPlayer ? 0x1a237e : new THREE.Color(clothesColor).multiplyScalar(0.7));
     var legMat = new THREE.MeshPhongMaterial({ color: legColor });
 
     var llG = new THREE.Group();

@@ -93,6 +93,24 @@ LIFE.ui.updateActionButtons = function() {
     });
 };
 
+LIFE.ui.updateJailActions = function() {
+    var container = LIFE.ui.$.actions;
+    container.innerHTML = '';
+    var jailActs = [
+        { key: '1', label: 'Punch', action: function() { LIFE.performAction(0); } },
+        { key: 'T', label: 'Talk', action: function() {
+            if (LIFE.state.nearestNPC) { LIFE.dialogue.talkToNPC(LIFE.state.nearestNPC); }
+        }}
+    ];
+    jailActs.forEach(function(a) {
+        var btn = document.createElement('div');
+        btn.className = 'actBtn';
+        btn.innerHTML = '<span class="key">' + a.key + '</span>' + a.label;
+        btn.onclick = a.action;
+        container.appendChild(btn);
+    });
+};
+
 LIFE.ui.hideGameUI = function() {
     var $ = LIFE.ui.$;
     $.ageBox.style.display = 'none';

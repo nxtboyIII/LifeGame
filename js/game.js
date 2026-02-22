@@ -303,6 +303,8 @@ LIFE.arrestPlayer = function() {
     LIFE.ui.$.playerHpBar.style.display = 'block';
     LIFE.ui.$.controls.style.display = 'block';
     LIFE.ui.$.controls.textContent = 'WASD: Move | Mouse: Look | Click/1: Punch | T: Talk';
+    LIFE.ui.$.actions.style.display = 'flex';
+    LIFE.ui.updateJailActions();
     LIFE.ui.updateWeapon();
 
     // lock cursor for 3D jail
