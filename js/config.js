@@ -130,15 +130,14 @@ LIFE.LAST_NAMES = [
     'Rogers', 'Morgan', 'Peterson', 'Cooper', 'Reed', 'Bailey', 'Bell', 'Ward'
 ];
 // Types that get individual first names (multiple NPCs of same type)
-LIFE.NPC_NEEDS_NAME = { Kid: true, Student: true, Stranger: true, Neighbor: true, Coworker: true, Inmate: true };
+LIFE.NPC_NEEDS_NAME = { Kid: true, Student: true, Stranger: true, Neighbor: true, Coworker: true, Inmate: true, 'Old Friend': true };
 
 // Types where nametag ALWAYS shows their role title (player can see their occupation/role)
 LIFE.NPC_TITLE_VISIBLE = {
     Teacher: true, Professor: true, Doctor: true, Nurse: true, Police: true,
     Dealer: true, 'Car Salesman': true, 'Real Estate Agent': true, 'Food Vendor': true, 'Clothes Shop': true,
     'Pharmacist': true, 'Bookstore': true, 'Gym Trainer': true, 'Electronics': true,
-    'Ticket Seller': true, Boss: true, Inmate: true,
-    Kid: true, Student: true, Neighbor: true, Coworker: true, 'Old Friend': true
+    'Ticket Seller': true, Boss: true
 };
 // Types where nametag shows family relationship (always known)
 LIFE.NPC_FAMILY_TITLE = {

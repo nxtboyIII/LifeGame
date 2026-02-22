@@ -55,6 +55,7 @@ LIFE.NPC_CHAT = {
 };
 
 LIFE.getNPCChatMessage = function(npc) {
+    if (npc._sleeping) return "Zzz...";
     var state = LIFE.state;
     var rel = state.relationships[npc.name];
     var relLevel = rel ? rel.level : 0;
@@ -153,8 +154,8 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
     var lastName = opts.lastName || LIFE.LAST_NAMES[Math.floor(Math.random() * LIFE.LAST_NAMES.length)];
     var fullName = individualName + ' ' + lastName;
 
-    // Determine if player "knows" this NPC (visible title or family)
-    var knownByDefault = !!LIFE.NPC_TITLE_VISIBLE[type] || !!LIFE.NPC_FAMILY_TITLE[type] || isHiring;
+    // Determine if player "knows" this NPC (visible title or family or old friend)
+    var knownByDefault = !!LIFE.NPC_TITLE_VISIBLE[type] || !!LIFE.NPC_FAMILY_TITLE[type] || isHiring || type === 'Old Friend';
     var met = knownByDefault;
     var skin = LIFE.SKIN_COLORS[Math.floor(Math.random() * LIFE.SKIN_COLORS.length)];
     var isDoctor = type === 'Doctor';
@@ -231,8 +232,8 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
         // Family title always visible
         displayName = type;
     } else if (!met) {
-        // Unknown person - show generic label
-        displayName = 'Stranger';
+        // Unknown person - show type label until met
+        displayName = LIFE.NPC_NEEDS_NAME[type] ? type : 'Stranger';
     } else {
         // Known person - show their first name
         displayName = individualName;
@@ -377,6 +378,13 @@ LIFE.updateNPCHealthBar = function(npc) {
 
 LIFE.damageNPC = function(npc, amount) {
     if (!npc || !npc.alive) return;
+    // Wake up sleeping NPCs when attacked — stay awake for 30s
+    if (npc._sleeping) {
+        npc._sleeping = false;
+        npc._wakeLock = 30;
+        npc.char.group.position.y = 0;
+        npc.char.group.rotation.x = 0;
+    }
     npc.health = Math.max(0, npc.health - amount);
     LIFE.updateNPCHealthBar(npc);
     npc.reacting = 1.5;
@@ -664,6 +672,14 @@ LIFE.updateNPCs = function(dt) {
 
     LIFE.npcs.forEach(function(npc) {
         if (!npc.alive) return;
+        // Sleeping NPCs: skip movement/AI, just show ring if nearest
+        if (npc._sleeping) {
+            var isNearest2 = (npc === nearestNPC);
+            npc.ringMat.opacity += ((isNearest2 ? 0.6 : 0) - npc.ringMat.opacity) * 0.1;
+            if (isNearest2) npc.ring.rotation.z += dt * 2;
+            npc.chatSprite.visible = false;
+            return; // skip all movement/behavior
+        }
         var isNearest = (npc === nearestNPC);
         npc.ringMat.opacity += ((isNearest ? 0.6 : 0) - npc.ringMat.opacity) * 0.1;
         if (isNearest) npc.ring.rotation.z += dt * 2;

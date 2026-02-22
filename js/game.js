@@ -957,6 +957,10 @@ LIFE.arrestPlayer = function() {
         LIFE.ui.$.controls.style.color = '#ff1744';
         LIFE.ui.$.cross.style.display = 'none';
 
+        // Big sentencing popup for death penalty
+        LIFE.ui.showSentencePopup(99, 0, state.crimeLog || []);
+        state.crimeLog = [];
+
         LIFE.lockCursor();
         LIFE.sounds.arrest();
         return;
@@ -1083,7 +1087,9 @@ LIFE.arrestPlayer = function() {
     }
 
     // show jail HUD
+    var crimesCopy = (state.crimeLog || []).slice();
     LIFE.ui.showJailScreen(years, state.jailFine);
+    LIFE.ui.showSentencePopup(years, state.jailFine, crimesCopy);
     state.crimeLog = []; // clear crime log after displaying
     LIFE.ui.hideGameUI();
     LIFE.ui.$.ageBox.style.display = 'block';
@@ -1585,7 +1591,7 @@ LIFE.exitHospital = function() {
         // if school age, restore day phase
         if (LIFE.isSchoolAge(state.age)) {
             var dayTimer = state.yearTimer % LIFE.DAY_DURATION;
-            var phase = 'classroom';
+            var phase = 'home';
             for (var i = 0; i < LIFE.SCHOOL_PHASES.length; i++) {
                 var sp = LIFE.SCHOOL_PHASES[i];
                 if (dayTimer >= sp.start && dayTimer < sp.end) { phase = sp.name; break; }
@@ -1603,7 +1609,7 @@ LIFE.exitHospital = function() {
         // if school age, restore day phase
         if (LIFE.isSchoolAge(state.age)) {
             var dayTimer2 = state.yearTimer % LIFE.DAY_DURATION;
-            var phase2 = 'classroom';
+            var phase2 = 'home';
             for (var j = 0; j < LIFE.SCHOOL_PHASES.length; j++) {
                 var sp2 = LIFE.SCHOOL_PHASES[j];
                 if (dayTimer2 >= sp2.start && dayTimer2 < sp2.end) { phase2 = sp2.name; break; }
@@ -1620,10 +1626,15 @@ LIFE.exitHospital = function() {
 // SCHOOL DAY CYCLE
 // ============================================================
 // School day phases within a single 20-minute day (1200 seconds)
+// School day: 8am-2pm class, 2-4pm recess, 4-10pm home, 10pm-8am sleep
+// dayTimer 0-1200 maps to full 24 hours (same as non-school)
+// Phase ranges in dayTimer units: 1200/24 = 50 per hour
 LIFE.SCHOOL_PHASES = [
-    { name: 'classroom',  start: 0,   end: 600 },   // 10 min in class
-    { name: 'schoolyard', start: 600,  end: 840 },   // 4 min recess/outside
-    { name: 'home',       start: 840,  end: 1200 }   // 6 min at home
+    { name: 'sleep',      start: 0,    end: 400 },    // 12am-8am (sleep)
+    { name: 'classroom',  start: 400,  end: 700 },    // 8am-2pm (school)
+    { name: 'schoolyard', start: 700,  end: 800 },    // 2pm-4pm (recess)
+    { name: 'home',       start: 800,  end: 1100 },   // 4pm-10pm (home free time)
+    { name: 'sleep',      start: 1100, end: 1200 }    // 10pm-12am (sleep)
 ];
 
 LIFE.isSchoolAge = function(age) {
@@ -1652,28 +1663,11 @@ LIFE.getSimDate = function() {
     var dayTimer = state.yearTimer % dayDur; // 0 to 1200
     var hour, minutes;
 
-    if (state.dayPhase === 'classroom') {
-        // 8 AM to 2 PM (360 minutes) over 600 seconds
-        var totalMin = (dayTimer / 600) * 360;
-        hour = 8 + Math.floor(totalMin / 60);
-        minutes = Math.floor(totalMin % 60);
-    } else if (state.dayPhase === 'schoolyard') {
-        // 2 PM to 4 PM (120 minutes) over 240 seconds
-        var totalMin2 = ((dayTimer - 600) / 240) * 120;
-        hour = 14 + Math.floor(totalMin2 / 60);
-        minutes = Math.floor(totalMin2 % 60);
-    } else if (state.dayPhase === 'home') {
-        // 4 PM to 10 PM (360 minutes) over 360 seconds
-        var totalMin3 = ((dayTimer - 840) / 360) * 360;
-        hour = 16 + Math.floor(totalMin3 / 60);
-        minutes = Math.floor(totalMin3 % 60);
-    } else {
-        // full 24-hour cycle: 0:00 to 23:59
-        var dayFrac = dayTimer / dayDur;
-        var totalMin4 = dayFrac * 1440; // 24 * 60
-        hour = Math.floor(totalMin4 / 60);
-        minutes = Math.floor(totalMin4 % 60);
-    }
+    // All ages use same 24-hour clock: dayTimer 0-1200 = 0:00-23:59
+    var dayFrac = dayTimer / dayDur;
+    var totalMin4 = dayFrac * 1440; // 24 * 60
+    hour = Math.floor(totalMin4 / 60);
+    minutes = Math.floor(totalMin4 % 60);
     hour = Math.max(0, Math.min(23, hour));
     minutes = Math.max(0, Math.min(59, minutes));
     var ampm = hour >= 12 ? 'PM' : 'AM';
@@ -1786,6 +1780,10 @@ LIFE.transitionDayPhase = function(phase) {
             var def = LIFE.ZONE_DEFS[schoolZone];
             if (def) LIFE.player.group.position.set(def.cx, 0, def.cz + 5);
             LIFE.ui.showPopup('Recess!', '#66bb6a');
+        } else if (phase === 'sleep') {
+            if (LIFE.world.insideInterior) LIFE.world.exitInterior();
+            LIFE.player.group.position.set(0, 0, -5);
+            LIFE.ui.showPopup('Time for bed...', '#5c6bc0');
         } else {
             if (LIFE.world.insideInterior) LIFE.world.exitInterior();
             LIFE.player.group.position.set(0, 0, 5);
@@ -1814,6 +1812,8 @@ LIFE.transitionDayPhase = function(phase) {
         LIFE.ui.showPopup('School time!', '#4fc3f7');
     } else if (phase === 'schoolyard') {
         LIFE.ui.showPopup('Recess!', '#66bb6a');
+    } else if (phase === 'sleep') {
+        LIFE.ui.showPopup('Time for bed...', '#5c6bc0');
     } else {
         LIFE.ui.showPopup('Home from school!', '#ff9800');
     }
@@ -1837,7 +1837,7 @@ LIFE.updateSchoolDayCycle = function() {
             break;
         }
     }
-    if (!expectedPhase) expectedPhase = 'classroom'; // safety fallback
+    if (!expectedPhase) expectedPhase = 'sleep'; // fallback to sleep (late night)
 
     if (expectedPhase !== state.dayPhase) {
         // don't transition during dialogue or shop
@@ -1856,16 +1856,9 @@ LIFE.skipTime = function(hours) {
     }
     if (LIFE.dialogue.active && LIFE.dialogue.blocking) return;
 
-    // Convert displayed hours to yearTimer seconds using current phase rate
-    // Phase rates: yearTimer-seconds per displayed-minute
-    var secsPerMin;
-    if (LIFE.isSchoolAge(state.age) && state.dayPhase) {
-        if (state.dayPhase === 'classroom') secsPerMin = 600 / 360;       // 1.667
-        else if (state.dayPhase === 'schoolyard') secsPerMin = 240 / 120; // 2.0
-        else secsPerMin = 360 / 360;                                       // 1.0 (home)
-    } else {
-        secsPerMin = LIFE.DAY_DURATION / 1440; // 0.833
-    }
+    // Convert displayed hours to yearTimer seconds
+    // All ages: 1200 seconds = 1440 minutes (24 hours)
+    var secsPerMin = LIFE.DAY_DURATION / 1440; // 0.833
     var secondsToAdd = hours * 60 * secsPerMin;
 
     // handle multi-year skips
@@ -2061,11 +2054,8 @@ LIFE.advanceYear = function() {
 
     state.age++;
     // start each year at 9:00 AM displayed time
-    if (LIFE.isSchoolAge(state.age)) {
-        state.yearTimer = 100; // 9AM in classroom phase (100/600 * 360min + 8h = 9AM)
-    } else {
-        state.yearTimer = 450; // 9AM in 24hr cycle (450/1200 * 24h = 9AM)
-    }
+    // 9AM = 9/24 * 1200 = 450
+    state.yearTimer = 450;
 
     if (state.age > LIFE.MAX_AGE) { state.deathCause = 'old age'; LIFE.triggerDeath(); return; }
 
@@ -2145,8 +2135,15 @@ LIFE.advanceYear = function() {
                 LIFE.world._cullingTimer = 999;
                 LIFE.world.updateCulling(0);
                 if (LIFE.isSchoolAge(state.age)) {
-                    state.dayPhase = 'classroom';
-                    LIFE.transitionDayPhase('classroom');
+                    // Determine correct phase for current time
+                    var dt2 = state.yearTimer % LIFE.DAY_DURATION;
+                    var startPhase = 'home';
+                    for (var spi = 0; spi < LIFE.SCHOOL_PHASES.length; spi++) {
+                        var sp2 = LIFE.SCHOOL_PHASES[spi];
+                        if (dt2 >= sp2.start && dt2 < sp2.end) { startPhase = sp2.name; break; }
+                    }
+                    state.dayPhase = startPhase;
+                    LIFE.transitionDayPhase(startPhase);
                 } else {
                     state.dayPhase = null;
                 }
@@ -2158,8 +2155,8 @@ LIFE.advanceYear = function() {
             }
         } else {
             if (LIFE.isSchoolAge(state.age)) {
-                state.dayPhase = 'classroom';
-                LIFE.transitionDayPhase('classroom');
+                // New year starts at dayTimer 0 = midnight, so start at home (sleep)
+                state.dayPhase = 'home';
             } else {
                 state.dayPhase = null;
                 LIFE.buildEnvironment(newStage);
@@ -2168,9 +2165,8 @@ LIFE.advanceYear = function() {
             LIFE.player.group.position.set(0, 0, 0);
         }
     } else if (LIFE.isSchoolAge(state.age)) {
-        // same school stage, new year - reset to classroom
-        state.dayPhase = 'classroom';
-        LIFE.transitionDayPhase('classroom');
+        // same school stage, new year - yearTimer resets to 0 (midnight), so home phase
+        state.dayPhase = 'home';
     } else {
         state.dayPhase = null;
     }

@@ -50,7 +50,12 @@ LIFE.ui.$ = {
     damageFlash:   document.getElementById('damageFlash'),
     jailScreen:    document.getElementById('jailScreen'),
     jailText:      document.getElementById('jailText'),
-    jailDetails:   document.getElementById('jailDetails')
+    jailDetails:   document.getElementById('jailDetails'),
+    sentencePopup: document.getElementById('sentencePopup'),
+    sentenceHeader:document.getElementById('sentenceHeader'),
+    sentenceTime:  document.getElementById('sentenceTime'),
+    sentenceCharges:document.getElementById('sentenceCharges'),
+    sentenceFine:  document.getElementById('sentenceFine')
 };
 
 LIFE.ui.repChangeTimer = 0;
@@ -217,7 +222,8 @@ LIFE.ui.updateNPCHint = function() {
         } else {
             hintName = npc.displayName || npc.name || npc.type;
         }
-        hint.textContent = 'Press T to talk to ' + hintName + relText;
+        var sleepText = npc._sleeping ? ' (Sleeping)' : '';
+        hint.textContent = 'Press T to ' + (npc._sleeping ? 'wake up ' : 'talk to ') + hintName + relText + sleepText;
     } else {
         hint.style.display = 'none';
     }
@@ -795,6 +801,60 @@ LIFE.ui.hideJailScreen = function() {
     var el = LIFE.ui.$.jailScreen;
     if (!el) return;
     el.classList.remove('active');
+};
+
+LIFE.ui.showSentencePopup = function(years, fine, crimes) {
+    var popup = LIFE.ui.$.sentencePopup;
+    if (!popup) return;
+
+    // Header
+    var header = LIFE.ui.$.sentenceHeader;
+    if (years >= 50) header.textContent = 'DEATH SENTENCE';
+    else header.textContent = 'SENTENCED';
+
+    // Sentence time
+    var timeEl = LIFE.ui.$.sentenceTime;
+    if (years >= 50) timeEl.textContent = 'Multiple Life Sentences';
+    else if (years >= 25) timeEl.textContent = 'Life in Prison';
+    else timeEl.textContent = years + ' Year' + (years > 1 ? 's' : '') + ' in Prison';
+
+    // Charges
+    var chargesEl = LIFE.ui.$.sentenceCharges;
+    chargesEl.innerHTML = '';
+    if (crimes && crimes.length > 0) {
+        var counts = {};
+        for (var i = 0; i < crimes.length; i++) {
+            counts[crimes[i]] = (counts[crimes[i]] || 0) + 1;
+        }
+        var delay = 0;
+        for (var crime in counts) {
+            var line = document.createElement('span');
+            line.className = 'charge-line';
+            line.style.animationDelay = delay + 's';
+            var label = crime;
+            if (counts[crime] > 1) label += ' x' + counts[crime];
+            line.textContent = label;
+            chargesEl.appendChild(line);
+            delay += 0.15;
+        }
+    }
+
+    // Fine
+    var fineEl = LIFE.ui.$.sentenceFine;
+    if (fine > 0) fineEl.textContent = 'FINE: $' + fine.toLocaleString();
+    else fineEl.textContent = '';
+
+    // Show
+    popup.classList.remove('fade-out');
+    popup.classList.add('active');
+
+    // Auto-hide after 4 seconds
+    setTimeout(function() {
+        popup.classList.add('fade-out');
+        setTimeout(function() {
+            popup.classList.remove('active', 'fade-out');
+        }, 1000);
+    }, 4000);
 };
 
 // ============================================================

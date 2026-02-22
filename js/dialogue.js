@@ -1218,6 +1218,28 @@ LIFE.canFlirtWith = function(npc) {
 
 LIFE.dialogue.talkToNPC = function(npc) {
     if (!npc || !npc.alive || LIFE.dialogue.active) return;
+
+    // Sleeping NPC — wake them up
+    if (npc._sleeping) {
+        LIFE.dialogue.npc = npc;
+        var sleepName = npc.displayName || npc.name || npc.type;
+        var isFamily = (npc.type === 'Mom' || npc.type === 'Dad' || npc.type === 'Sibling' ||
+            npc.type === 'Spouse' || npc.type === 'Your Child');
+        var wakeLines = isFamily
+            ? ["*yawns* Huh? What is it, honey?", "*groggily* What time is it...?", "*stirs* Can't this wait until morning?"]
+            : ["Zzz... huh? What? Leave me alone...", "*wakes up startled* What do you want?!", "*yawns* ...I was sleeping."];
+        LIFE.dialogue.open(sleepName, wakeLines[Math.floor(Math.random() * wakeLines.length)], [
+            { text: "Sorry, go back to sleep.", effects: {}, rep: 0 },
+            { text: "Wake up! I need to talk to you.", effects: {}, rep: -1 }
+        ], true);
+        // Wake them up — stay awake for 30 seconds before going back to sleep
+        npc._sleeping = false;
+        npc._wakeLock = 30;
+        npc.char.group.position.y = 0;
+        npc.char.group.rotation.x = 0;
+        return;
+    }
+
     // Mark NPC as met (reveals their name if they were a stranger)
     if (LIFE.meetNPC) LIFE.meetNPC(npc);
     var state = LIFE.state;

@@ -99,6 +99,19 @@ LIFE.buildNursery = function() {
 };
 
 // ---------- HOME ----------
+// Helper: create a bed (frame + mattress + pillow)
+LIFE.makeBed = function(x, z, color) {
+    color = color || 0x1565c0;
+    // bed frame
+    LIFE.addEnv(LIFE.makeBox(1.2, 0.3, 2.2, 0x5d4037, x, 0.15, z));
+    // mattress
+    LIFE.addEnv(LIFE.makeBox(1.0, 0.15, 2.0, 0xfafafa, x, 0.35, z));
+    // blanket
+    LIFE.addEnv(LIFE.makeBox(1.0, 0.06, 1.2, color, x, 0.42, z + 0.3));
+    // pillow
+    LIFE.addEnv(LIFE.makeBox(0.6, 0.1, 0.3, 0xfff9c4, x, 0.42, z - 0.8));
+};
+
 LIFE.buildHome = function() {
     LIFE.makeGround(32, 0x4a7c3f);
     // house floor (raised above zone ground to avoid z-fighting)
@@ -108,9 +121,14 @@ LIFE.buildHome = function() {
     LIFE.addSolid(0.3, 3.5, 10, 0xfff8e1, -7, 1.75, -5);
     LIFE.addSolid(0.3, 3.5, 10, 0xfff8e1, 7, 1.75, -5);
     // furniture (solid)
-    LIFE.addSolid(3, 1, 1.5, 0x5d4037, 0, 0.5, -8);
-    LIFE.addSolid(2, 0.8, 1, 0x795548, -4, 0.4, -8);
-    LIFE.addSolid(1.5, 1.8, 0.3, 0x424242, 5, 0.9, -9.7);
+    LIFE.addSolid(3, 1, 1.5, 0x5d4037, 0, 0.5, -8); // table
+    LIFE.addSolid(2, 0.8, 1, 0x795548, -4, 0.4, -8); // side table
+    LIFE.addSolid(1.5, 1.8, 0.3, 0x424242, 5, 0.9, -9.7); // TV
+    // beds for parents
+    LIFE.makeBed(-4, -3, 0x1565c0); // Mom's side
+    LIFE.makeBed(-2.5, -3, 0x1565c0); // Dad's side (double bed look)
+    // kid's bed
+    LIFE.makeBed(5, -4, 0x66bb6a);
     // yard
     LIFE.makeTree(10, 5);
     LIFE.makeTree(-10, 8);
@@ -119,6 +137,19 @@ LIFE.buildHome = function() {
     for (var x = -15; x <= 15; x += 2) {
         LIFE.addEnv(LIFE.makeBox(0.1, 0.8, 0.1, 0xdeb887, x, 0.4, 15));
         LIFE.addEnv(LIFE.makeBox(0.1, 0.8, 0.1, 0xdeb887, x, 0.4, -15));
+    }
+    // neighbor houses
+    var nhColors = [0xe8eaf6, 0xfce4ec, 0xe0f2f1];
+    var nhRoofs = [0x5d4037, 0x37474f, 0x4e342e];
+    var nhPositions = [
+        { x: -20, z: -5 }, { x: 20, z: -5 }, { x: -20, z: 10 }
+    ];
+    for (var nh = 0; nh < nhPositions.length; nh++) {
+        var np = nhPositions[nh];
+        LIFE.addSolid(5, 2.8, 4, nhColors[nh], np.x, 1.4, np.z);
+        LIFE.addEnv(LIFE.makeBox(6, 0.3, 5, nhRoofs[nh], np.x, 2.95, np.z));
+        LIFE.addEnv(LIFE.makeBox(1, 1.8, 0.1, 0x5d4037, np.x, 0.9, np.z + 2.1));
+        LIFE.addEnv(LIFE.makeBox(0.8, 0.8, 0.1, 0xbbdefb, np.x + 1.5, 1.5, np.z + 2.1));
     }
 };
 
@@ -339,6 +370,46 @@ LIFE.buildCity = function() {
     for (var c = 0; c < 6; c++) {
         var cc = LIFE.CLOTHES_COLORS[Math.floor(Math.random() * LIFE.CLOTHES_COLORS.length)];
         LIFE.addSolid(1.5, 0.8, 3, cc, -35 + c * 8, 0.4, 7);
+    }
+
+    // RESIDENTIAL NEIGHBORHOOD - houses where NPCs sleep
+    var houseColors = [0xfff8e1, 0xe8eaf6, 0xfce4ec, 0xe0f2f1, 0xfff3e0, 0xf3e5f5];
+    var roofColors = [0x8b0000, 0x5d4037, 0x37474f, 0x4e342e, 0x263238, 0x3e2723];
+    // Row of houses along one side
+    var housePositions = [
+        { x: -40, z: -30 }, { x: -28, z: -30 }, { x: -16, z: -30 },
+        { x: 16, z: -30 }, { x: 28, z: -30 }, { x: 40, z: -30 },
+        // apartment block
+        { x: -45, z: 20, isApartment: true }, { x: 45, z: 20, isApartment: true }
+    ];
+    LIFE.world._cityHouses = [];
+    for (var hi = 0; hi < housePositions.length; hi++) {
+        var hp = housePositions[hi];
+        if (hp.isApartment) {
+            // Apartment building (taller, multiple units)
+            LIFE.makeBuilding(hp.x, hp.z, 8, 12, 6, 0x78909c, 0x546e7a);
+            // Windows
+            for (var fl = 0; fl < 3; fl++) {
+                for (var wi = 0; wi < 3; wi++) {
+                    LIFE.addEnv(LIFE.makeBox(1, 1.2, 0.1, 0xbbdefb, hp.x - 2.5 + wi * 2.5, 3 + fl * 3.5, hp.z + 3.1));
+                }
+            }
+            LIFE.world._cityHouses.push({ x: hp.x, z: hp.z, isApartment: true, slots: 6 });
+        } else {
+            // Small residential house
+            var hcol = houseColors[hi % houseColors.length];
+            var rcol = roofColors[hi % roofColors.length];
+            // House body
+            LIFE.addSolid(6, 3, 5, hcol, hp.x, 1.5, hp.z);
+            // Roof
+            LIFE.addEnv(LIFE.makeBox(7, 0.3, 6, rcol, hp.x, 3.15, hp.z));
+            // Door
+            LIFE.addEnv(LIFE.makeBox(1, 2, 0.1, 0x5d4037, hp.x, 1, hp.z + 2.6));
+            // Window
+            LIFE.addEnv(LIFE.makeBox(1.2, 1, 0.1, 0xbbdefb, hp.x + 2, 1.8, hp.z + 2.6));
+            LIFE.addEnv(LIFE.makeBox(1.2, 1, 0.1, 0xbbdefb, hp.x - 2, 1.8, hp.z + 2.6));
+            LIFE.world._cityHouses.push({ x: hp.x, z: hp.z, isApartment: false, slots: 2 });
+        }
     }
 };
 

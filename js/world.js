@@ -884,9 +884,7 @@ LIFE.world.updateCulling = function(dt) {
     // Get current hour for time-of-day NPC behavior
     var sim = LIFE.getSimDate ? LIFE.getSimDate() : null;
     var hour = sim ? sim.hour : 12;
-    var isNight = hour >= 22 || hour < 6;
-    var isEarlyMorning = hour >= 6 && hour < 8;
-    var isLateEvening = hour >= 20 && hour < 22;
+    var currentHour = sim ? (sim.hour + (sim.minutes || 0) / 60) : 12; // fractional hour for bedtime checks
 
     for (var name in LIFE.world.zones) {
         var zone = LIFE.world.zones[name];
@@ -901,20 +899,54 @@ LIFE.world.updateCulling = function(dt) {
             if (dist < 120) zone.group.visible = true;
         }
 
-        // Show/hide zone NPCs based on visibility + time of day
+        // Show/hide zone NPCs and handle sleep state
         if (zone.npcs) {
             for (var ni = 0; ni < zone.npcs.length; ni++) {
                 var npc = zone.npcs[ni];
-                if (npc.char && npc.char.group) {
-                    var timeVisible = true;
-                    if (isNight) {
-                        timeVisible = !!npc._nightActive;
-                    } else if (isEarlyMorning || isLateEvening) {
-                        // partial: some sleepers still hidden
-                        timeVisible = npc._nightActive || npc._earlyBird;
-                    }
-                    npc.char.group.visible = zone.group.visible && npc.alive && timeVisible;
+                if (!npc.char || !npc.char.group) continue;
+                if (!npc.alive) { npc.char.group.visible = zone.group.visible; continue; }
+
+                // Woken-up NPCs stay awake for a while before going back to sleep
+                if (npc._wakeLock > 0) {
+                    npc._wakeLock -= 0.5; // culling runs every 0.5s
+                    npc.char.group.visible = zone.group.visible && npc.alive;
+                    continue;
                 }
+
+                // Check if NPC should be sleeping based on their personal schedule
+                var shouldSleep = false;
+                if (npc._bedtime >= 0) {
+                    if (npc._bedtime > npc._waketime) {
+                        shouldSleep = (currentHour >= npc._bedtime || currentHour < npc._waketime);
+                    } else {
+                        shouldSleep = (currentHour >= npc._bedtime && currentHour < npc._waketime);
+                    }
+                }
+
+                if (shouldSleep && !npc._sleeping) {
+                    // Go to sleep: move to sleep position and lay down
+                    npc._sleeping = true;
+                    npc._preSleepPos = { x: npc.char.group.position.x, z: npc.char.group.position.z };
+                    if (npc._sleepPos) {
+                        npc.char.group.position.x = npc._sleepPos.x;
+                        npc.char.group.position.z = npc._sleepPos.z;
+                    }
+                    npc.char.group.position.y = npc._homeless ? 0.05 : 0.35; // bed height or ground
+                    npc.char.group.rotation.x = -Math.PI / 2; // lay flat
+                    npc.speed = 0;
+                    npc._savedSpeed = npc.speed;
+                } else if (!shouldSleep && npc._sleeping) {
+                    // Wake up: restore position and stand up
+                    npc._sleeping = false;
+                    if (npc._preSleepPos) {
+                        npc.char.group.position.x = npc._preSleepPos.x;
+                        npc.char.group.position.z = npc._preSleepPos.z;
+                    }
+                    npc.char.group.position.y = 0;
+                    npc.char.group.rotation.x = 0;
+                }
+
+                npc.char.group.visible = zone.group.visible && npc.alive;
             }
         }
     }
@@ -1150,23 +1182,49 @@ LIFE.world.spawnZoneNPCs = function(zoneName) {
         npc._zoneCenter = new THREE.Vector3(def.cx, 0, def.cz);
         npc._zoneRadius = def.radius;
 
-        // Time-of-day behavior: who stays out at night?
-        var alwaysActive = { 'Police': true, 'Dealer': true };
-        var nightOwlTypes = { 'Stranger': true, 'Inmate': true };
-        if (alwaysActive[npcType]) {
-            npc._nightActive = true;
-            npc._earlyBird = true;
-        } else if (nightOwlTypes[npcType]) {
-            npc._nightActive = Math.random() < 0.5;
-            npc._earlyBird = true;
-        } else if (npc.isVendor || npc.isCarSalesman || npc.isRealEstate) {
-            // Vendors active during business hours (earlyBird), closed at night
-            npc._nightActive = false;
-            npc._earlyBird = true;
+        // Sleep schedule: unique bedtime/wake time per NPC
+        if (npcType === 'Police' || npcType === 'Dealer') {
+            npc._bedtime = -1; // never sleeps (always active)
+        } else if (npc.isVendor || npc.isCarSalesman || npc.isRealEstate || npc.isHiring) {
+            // Business hours: sleep 9pm-7am
+            npc._bedtime = 21;
+            npc._waketime = 7;
+        } else if (npcType === 'Mom' || npcType === 'Dad') {
+            npc._bedtime = 22.5; // parents: 10:30pm
+            npc._waketime = 6.5;
+        } else if (npcType === 'Sibling' || npcType === 'Kid' || npcType === 'Student') {
+            npc._bedtime = 21 + Math.random() * 1; // kids: 9-10pm
+            npc._waketime = 6.5 + Math.random() * 1; // wake 6:30-7:30am
+        } else if (npcType === 'Stranger' || npcType === 'Neighbor') {
+            // Random adult schedule
+            npc._bedtime = 21 + Math.random() * 4; // 9pm-1am
+            if (npc._bedtime >= 24) npc._bedtime -= 24;
+            npc._waketime = 5.5 + Math.random() * 3; // 5:30-8:30am
         } else {
-            // Most NPCs sleep at night, ~20% are night owls
-            npc._nightActive = Math.random() < 0.15;
-            npc._earlyBird = Math.random() < 0.5;
+            // Everyone else: random schedule
+            npc._bedtime = 22 + Math.random() * 2; // 10pm-12am
+            npc._waketime = 6 + Math.random() * 2; // 6-8am
+        }
+        npc._sleeping = false;
+        npc._homeless = (npcType === 'Stranger' && Math.random() < 0.15); // 15% of strangers are homeless
+
+        // Assign sleep position based on type and zone
+        if (npcType === 'Mom' || npcType === 'Dad') {
+            // Parents sleep in home beds (local coords become world coords during zone build)
+            npc._sleepPos = { x: def.cx + (npcType === 'Mom' ? -4 : -2.5), z: def.cz - 3 };
+        } else if (npcType === 'Sibling') {
+            npc._sleepPos = { x: def.cx + 5, z: def.cz - 4 };
+        } else if (npc._homeless) {
+            // Homeless: sleep on a random sidewalk/bench spot
+            npc._sleepPos = { x: x + (Math.random() - 0.5) * 4, z: z + (Math.random() - 0.5) * 4 };
+        } else if (zoneName === 'city' && LIFE.world._cityHouses && LIFE.world._cityHouses.length > 0) {
+            // City NPCs: assigned to a house (house coords are local, offset by zone center)
+            var houseIdx = ni % LIFE.world._cityHouses.length;
+            var house = LIFE.world._cityHouses[houseIdx];
+            npc._sleepPos = { x: def.cx + house.x + (Math.random() - 0.5) * 2, z: def.cz + house.z };
+        } else {
+            // Other zones: sleep at their spawn pos
+            npc._sleepPos = { x: x, z: z };
         }
 
         zone.npcs.push(npc);
@@ -1185,8 +1243,10 @@ LIFE.world.spawnZoneNPCs = function(zoneName) {
             hireNPC._zoneCenter = new THREE.Vector3(cityDef.cx, 0, cityDef.cz);
             hireNPC._zoneRadius = cityDef.radius;
             hireNPC.stayNear = new THREE.Vector3(jb.x + cityDef.cx, 0, jb.z + cityDef.cz);
-            hireNPC._nightActive = false;
-            hireNPC._earlyBird = true;
+            hireNPC._bedtime = 21;
+            hireNPC._waketime = 7;
+            hireNPC._sleeping = false;
+            hireNPC._sleepPos = { x: jb.x + cityDef.cx, z: jb.z + cityDef.cz + 6 };
             zone.npcs.push(hireNPC);
         });
     }
