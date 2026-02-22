@@ -208,8 +208,8 @@ LIFE.arrestPlayer = function() {
     if (LIFE.state.gamePhase === 'jail' || LIFE.state.gamePhase === 'execution') return;
     var state = LIFE.state;
 
-    // DEATH PENALTY check - too many kills or max wanted with high kill count
-    if (state.kills >= 5 || (state.wantedLevel >= 5 && state.kills >= 3)) {
+    // DEATH PENALTY check - too many kills or max wanted with high kill count (adults only)
+    if (state.age >= 18 && (state.kills >= 5 || (state.wantedLevel >= 5 && state.kills >= 3))) {
         LIFE.cleanupBullets();
         LIFE.despawnPolice();
         state.wantedLevel = 0;
@@ -250,12 +250,25 @@ LIFE.arrestPlayer = function() {
 
     var years = Math.min(15, state.wantedLevel * 2 + state.kills * 3);
     if (years < 1) years = 1;
+    // juveniles get much lighter sentences
+    if (state.age < 18) {
+        if (state.age < 10) {
+            years = Math.min(1, Math.ceil(years * 0.1)); // young kids: slap on the wrist
+        } else if (state.age < 14) {
+            years = Math.max(1, Math.ceil(years * 0.25)); // preteens: juvenile detention
+        } else {
+            years = Math.max(1, Math.ceil(years * 0.5)); // teens: reduced sentence
+        }
+    }
     var fine = Math.min(state.money, 500 * state.wantedLevel + 5000 * state.kills);
+    if (state.age < 18) fine = Math.floor(fine * 0.3); // juveniles pay less fines
 
     state.gamePhase = 'jail';
     state.jailYears = years;
     state.jailFine = Math.floor(fine);
     state.jailTimer = years * 30 + 5; // longer jail stays with 20-min days
+    state._jailStartTimer = state.jailTimer;
+    state._jailStartAge = state.age;
     state.jailEventTimer = 5 + Math.random() * 8;
     state.money = Math.max(0, state.money - fine);
     state.career = null;
@@ -299,10 +312,12 @@ LIFE.arrestPlayer = function() {
 
 LIFE.exitJail = function() {
     var state = LIFE.state;
-    for (var i = 0; i < state.jailYears; i++) {
-        state.age++;
-        if (state.age > LIFE.MAX_AGE) { state.deathCause = 'died in prison'; LIFE.triggerDeath(); return; }
-    }
+    // age already advanced during jail stay, just make sure final age is correct
+    var finalAge = (state._jailStartAge || state.age) + state.jailYears;
+    if (finalAge > LIFE.MAX_AGE) { state.deathCause = 'died in prison'; LIFE.triggerDeath(); return; }
+    state.age = finalAge;
+    state._jailStartTimer = null;
+    state._jailStartAge = null;
     state.kills = 0;
     state.gamePhase = 'playing';
     LIFE.ui.hideJailScreen();
@@ -1548,6 +1563,18 @@ LIFE.animate = function() {
             state.stats.health = Math.max(0, state.stats.health - 0.15 * dt);
             state.stats.happiness = Math.max(0, state.stats.happiness - 0.08 * dt);
 
+            // age advances in prison - scale jail time to years
+            if (!state._jailStartTimer) state._jailStartTimer = state.jailTimer + dt;
+            var jailProgress = 1 - (state.jailTimer / state._jailStartTimer);
+            var expectedAge = state._jailStartAge + Math.floor(jailProgress * state.jailYears);
+            if (expectedAge > state.age && expectedAge <= 80) {
+                state.age = expectedAge;
+                if (state.age >= 80 && !state.deathTriggered) {
+                    state.deathCause = 'died of old age in prison';
+                    LIFE.triggerDeath();
+                }
+            }
+
             // allow movement in jail cell
             LIFE.updatePlayer(dt);
             LIFE.updateNPCs(dt);
@@ -1590,8 +1617,8 @@ LIFE.animate = function() {
             }
 
             // update jail countdown display
-            var yearsLeft = Math.ceil(state.jailTimer / 2.5);
-            if (yearsLeft < 1) yearsLeft = 1;
+            var jailFrac = state.jailTimer / (state._jailStartTimer || 1);
+            var yearsLeft = Math.max(1, Math.ceil(jailFrac * state.jailYears));
             if (LIFE.ui.$.jailText) {
                 LIFE.ui.$.jailText.textContent = yearsLeft + ' year' + (yearsLeft > 1 ? 's' : '') + ' remaining';
             }
