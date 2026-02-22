@@ -333,6 +333,18 @@ LIFE.dialogue.selectOption = function(idx) {
     var opt = dlg.options[idx];
     LIFE.sounds.select();
 
+    // goodbye ends conversation immediately
+    if (opt.goodbye) {
+        LIFE.dialogue._endConversation = true;
+        LIFE.dialogue.showing = 'response';
+        LIFE.dialogue.responseTimer = 0.5;
+        var gel = LIFE.dialogue.elements;
+        gel.options.style.display = 'none';
+        gel.response.style.display = 'block';
+        gel.response.innerHTML = '<div class="dlgYouLabel">You:</div>' + opt.text;
+        return;
+    }
+
     if (opt.cost && opt.cost > 0) {
         if (!LIFE.economy.canAfford(opt.cost)) {
             LIFE.ui.showPopup("Can't afford it! ($" + opt.cost + ")", '#ef5350');
@@ -535,7 +547,13 @@ LIFE.dialogue.selectOption = function(idx) {
         LIFE.dialogue.decisionsMade[LIFE.state.age] = opt.tag || idx;
     }
 
-    // show player's response then close
+    // determine if conversation should end after this response
+    var shouldEnd = dlg.isDecision || opt.goodbye || opt.hospitalExit || opt.hospital ||
+        opt.marry || opt.haveKid || opt.kids || opt.career !== undefined ||
+        opt.setGender || opt.childName || opt.giveSwitchblade || opt.rehab;
+    LIFE.dialogue._endConversation = shouldEnd;
+
+    // show player's response then continue or close
     LIFE.dialogue.showing = 'response';
     LIFE.dialogue.responseTimer = LIFE.dialogue.blocking ? 1.8 : 1.0;
     var el = LIFE.dialogue.elements;
@@ -563,7 +581,15 @@ LIFE.dialogue.update = function(dt) {
     if (LIFE.dialogue.showing === 'response') {
         LIFE.dialogue.responseTimer -= dt;
         if (LIFE.dialogue.responseTimer <= 0) {
-            LIFE.dialogue.close();
+            // Skyrim-style: continue conversation if possible
+            if (!LIFE.dialogue._endConversation && LIFE.dialogue.npc &&
+                LIFE.dialogue.npc.alive && !LIFE.dialogue.blocking) {
+                LIFE.dialogue._endConversation = false;
+                LIFE.dialogue.continueConversation();
+            } else {
+                LIFE.dialogue._endConversation = false;
+                LIFE.dialogue.close();
+            }
         }
         return;
     }
@@ -769,6 +795,13 @@ LIFE.dialogue.talkToNPC = function(npc) {
 
     LIFE.dialogue.npc = npc;
 
+    // helper to append [End conversation] to options
+    var addGoodbye = function(opts) {
+        var copy = opts.slice();
+        copy.push({ text: "[End conversation]", effects: {}, goodbye: true });
+        return copy;
+    };
+
     // feared reputation override
     if (LIFE.state.reputation <= -40 && type !== 'Mom' && type !== 'Dad' && type !== 'Dealer') {
         var fearDialogue = { text: "Stay away from me! I've heard about you...", options: [
@@ -777,7 +810,7 @@ LIFE.dialogue.talkToNPC = function(npc) {
             { text: "I'm trying to change...", effects: { happiness: 1 }, rep: 5 }
         ]};
         if (Math.random() < 0.5) {
-            LIFE.dialogue.open(speakerName, fearDialogue.text, fearDialogue.options, false);
+            LIFE.dialogue.open(speakerName, fearDialogue.text, addGoodbye(fearDialogue.options), false);
             return;
         }
     }
@@ -789,7 +822,7 @@ LIFE.dialogue.talkToNPC = function(npc) {
             { text: "The feeling's mutual.", effects: {}, rep: -3 },
             { text: "Can we start over?", effects: { happiness: 1 }, rep: 8 }
         ]};
-        LIFE.dialogue.open(speakerName, enemyDlg.text, enemyDlg.options, false);
+        LIFE.dialogue.open(speakerName, enemyDlg.text, addGoodbye(enemyDlg.options), false);
         return;
     }
 
@@ -808,7 +841,7 @@ LIFE.dialogue.talkToNPC = function(npc) {
         if (LIFE.state.married && LIFE.state.spouseName === npc.name && LIFE.state.age >= 22) {
             romOptions.push({ text: "Want to start a family?", effects: { happiness: 5 }, rep: 5, haveKid: true });
         }
-        LIFE.dialogue.open(speakerName, romDlg.text, romOptions, false);
+        LIFE.dialogue.open(speakerName, romDlg.text, addGoodbye(romOptions), false);
         LIFE.state.romanceLevel = Math.min(100, LIFE.state.romanceLevel + romDlg.romance * 0.3);
         return;
     }
@@ -817,34 +850,30 @@ LIFE.dialogue.talkToNPC = function(npc) {
     if (relLevel >= 15 && LIFE.NPC_FRIEND_DIALOGUES[type]) {
         var friendDlgs = LIFE.NPC_FRIEND_DIALOGUES[type];
         var fdlg = friendDlgs[Math.floor(Math.random() * friendDlgs.length)];
+        var fOpts = fdlg.options.slice();
         // add flirt options to friend dialogues too
         if (LIFE.canFlirtWith(npc)) {
-            var fOpts = fdlg.options.slice();
             LIFE.getFlirtOptions(npc.name).forEach(function(fo) { fOpts.push(fo); });
-            LIFE.dialogue.open(speakerName, fdlg.text, fOpts, false);
-        } else {
-            LIFE.dialogue.open(speakerName, fdlg.text, fdlg.options, false);
         }
+        LIFE.dialogue.open(speakerName, fdlg.text, addGoodbye(fOpts), false);
         return;
     }
 
     // default dialogues by type
     var dialogues = LIFE.NPC_DIALOGUES[type];
     if (!dialogues || dialogues.length === 0) {
-        dialogues = [{ text: "...", options: [{ text: "Wave and smile", effects: { charisma: 1 }, rep: 1 }, { text: "Walk away", effects: {} }] }];
+        dialogues = [{ text: "...", options: [{ text: "Wave and smile", effects: { charisma: 1 }, rep: 1 }] }];
     }
 
     var dlg = dialogues[Math.floor(Math.random() * dialogues.length)];
+    var finalOpts = dlg.options.slice();
 
     // add flirt options to eligible NPCs
     if (LIFE.canFlirtWith(npc)) {
-        var modOptions = dlg.options.slice();
-        LIFE.getFlirtOptions(npc.name).forEach(function(fo) { modOptions.push(fo); });
-        LIFE.dialogue.open(speakerName, dlg.text, modOptions, false);
-        return;
+        LIFE.getFlirtOptions(npc.name).forEach(function(fo) { finalOpts.push(fo); });
     }
 
-    LIFE.dialogue.open(speakerName, dlg.text, dlg.options, false);
+    LIFE.dialogue.open(speakerName, dlg.text, addGoodbye(finalOpts), false);
 };
 
 // Child naming dialogue
@@ -987,6 +1016,96 @@ LIFE.NPC_DIALOGUES['Nurse'] = [
         { text: "Do I have to?", effects: { health: 2, happiness: -1 }, rep: -1 }
     ]}
 ];
+
+// ============================================================
+// SKYRIM-STYLE CONVERSATION CONTINUATION
+// ============================================================
+LIFE.dialogue.continueConversation = function() {
+    var npc = LIFE.dialogue.npc;
+    if (!npc || !npc.alive) { LIFE.dialogue.close(); return; }
+
+    var type = npc.type;
+    var speakerName = npc.name || type;
+
+    // gather all available dialogues for this NPC
+    var pool = [];
+    var dialogues = LIFE.NPC_DIALOGUES[type];
+    if (dialogues) {
+        for (var i = 0; i < dialogues.length; i++) pool.push(dialogues[i]);
+    }
+
+    // add friend dialogues if relationship is high
+    var rel = LIFE.state.relationships[npc.name];
+    var relLevel = rel ? rel.level : 0;
+    if (relLevel >= 15 && LIFE.NPC_FRIEND_DIALOGUES[type]) {
+        var fDlgs = LIFE.NPC_FRIEND_DIALOGUES[type];
+        for (var j = 0; j < fDlgs.length; j++) pool.push(fDlgs[j]);
+    }
+
+    // romance partner gets romance dialogues
+    if (LIFE.state.romanceTarget === npc.name && LIFE.state.romanceLevel >= 30) {
+        var romDlg = LIFE.ROMANCE_DIALOGUES[Math.floor(Math.random() * LIFE.ROMANCE_DIALOGUES.length)];
+        pool.push({
+            text: romDlg.text,
+            options: [
+                { text: "I feel the same way!", effects: { happiness: 5 }, rep: 3 },
+                { text: "You're so sweet!", effects: { happiness: 3, charisma: 1 }, rep: 2 }
+            ]
+        });
+    }
+
+    if (pool.length === 0) {
+        LIFE.dialogue.close();
+        return;
+    }
+
+    // pick a random dialogue from pool
+    var dlg = pool[Math.floor(Math.random() * pool.length)];
+
+    // build options from the chosen dialogue
+    var options = [];
+    for (var k = 0; k < dlg.options.length; k++) {
+        options.push(dlg.options[k]);
+    }
+
+    // add flirt options if eligible
+    if (LIFE.canFlirtWith(npc)) {
+        var flirtOpts = LIFE.getFlirtOptions(npc.name);
+        options.push(flirtOpts[0]);
+    }
+
+    // add propose/kids options if romantic partner
+    if (LIFE.state.romanceLevel >= 70 && !LIFE.state.married &&
+        LIFE.state.age >= 20 && LIFE.state.romanceTarget === npc.name) {
+        options.push({ text: "Will you marry me? ($3,000)", effects: { happiness: 15 }, rep: 10, cost: 3000, marry: npc.name });
+    }
+    if (LIFE.state.married && LIFE.state.spouseName === npc.name && LIFE.state.age >= 22) {
+        options.push({ text: "Want to start a family?", effects: { happiness: 5 }, rep: 5, haveKid: true });
+    }
+
+    // always add goodbye option
+    options.push({ text: "[End conversation]", effects: {}, goodbye: true });
+
+    // set up the new dialogue without closing (preserve npc reference)
+    LIFE.dialogue.active = true;
+    LIFE.dialogue.blocking = false;
+    LIFE.dialogue.showing = 'npc';
+    LIFE.dialogue.current = { speaker: speakerName, text: dlg.text, options: options, isDecision: false };
+    LIFE.dialogue.fullText = dlg.text;
+    LIFE.dialogue.displayText = '';
+    LIFE.dialogue.textIndex = 0;
+    LIFE.dialogue.textTimer = 0;
+    LIFE.dialogue.selectedOption = -1;
+    LIFE.dialogue.responseTimer = 0;
+
+    var el = LIFE.dialogue.elements;
+    el.name.textContent = speakerName;
+    el.name.style.color = '#4fc3f7';
+    el.text.textContent = '';
+    el.options.innerHTML = '';
+    el.options.style.display = 'none';
+    el.response.style.display = 'none';
+};
 
 LIFE.dialogue.triggerDecision = function(age) {
     var dec = LIFE.DECISIONS[age];
