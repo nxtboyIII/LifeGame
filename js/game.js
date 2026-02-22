@@ -2809,6 +2809,7 @@ LIFE.animate = function() {
             LIFE.economy.passiveIncome(dt);
             LIFE.updatePlayer(dt);
             LIFE.updateNPCs(dt);
+            LIFE.pathfinding.updateCache(dt);
             LIFE.updatePolice(dt);
             LIFE.updateBullets(dt);
             LIFE.updateActionAnim(dt);
@@ -2914,6 +2915,7 @@ LIFE.animate = function() {
             // allow movement in jail cell
             LIFE.updatePlayer(dt);
             LIFE.updateNPCs(dt);
+            LIFE.pathfinding.updateCache(dt);
             LIFE.updateActionAnim(dt);
             LIFE.updateCamera();
             LIFE.dialogue.update(dt);

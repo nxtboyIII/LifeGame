@@ -461,73 +461,243 @@ LIFE.isInsideCollider = function(x, z) {
 };
 
 // ============================================================
-// NPC PATHFINDING / OBSTACLE AVOIDANCE
+// A* PATHFINDING SYSTEM
 // ============================================================
-// Raycast-style check: is there a collider between point A and point B?
-LIFE.pathBlocked = function(ax, az, bx, bz) {
-    var dx = bx - ax, dz = bz - az;
-    var dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist < 1) return false;
-    var steps = Math.ceil(dist / 1.5); // check every 1.5 units
-    for (var i = 1; i <= steps; i++) {
-        var t = i / steps;
-        var px = ax + dx * t;
-        var pz = az + dz * t;
-        if (LIFE.isInsideCollider(px, pz)) return true;
-    }
-    return false;
+LIFE.pathfinding = {
+    GRID_SIZE: 2,       // world units per grid cell (2 = good balance of precision vs speed)
+    _cache: {},         // path cache keyed by "sx,sz>ex,ez"
+    _cacheTimer: 0,
+    CACHE_LIFETIME: 10  // seconds before cache expires
 };
 
-// Find a clear target for NPC, avoiding colliders in the path
-LIFE.findClearTarget = function(npc, centerX, centerZ, radius) {
-    var npcX = npc.char.group.position.x;
-    var npcZ = npc.char.group.position.z;
-    // Try up to 8 random targets, pick first one with clear path
-    for (var i = 0; i < 8; i++) {
-        var tx = centerX + (Math.random() - 0.5) * radius * 2;
-        var tz = centerZ + (Math.random() - 0.5) * radius * 2;
-        if (!LIFE.isInsideCollider(tx, tz) && !LIFE.pathBlocked(npcX, npcZ, tx, tz)) {
-            return { x: tx, z: tz };
+// Check if a world position is walkable (not inside a collider, with margin)
+LIFE.pathfinding.isWalkable = function(wx, wz) {
+    var margin = 0.8; // NPC body radius margin
+    for (var i = 0; i < LIFE.colliders.length; i++) {
+        var c = LIFE.colliders[i];
+        if (wx > c.minX - margin && wx < c.maxX + margin && wz > c.minZ - margin && wz < c.maxZ + margin) return false;
+    }
+    return true;
+};
+
+// Convert world coords to grid coords
+LIFE.pathfinding.worldToGrid = function(wx, wz) {
+    var gs = LIFE.pathfinding.GRID_SIZE;
+    return { gx: Math.round(wx / gs), gz: Math.round(wz / gs) };
+};
+
+// Convert grid coords to world coords
+LIFE.pathfinding.gridToWorld = function(gx, gz) {
+    var gs = LIFE.pathfinding.GRID_SIZE;
+    return { wx: gx * gs, wz: gz * gs };
+};
+
+// Binary min-heap for A* open set
+LIFE.pathfinding.MinHeap = function() {
+    this.data = [];
+};
+LIFE.pathfinding.MinHeap.prototype.push = function(node) {
+    this.data.push(node);
+    var i = this.data.length - 1;
+    while (i > 0) {
+        var parent = (i - 1) >> 1;
+        if (this.data[parent].f <= this.data[i].f) break;
+        var tmp = this.data[parent]; this.data[parent] = this.data[i]; this.data[i] = tmp;
+        i = parent;
+    }
+};
+LIFE.pathfinding.MinHeap.prototype.pop = function() {
+    var top = this.data[0];
+    var last = this.data.pop();
+    if (this.data.length > 0) {
+        this.data[0] = last;
+        var i = 0;
+        while (true) {
+            var l = 2 * i + 1, r = 2 * i + 2, smallest = i;
+            if (l < this.data.length && this.data[l].f < this.data[smallest].f) smallest = l;
+            if (r < this.data.length && this.data[r].f < this.data[smallest].f) smallest = r;
+            if (smallest === i) break;
+            var t = this.data[i]; this.data[i] = this.data[smallest]; this.data[smallest] = t;
+            i = smallest;
         }
     }
-    // Fallback: just find a non-collider spot (old behavior)
-    for (var j = 0; j < 5; j++) {
-        var fx = centerX + (Math.random() - 0.5) * radius * 2;
-        var fz = centerZ + (Math.random() - 0.5) * radius * 2;
-        if (!LIFE.isInsideCollider(fx, fz)) return { x: fx, z: fz };
-    }
-    return { x: centerX, z: centerZ };
+    return top;
 };
+LIFE.pathfinding.MinHeap.prototype.isEmpty = function() { return this.data.length === 0; };
 
-// Steer NPC around obstacle: when stuck, try perpendicular directions
-LIFE.steerAroundObstacle = function(npc, targetX, targetZ) {
-    var nx = npc.char.group.position.x;
-    var nz = npc.char.group.position.z;
-    var dx = targetX - nx;
-    var dz = targetZ - nz;
-    var dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist < 0.5) return null;
+// A* algorithm - returns array of {x, z} world positions, or null if no path
+LIFE.pathfinding.findPath = function(startX, startZ, endX, endZ) {
+    var pf = LIFE.pathfinding;
+    var gs = pf.GRID_SIZE;
 
-    // Normalize direction
-    var ndx = dx / dist;
-    var ndz = dz / dist;
+    // Check cache
+    var cacheKey = Math.round(startX/gs) + ',' + Math.round(startZ/gs) + '>' + Math.round(endX/gs) + ',' + Math.round(endZ/gs);
+    if (pf._cache[cacheKey]) return pf._cache[cacheKey].slice();
 
-    // Try perpendicular directions (left and right of target direction)
-    var perpDist = 5 + Math.random() * 5; // steer 5-10 units to the side
-    var candidates = [
-        { x: nx - ndz * perpDist, z: nz + ndx * perpDist }, // left
-        { x: nx + ndz * perpDist, z: nz - ndx * perpDist }, // right
-        { x: nx - ndz * perpDist + ndx * 3, z: nz + ndx * perpDist + ndz * 3 }, // left-forward
-        { x: nx + ndz * perpDist + ndx * 3, z: nz - ndx * perpDist + ndz * 3 }  // right-forward
+    var start = pf.worldToGrid(startX, startZ);
+    var end = pf.worldToGrid(endX, endZ);
+
+    // Early out: if end is not walkable, find nearest walkable spot
+    var endW = pf.gridToWorld(end.gx, end.gz);
+    if (!pf.isWalkable(endW.wx, endW.wz)) {
+        // Spiral search for nearest walkable cell
+        for (var r = 1; r <= 5; r++) {
+            for (var dx = -r; dx <= r; dx++) {
+                for (var dz = -r; dz <= r; dz++) {
+                    if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue;
+                    var tw = pf.gridToWorld(end.gx + dx, end.gz + dz);
+                    if (pf.isWalkable(tw.wx, tw.wz)) {
+                        end = { gx: end.gx + dx, gz: end.gz + dz };
+                        r = 999; // break outer
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // If start === end, no path needed
+    if (start.gx === end.gx && start.gz === end.gz) return [{ x: endX, z: endZ }];
+
+    var open = new pf.MinHeap();
+    var closed = {};
+    var cameFrom = {};
+
+    var heuristic = function(gx, gz) {
+        return Math.abs(gx - end.gx) + Math.abs(gz - end.gz); // Manhattan distance
+    };
+
+    var startKey = start.gx + ',' + start.gz;
+    open.push({ gx: start.gx, gz: start.gz, g: 0, f: heuristic(start.gx, start.gz), key: startKey });
+
+    var maxIterations = 400; // limit to prevent lag
+    var iterations = 0;
+
+    // 8-directional neighbors
+    var dirs = [
+        { dx: 1, dz: 0, cost: 1 }, { dx: -1, dz: 0, cost: 1 },
+        { dx: 0, dz: 1, cost: 1 }, { dx: 0, dz: -1, cost: 1 },
+        { dx: 1, dz: 1, cost: 1.414 }, { dx: -1, dz: 1, cost: 1.414 },
+        { dx: 1, dz: -1, cost: 1.414 }, { dx: -1, dz: -1, cost: 1.414 }
     ];
 
-    for (var i = 0; i < candidates.length; i++) {
-        var c = candidates[i];
-        if (!LIFE.isInsideCollider(c.x, c.z) && !LIFE.pathBlocked(nx, nz, c.x, c.z)) {
-            return c;
+    while (!open.isEmpty() && iterations < maxIterations) {
+        iterations++;
+        var current = open.pop();
+
+        if (current.gx === end.gx && current.gz === end.gz) {
+            // Reconstruct path
+            var path = [];
+            var key = current.key;
+            while (key && key !== startKey) {
+                var parts = key.split(',');
+                var w = pf.gridToWorld(parseInt(parts[0]), parseInt(parts[1]));
+                path.unshift({ x: w.wx, z: w.wz });
+                key = cameFrom[key];
+            }
+            // Simplify path: remove intermediate points that are in a straight unblocked line
+            path = pf.simplifyPath(path);
+            // Add exact end position as final waypoint
+            if (path.length > 0) {
+                path[path.length - 1] = { x: endX, z: endZ };
+            } else {
+                path.push({ x: endX, z: endZ });
+            }
+            // Cache the path
+            pf._cache[cacheKey] = path.slice();
+            return path;
+        }
+
+        closed[current.key] = true;
+
+        for (var d = 0; d < dirs.length; d++) {
+            var ngx = current.gx + dirs[d].dx;
+            var ngz = current.gz + dirs[d].dz;
+            var nKey = ngx + ',' + ngz;
+
+            if (closed[nKey]) continue;
+
+            var nw = pf.gridToWorld(ngx, ngz);
+            if (!pf.isWalkable(nw.wx, nw.wz)) {
+                closed[nKey] = true;
+                continue;
+            }
+
+            // For diagonal moves, check that both adjacent cardinal cells are walkable (corner cutting prevention)
+            if (dirs[d].dx !== 0 && dirs[d].dz !== 0) {
+                var c1 = pf.gridToWorld(current.gx + dirs[d].dx, current.gz);
+                var c2 = pf.gridToWorld(current.gx, current.gz + dirs[d].dz);
+                if (!pf.isWalkable(c1.wx, c1.wz) || !pf.isWalkable(c2.wx, c2.wz)) continue;
+            }
+
+            var ng = current.g + dirs[d].cost;
+            var nf = ng + heuristic(ngx, ngz);
+            open.push({ gx: ngx, gz: ngz, g: ng, f: nf, key: nKey });
+            if (!cameFrom[nKey] || ng < (cameFrom[nKey + '_g'] || Infinity)) {
+                cameFrom[nKey] = current.key;
+                cameFrom[nKey + '_g'] = ng;
+            }
         }
     }
-    return null; // couldn't find a way around
+
+    return null; // no path found
+};
+
+// Simplify path by removing collinear waypoints
+LIFE.pathfinding.simplifyPath = function(path) {
+    if (path.length <= 2) return path;
+    var simplified = [path[0]];
+    for (var i = 1; i < path.length - 1; i++) {
+        var prev = simplified[simplified.length - 1];
+        var next = path[i + 1];
+        // Check if we can go directly from prev to next without hitting anything
+        if (LIFE.pathfinding.lineWalkable(prev.x, prev.z, next.x, next.z)) {
+            continue; // skip this intermediate point
+        }
+        simplified.push(path[i]);
+    }
+    simplified.push(path[path.length - 1]);
+    return simplified;
+};
+
+// Check if a straight line between two points is walkable
+LIFE.pathfinding.lineWalkable = function(ax, az, bx, bz) {
+    var dx = bx - ax, dz = bz - az;
+    var dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < 1) return true;
+    var steps = Math.ceil(dist / 1.0); // check every 1 unit
+    for (var i = 1; i <= steps; i++) {
+        var t = i / steps;
+        if (!LIFE.pathfinding.isWalkable(ax + dx * t, az + dz * t)) return false;
+    }
+    return true;
+};
+
+// Clean cache periodically
+LIFE.pathfinding.updateCache = function(dt) {
+    LIFE.pathfinding._cacheTimer += dt;
+    if (LIFE.pathfinding._cacheTimer > LIFE.pathfinding.CACHE_LIFETIME) {
+        LIFE.pathfinding._cache = {};
+        LIFE.pathfinding._cacheTimer = 0;
+    }
+};
+
+// Get next waypoint for NPC to follow their path
+LIFE.pathfinding.followPath = function(npc) {
+    if (!npc._path || npc._pathIdx >= npc._path.length) return null;
+    var wp = npc._path[npc._pathIdx];
+    var dx = wp.x - npc.char.group.position.x;
+    var dz = wp.z - npc.char.group.position.z;
+    var dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < 1.5) {
+        npc._pathIdx++;
+        if (npc._pathIdx >= npc._path.length) {
+            npc._path = null;
+            return null;
+        }
+        return npc._path[npc._pathIdx];
+    }
+    return wp;
 };
 
 LIFE.updateNPCHealthBar = function(npc) {
@@ -888,26 +1058,62 @@ LIFE.updateNPCs = function(dt) {
         if (npc.fleeing && npc.fleeTimer > 0) {
             npc.fleeTimer -= dt;
             if (player) {
-                var fdx = npc.char.group.position.x - player.group.position.x;
-                var fdz = npc.char.group.position.z - player.group.position.z;
-                var fdist = Math.sqrt(fdx * fdx + fdz * fdz);
-                if (fdist > 0.5) {
-                    var fs = 4 * dt; // flee fast
-                    npc.char.group.position.x += (fdx / fdist) * fs;
-                    npc.char.group.position.z += (fdz / fdist) * fs;
-                    npc.char.group.rotation.y = Math.atan2(-fdx, -fdz);
-                    npc.walkTime += dt * 12;
-                    var fswing = Math.sin(npc.walkTime) * 0.6;
-                    npc.char.parts.leftLeg.rotation.x = fswing;
-                    npc.char.parts.rightLeg.rotation.x = -fswing;
-                    npc.char.parts.leftArm.rotation.x = -fswing * 0.5;
-                    npc.char.parts.rightArm.rotation.x = fswing * 0.5;
+                var fPos = npc.char.group.position;
+                var fprevX = fPos.x, fprevZ = fPos.z;
+                // If NPC has a flee path, follow waypoints
+                if (npc._fleePath && npc._fleePathIdx < npc._fleePath.length) {
+                    var fwp = npc._fleePath[npc._fleePathIdx];
+                    var fwdx = fwp.x - fPos.x, fwdz = fwp.z - fPos.z;
+                    var fwdist = Math.sqrt(fwdx * fwdx + fwdz * fwdz);
+                    if (fwdist < 1.5) {
+                        npc._fleePathIdx++;
+                        if (npc._fleePathIdx >= npc._fleePath.length) npc._fleePath = null;
+                    } else {
+                        var ffs = 4 * dt;
+                        fPos.x += (fwdx / fwdist) * ffs;
+                        fPos.z += (fwdz / fwdist) * ffs;
+                        npc.char.group.rotation.y = Math.atan2(fwdx, fwdz);
+                    }
+                } else {
+                    // Direct flee away from player
+                    var fdx = fPos.x - player.group.position.x;
+                    var fdz = fPos.z - player.group.position.z;
+                    var fdist = Math.sqrt(fdx * fdx + fdz * fdz);
+                    if (fdist > 0.5) {
+                        var fs = 4 * dt;
+                        fPos.x += (fdx / fdist) * fs;
+                        fPos.z += (fdz / fdist) * fs;
+                        npc.char.group.rotation.y = Math.atan2(-fdx, -fdz);
+                    }
+                }
+                npc.walkTime += dt * 12;
+                var fswing = Math.sin(npc.walkTime) * 0.6;
+                npc.char.parts.leftLeg.rotation.x = fswing;
+                npc.char.parts.rightLeg.rotation.x = -fswing;
+                npc.char.parts.leftArm.rotation.x = -fswing * 0.5;
+                npc.char.parts.rightArm.rotation.x = fswing * 0.5;
+                LIFE._clampNPCBounds(npc);
+                LIFE.resolveCollisions(fPos);
+                // If stuck while fleeing, compute a flee path around obstacles
+                if (Math.abs(fPos.x - fprevX) < 0.01 && Math.abs(fPos.z - fprevZ) < 0.01 && !npc._fleePath) {
+                    var fleeDir = Math.atan2(fPos.z - player.group.position.z, fPos.x - player.group.position.x);
+                    // Try a flee target 15 units away from player, offset sideways if blocked
+                    var fleeTX = fPos.x + Math.cos(fleeDir) * 15;
+                    var fleeTZ = fPos.z + Math.sin(fleeDir) * 15;
+                    var fleePath = LIFE.pathfinding.findPath(fPos.x, fPos.z, fleeTX, fleeTZ);
+                    if (!fleePath) {
+                        // Try a different angle
+                        fleeTX = fPos.x + Math.cos(fleeDir + 1.2) * 12;
+                        fleeTZ = fPos.z + Math.sin(fleeDir + 1.2) * 12;
+                        fleePath = LIFE.pathfinding.findPath(fPos.x, fPos.z, fleeTX, fleeTZ);
+                    }
+                    if (fleePath && fleePath.length > 0) {
+                        npc._fleePath = fleePath;
+                        npc._fleePathIdx = 0;
+                    }
                 }
             }
-            if (npc.fleeTimer <= 0) npc.fleeing = false;
-            // clamp to bounds and collisions
-            LIFE._clampNPCBounds(npc);
-            LIFE.resolveCollisions(npc.char.group.position);
+            if (npc.fleeTimer <= 0) { npc.fleeing = false; npc._fleePath = null; }
             return;
         }
 
@@ -959,13 +1165,11 @@ LIFE.updateNPCs = function(dt) {
             return;
         }
 
-        // NPCs walk faster in rain/storm to seek shelter
+        // Weather speed modifier applied during movement below
+        var _weatherSpeedMul = 1;
         if (LIFE.weather && (LIFE.weather.current === 'rain' || LIFE.weather.current === 'storm')) {
-            if (!npc.stayNear && npc.speed > 0 && !npc.waiting) {
-                // speed up walking in bad weather
-                var weatherBoost = LIFE.weather.current === 'storm' ? 1.6 : 1.3;
-                npc.char.group.position.x += (dx / dist) * npc.speed * weatherBoost * dt * 0.3;
-                npc.char.group.position.z += (dz / dist) * npc.speed * weatherBoost * dt * 0.3;
+            if (!npc.stayNear && npc.speed > 0) {
+                _weatherSpeedMul = LIFE.weather.current === 'storm' ? 1.6 : 1.3;
             }
         }
 
@@ -975,11 +1179,16 @@ LIFE.updateNPCs = function(dt) {
             var adz = player.group.position.z - npc.char.group.position.z;
             var adist = Math.sqrt(adx * adx + adz * adz);
             if (adist > 3 && adist < 15) {
-                npc.target.set(
-                    player.group.position.x + (Math.random() - 0.5) * 3,
-                    0,
-                    player.group.position.z + (Math.random() - 0.5) * 3
-                );
+                var approachX = player.group.position.x + (Math.random() - 0.5) * 3;
+                var approachZ = player.group.position.z + (Math.random() - 0.5) * 3;
+                var approachPath = LIFE.pathfinding.findPath(npc.char.group.position.x, npc.char.group.position.z, approachX, approachZ);
+                if (approachPath && approachPath.length > 0) {
+                    npc._path = approachPath;
+                    npc._pathIdx = 0;
+                    npc.target.set(approachPath[0].x, 0, approachPath[0].z);
+                } else {
+                    npc.target.set(approachX, 0, approachZ);
+                }
                 npc.waiting = false;
             }
         }
@@ -1059,10 +1268,9 @@ LIFE.updateNPCs = function(dt) {
                         tx = npc._zoneCenter.x + (Math.random()-0.5)*zr*2;
                         tz = npc._zoneCenter.z + (Math.random()-0.5)*zr*2;
                         tries++;
-                    } while (tries < 10);
+                    } while (LIFE.isInsideCollider(tx, tz) && tries < 10);
                 } else {
                     var b = bounds * 0.6;
-                    // Get interior center offset if in a world-positioned interior
                     var icx = 0, icz = 0;
                     if (LIFE.world.built && LIFE.world.insideInterior && LIFE.world.INTERIOR_POSITIONS) {
                         var ip = LIFE.world.INTERIOR_POSITIONS[LIFE.world.insideInterior];
@@ -1074,41 +1282,113 @@ LIFE.updateNPCs = function(dt) {
                         tries++;
                     } while (LIFE.isInsideCollider(tx, tz) && tries < 10);
                 }
-                npc.target.set(tx, 0, tz);
+                // Use A* pathfinding to find a path around obstacles
+                var npcPos = npc.char.group.position;
+                var path = LIFE.pathfinding.findPath(npcPos.x, npcPos.z, tx, tz);
+                if (path && path.length > 0) {
+                    npc._path = path;
+                    npc._pathIdx = 0;
+                    npc.target.set(path[0].x, 0, path[0].z);
+                } else {
+                    // No path found, walk straight (fallback)
+                    npc._path = null;
+                    npc.target.set(tx, 0, tz);
+                }
                 npc.waiting = false;
             }
             return;
         }
+        // Follow A* path waypoints if available
+        var moveTarget = npc.target;
+        if (npc._path && npc._pathIdx < npc._path.length) {
+            var wp = LIFE.pathfinding.followPath(npc);
+            if (wp) {
+                moveTarget = wp; // current waypoint
+                npc.target.set(wp.x, 0, wp.z);
+            } else {
+                // Path complete
+                npc._path = null;
+                npc.waiting = true;
+                npc.waitTimer = 2 + Math.random() * 4;
+                return;
+            }
+        }
         var dx = npc.target.x - npc.char.group.position.x;
         var dz = npc.target.z - npc.char.group.position.z;
         var dist = Math.sqrt(dx*dx+dz*dz);
-        if (dist < 0.5) { npc.waiting = true; npc.waitTimer = 2+Math.random()*4; return; }
-        var s = npc.speed * dt;
+        if (dist < 0.5) {
+            // Reached current waypoint/target
+            if (npc._path && npc._pathIdx < npc._path.length) {
+                npc._pathIdx++;
+                if (npc._pathIdx >= npc._path.length) {
+                    npc._path = null;
+                    npc.waiting = true; npc.waitTimer = 2+Math.random()*4;
+                }
+                return;
+            }
+            npc.waiting = true; npc.waitTimer = 2+Math.random()*4; return;
+        }
+        var s = npc.speed * _weatherSpeedMul * dt;
         var prevX = npc.char.group.position.x;
         var prevZ = npc.char.group.position.z;
         npc.char.group.position.x += (dx/dist)*s; npc.char.group.position.z += (dz/dist)*s;
         npc.char.group.rotation.y = Math.atan2(dx, dz);
-        npc.walkTime += dt * npc.speed * 3;
+        npc.walkTime += dt * npc.speed * _weatherSpeedMul * 3;
         var swing = Math.sin(npc.walkTime) * 0.4;
         npc.char.parts.leftLeg.rotation.x = swing; npc.char.parts.rightLeg.rotation.x = -swing;
         npc.char.parts.leftArm.rotation.x = -swing*0.6; npc.char.parts.rightArm.rotation.x = swing*0.6;
         LIFE._clampNPCBounds(npc);
-        // collision check - if NPC hits a building, push back and pick a new target
         LIFE.resolveCollisions(npc.char.group.position);
+        // Stuck detection — if barely moved, try A* reroute
         if (Math.abs(npc.char.group.position.x - prevX) < s * 0.1 && Math.abs(npc.char.group.position.z - prevZ) < s * 0.1 && s > 0.001) {
-            // NPC got stuck on a collider, pick a new target
-            if (LIFE.world.built && !LIFE.world.insideInterior && npc._zoneCenter) {
-                var zrr = (npc._zoneRadius || 30) * 0.6;
-                npc.target.set(npc._zoneCenter.x + (Math.random()-0.5)*zrr*2, 0, npc._zoneCenter.z + (Math.random()-0.5)*zrr*2);
-            } else {
-                var nb = bounds * 0.6;
-                var scx = 0, scz = 0;
-                if (LIFE.world.built && LIFE.world.insideInterior && LIFE.world.INTERIOR_POSITIONS) {
-                    var sip = LIFE.world.INTERIOR_POSITIONS[LIFE.world.insideInterior];
-                    if (sip) { scx = sip.x; scz = sip.z; }
+            npc._stuckCount = (npc._stuckCount || 0) + 1;
+            if (npc._stuckCount > 3) {
+                // NPC is truly stuck - try A* pathfinding to reroute
+                npc._stuckCount = 0;
+                var stuckPos = npc.char.group.position;
+                var finalTarget;
+                if (npc._path && npc._path.length > 0) {
+                    // Try to reach the final destination of the current path
+                    var lastWp = npc._path[npc._path.length - 1];
+                    finalTarget = { x: lastWp.x, z: lastWp.z };
+                } else {
+                    finalTarget = { x: npc.target.x, z: npc.target.z };
                 }
-                npc.target.set(scx + (Math.random()-0.5)*nb*2, 0, scz + (Math.random()-0.5)*nb*2);
+                var reroute = LIFE.pathfinding.findPath(stuckPos.x, stuckPos.z, finalTarget.x, finalTarget.z);
+                if (reroute && reroute.length > 0) {
+                    npc._path = reroute;
+                    npc._pathIdx = 0;
+                    npc.target.set(reroute[0].x, 0, reroute[0].z);
+                } else {
+                    // Can't reroute — pick completely new random target
+                    npc._path = null;
+                    var ntx, ntz;
+                    if (LIFE.world.built && !LIFE.world.insideInterior && npc._zoneCenter) {
+                        var zrr = (npc._zoneRadius || 30) * 0.6;
+                        ntx = npc._zoneCenter.x + (Math.random()-0.5)*zrr*2;
+                        ntz = npc._zoneCenter.z + (Math.random()-0.5)*zrr*2;
+                    } else {
+                        var nb = bounds * 0.6;
+                        var scx = 0, scz = 0;
+                        if (LIFE.world.built && LIFE.world.insideInterior && LIFE.world.INTERIOR_POSITIONS) {
+                            var sip = LIFE.world.INTERIOR_POSITIONS[LIFE.world.insideInterior];
+                            if (sip) { scx = sip.x; scz = sip.z; }
+                        }
+                        ntx = scx + (Math.random()-0.5)*nb*2;
+                        ntz = scz + (Math.random()-0.5)*nb*2;
+                    }
+                    var newPath = LIFE.pathfinding.findPath(stuckPos.x, stuckPos.z, ntx, ntz);
+                    if (newPath && newPath.length > 0) {
+                        npc._path = newPath;
+                        npc._pathIdx = 0;
+                        npc.target.set(newPath[0].x, 0, newPath[0].z);
+                    } else {
+                        npc.target.set(ntx, 0, ntz);
+                    }
+                }
             }
+        } else {
+            npc._stuckCount = 0;
         }
 
         // hiring managers stay near their building

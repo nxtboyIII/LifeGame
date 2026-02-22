@@ -136,4 +136,6 @@ LIFE.clearEnvironment = function() {
     LIFE.envObjects.forEach(obj => LIFE.scene.remove(obj));
     LIFE.envObjects = [];
     LIFE.colliders = [];
+    // Clear pathfinding cache since colliders changed
+    if (LIFE.pathfinding) LIFE.pathfinding._cache = {};
 };
