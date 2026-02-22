@@ -500,10 +500,12 @@ LIFE.buildClassroom = function() {
     bCtx.font = '20px Arial';
     bCtx.fillText('ABC  123  + - x', 128, 90);
     var boardTex = new THREE.CanvasTexture(boardCanvas);
-    var boardSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: boardTex, transparent: true }));
-    boardSprite.position.set(0, 2.2, -4.7);
-    boardSprite.scale.set(4.5, 2, 1);
-    LIFE.addEnv(boardSprite);
+    var boardPlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(4.5, 2),
+        new THREE.MeshBasicMaterial({ map: boardTex, transparent: true })
+    );
+    boardPlane.position.set(0, 2.2, -4.7);
+    LIFE.addEnv(boardPlane);
     // teacher desk
     LIFE.addSolid(2.5, 0.8, 1, 0x5d4037, 0, 0.4, -3.5);
     // student desks (3 rows of 3)
@@ -562,10 +564,12 @@ LIFE.buildHSClassroom = function() {
     wCtx.font = '16px Arial';
     wCtx.fillText('Homework due Friday', 128, 80);
     var wbTex = new THREE.CanvasTexture(wbCanvas);
-    var wbSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: wbTex, transparent: true }));
-    wbSprite.position.set(0, 2.5, -5.7);
-    wbSprite.scale.set(5.5, 2.3, 1);
-    LIFE.addEnv(wbSprite);
+    var wbPlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(5.5, 2.3),
+        new THREE.MeshBasicMaterial({ map: wbTex, transparent: true })
+    );
+    wbPlane.position.set(0, 2.5, -5.7);
+    LIFE.addEnv(wbPlane);
     // teacher desk
     LIFE.addSolid(3, 0.8, 1.2, 0x5d4037, -3, 0.4, -4);
     // student desks (4 rows of 4)

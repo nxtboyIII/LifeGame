@@ -27,6 +27,11 @@ LIFE.performAction = function(idx) {
                 var pushDir = new THREE.Vector3(dx, 0, dz).normalize();
                 npc.char.group.position.x += pushDir.x * 1.5;
                 npc.char.group.position.z += pushDir.z * 1.5;
+                // clamp to bounds and resolve wall collisions
+                var jb = state.bounds;
+                npc.char.group.position.x = Math.max(-jb, Math.min(jb, npc.char.group.position.x));
+                npc.char.group.position.z = Math.max(-jb, Math.min(jb, npc.char.group.position.z));
+                LIFE.resolveCollisions(npc.char.group.position);
                 if (jailDmg > 0) LIFE.damageNPC(npc, jailDmg);
                 npc.reacting = 1.5;
                 setTimeout(function() {
@@ -88,6 +93,11 @@ LIFE.performAction = function(idx) {
                 var pushDir = new THREE.Vector3(dx, 0, dz).normalize();
                 npc.char.group.position.x += pushDir.x * 2;
                 npc.char.group.position.z += pushDir.z * 2;
+                // clamp to bounds and resolve wall collisions
+                var kb = state.bounds;
+                npc.char.group.position.x = Math.max(-kb, Math.min(kb, npc.char.group.position.x));
+                npc.char.group.position.z = Math.max(-kb, Math.min(kb, npc.char.group.position.z));
+                LIFE.resolveCollisions(npc.char.group.position);
                 LIFE.sounds.punch();
 
                 // age-based damage
@@ -106,29 +116,43 @@ LIFE.performAction = function(idx) {
                     npc.type === 'Spouse' || npc.type === 'Your Child');
                 var isVulnerable = (npc.type === 'Kid' || npc.type === 'Grandchild');
 
-                // wanted level - harsher for family/kids
+                // wanted level - scaled by age and target
+                var isChild = state.age < 13;
+                var hasWeapon = equipped === 'Switchblade';
                 if (npc.isPolice) {
                     LIFE.addWanted(2);
                 } else if (isFamily) {
-                    LIFE.addWanted(2);
+                    LIFE.addWanted(isChild && !hasWeapon ? 1 : 2);
                 } else if (isVulnerable) {
-                    LIFE.addWanted(2);
+                    LIFE.addWanted(isChild && !hasWeapon ? 0 : 2);
                 } else {
-                    LIFE.addWanted(1);
+                    LIFE.addWanted(isChild && !hasWeapon ? 0 : 1);
                 }
 
-                // reputation - family violence is devastating
+                // reputation - kids fighting is normal, weapons/family violence is serious
                 var repLoss = -5;
-                if (isFamily) {
-                    repLoss = -20;
-                    state.stats.happiness = Math.max(0, state.stats.happiness - 8);
-                    state.stats.charisma = Math.max(0, state.stats.charisma - 2);
-                    // family trauma flag
-                    if (!state.familyAbuser) state.familyAbuser = true;
-                }
-                if (isVulnerable) {
-                    repLoss = -25;
-                    state.stats.happiness = Math.max(0, state.stats.happiness - 5);
+                if (isChild && !hasWeapon) {
+                    // kids fighting kids/others without weapons - minor rep hit
+                    repLoss = -1;
+                    if (isFamily) {
+                        repLoss = -5;
+                        state.stats.happiness = Math.max(0, state.stats.happiness - 3);
+                        if (!state.familyAbuser) state.familyAbuser = true;
+                    } else if (isVulnerable) {
+                        repLoss = -2;
+                    }
+                } else {
+                    // adults or anyone with weapons
+                    if (isFamily) {
+                        repLoss = -20;
+                        state.stats.happiness = Math.max(0, state.stats.happiness - 8);
+                        state.stats.charisma = Math.max(0, state.stats.charisma - 2);
+                        if (!state.familyAbuser) state.familyAbuser = true;
+                    }
+                    if (isVulnerable) {
+                        repLoss = -25;
+                        state.stats.happiness = Math.max(0, state.stats.happiness - 5);
+                    }
                 }
                 state.reputation = Math.max(-100, state.reputation + repLoss);
                 LIFE.ui.showRepChange(repLoss);

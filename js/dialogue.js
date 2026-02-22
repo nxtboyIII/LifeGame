@@ -1138,6 +1138,110 @@ LIFE.dialogue.talkToNPC = function(npc) {
     if (!npc || !npc.alive || LIFE.dialogue.active) return;
     var type = npc.type;
     var speakerName = npc.name || type;
+    var age = LIFE.state.age;
+
+    // BABY (0-1): can't talk, just gestures
+    if (age <= 1) {
+        var babyActions = [
+            { npcText: "Aww, look at you!", options: [
+                { text: "*gurgle*", effects: { happiness: 2 }, rep: 1 },
+                { text: "*stare blankly*", effects: {}, rep: 0 },
+                { text: "*start crying*", effects: { happiness: -1 }, rep: -1, sound: 'cry' }
+            ]},
+            { npcText: "Hey there little one!", options: [
+                { text: "*reach out arms*", effects: { happiness: 2 }, rep: 2 },
+                { text: "*drool*", effects: {}, rep: 0 },
+                { text: "*babble* goo goo", effects: { happiness: 1, charisma: 1 }, rep: 1 }
+            ]},
+            { npcText: "You are so cute!", options: [
+                { text: "*giggle*", effects: { happiness: 3 }, rep: 2 },
+                { text: "*yawn*", effects: {}, rep: 0 },
+                { text: "*wave tiny hand*", effects: { charisma: 1 }, rep: 1 }
+            ]}
+        ];
+        var ba = babyActions[Math.floor(Math.random() * babyActions.length)];
+        LIFE.dialogue.npc = npc;
+        LIFE.dialogue.open(speakerName, ba.npcText, ba.options, false);
+        return;
+    }
+
+    // TODDLER (2-4): broken baby talk
+    if (age >= 2 && age <= 4) {
+        var toddlerActions = [
+            { npcText: "Hey there, little buddy!", options: [
+                { text: "Hi hi!", effects: { happiness: 2, charisma: 1 }, rep: 2 },
+                { text: "Me no wanna talk!", effects: {}, rep: -1 },
+                { text: "*hide behind hands*", effects: { happiness: 1 }, rep: 0 }
+            ]},
+            { npcText: "What are you up to, little one?", options: [
+                { text: "Me playing!", effects: { happiness: 2 }, rep: 1, response: {
+                    text: "That's great! What are you playing?", options: [
+                        { text: "I dunno! Just playing!", effects: { happiness: 2 }, rep: 1 },
+                        { text: "Umm... monsters!", effects: { happiness: 1, charisma: 1 }, rep: 1 }
+                    ]
+                }},
+                { text: "Want cookie!", effects: { happiness: 1 }, rep: 0 },
+                { text: "You smell funny.", effects: { charisma: 1 }, rep: -2 }
+            ]},
+            { npcText: "You're getting so big!", options: [
+                { text: "I big kid now!", effects: { happiness: 2, charisma: 1 }, rep: 2, response: {
+                    text: "Yes you are! Such a big kid!", options: [
+                        { text: "*flex tiny muscles*", effects: { happiness: 2 }, rep: 2 },
+                        { text: "Bigger than you!", effects: { charisma: 1 }, rep: 0 }
+                    ]
+                }},
+                { text: "No! I baby!", effects: { happiness: 1 }, rep: 0 },
+                { text: "*run away giggling*", effects: { happiness: 2, health: 1 }, rep: 1 }
+            ]},
+            { npcText: "Want to play a game?", options: [
+                { text: "Yeah yeah yeah!", effects: { happiness: 3, health: 1 }, rep: 2 },
+                { text: "No! Mine!", effects: { charisma: -1 }, rep: -2 },
+                { text: "Pwease!", effects: { happiness: 2, charisma: 1 }, rep: 2 }
+            ]}
+        ];
+        var ta = toddlerActions[Math.floor(Math.random() * toddlerActions.length)];
+        LIFE.dialogue.npc = npc;
+        LIFE.dialogue.open(speakerName, ta.npcText, ta.options, false);
+        return;
+    }
+
+    // YOUNG KID (5-7): simple kid language - override normal dialogues with simpler versions
+    if (age >= 5 && age <= 7) {
+        // still allow parent-specific dialogues but simplify non-family ones
+        if (type !== 'Mom' && type !== 'Dad' && type !== 'Sibling' && type !== 'Teacher') {
+            var youngKidActions = [
+                { npcText: "Hey kid! What's up?", options: [
+                    { text: "Nothin'! Wanna play?", effects: { happiness: 2, charisma: 1 }, rep: 3, friend: true, response: {
+                        text: "Sure! What do you wanna play?", options: [
+                            { text: "Tag! You're it!", effects: { happiness: 2, health: 1 }, rep: 2 },
+                            { text: "I dunno, you pick!", effects: { happiness: 1 }, rep: 2 }
+                        ]
+                    }},
+                    { text: "Leave me alone!", effects: {}, rep: -3 },
+                    { text: "My mom said don't talk to strangers.", effects: { intelligence: 1 }, rep: 1 }
+                ]},
+                { npcText: "Hi there!", options: [
+                    { text: "Hi! I like your shoes!", effects: { charisma: 2, happiness: 1 }, rep: 3 },
+                    { text: "Do you have any candy?", effects: { happiness: 1 }, rep: 0 },
+                    { text: "Bye bye!", effects: { happiness: 1 }, rep: 1 }
+                ]},
+                { npcText: "Aren't you a little young to be out here?", options: [
+                    { text: "I'm not little! I'm a big kid!", effects: { charisma: 1 }, rep: 1, response: {
+                        text: "Ha! Okay tough guy. Be careful out here!", options: [
+                            { text: "I will!", effects: { happiness: 1 }, rep: 1 },
+                            { text: "You're not my mom!", effects: { charisma: 1 }, rep: -1 }
+                        ]
+                    }},
+                    { text: "My mommy knows I'm here.", effects: { happiness: 1 }, rep: 1 },
+                    { text: "*shrug*", effects: {}, rep: 0 }
+                ]}
+            ];
+            var yka = youngKidActions[Math.floor(Math.random() * youngKidActions.length)];
+            LIFE.dialogue.npc = npc;
+            LIFE.dialogue.open(speakerName, yka.npcText, yka.options, false);
+            return;
+        }
+    }
 
     // HIRING MANAGER NPCs - job application dialogue
     if (npc.isHiring && npc.careerType) {
