@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LIFE - From Womb to Tomb</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="ui">
+    <div id="crosshair"></div>
+    <div id="damageFlash"></div>
+
+    <!-- HUD -->
+    <div id="ageBox">Age<span id="ageNum">0</span></div>
+    <div id="moneyBox"><span id="moneyNum">0</span></div>
+    <div id="careerText"></div>
+
+    <!-- Wanted stars -->
+    <div id="wantedLevel"></div>
+
+    <!-- Player health bar -->
+    <div id="playerHpBar">
+        <div id="playerHpFill"></div>
+        <span id="playerHpText">80</span>
+    </div>
+
+    <!-- Inventory bar -->
+    <div id="inventoryBar"></div>
+
+    <div id="statsBox">
+        <div class="statRow"><span class="statLabel">Intelligence</span><div class="statBar"><div class="statFill int" id="statInt" style="width:5%"></div></div><span class="statVal" id="statIntVal">5</span></div>
+        <div class="statRow"><span class="statLabel">Happiness</span><div class="statBar"><div class="statFill hap" id="statHap" style="width:50%"></div></div><span class="statVal" id="statHapVal">50</span></div>
+        <div class="statRow"><span class="statLabel">Charisma</span><div class="statBar"><div class="statFill cha" id="statCha" style="width:5%"></div></div><span class="statVal" id="statChaVal">5</span></div>
+        <div class="statRow"><span class="statLabel">Health</span><div class="statBar"><div class="statFill hp" id="statHp" style="width:80%"></div></div><span class="statVal" id="statHpVal">80</span></div>
+        <div class="statRow repRow"><span class="statLabel">Reputation</span><div class="repBar"><div class="repCenter"></div><div class="repFill" id="repFill"></div></div><span class="statVal repVal" id="repVal">0</span></div>
+        <div id="repTitle"></div>
+    </div>
+
+    <div id="timerWrap"><div id="timerFill"></div></div>
+    <div id="dateTime"></div>
+    <div id="skipHint">E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info</div>
+
+    <!-- Popups -->
+    <div id="stageText"></div>
+    <div id="actionPopup"></div>
+    <div id="npcHint"></div>
+    <div id="repChange"></div>
+
+    <!-- Actions -->
+    <div id="actions"></div>
+    <div id="weaponIndicator"></div>
+    <div id="controls">WASD: Move | Mouse: Look | Space: Jump | 1-4: Actions | E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info | G: Enter Home</div>
+
+    <!-- Dialogue box -->
+    <div id="dialogueBox">
+        <div id="dlgName"></div>
+        <div id="dlgText"></div>
+        <div id="dlgOptions"></div>
+        <div id="dlgPlayerResponse"></div>
+    </div>
+
+    <!-- Shop -->
+    <div id="shopBox">
+        <h3>SHOP</h3>
+        <div id="shopItems"></div>
+    </div>
+
+    <!-- Friends list -->
+    <div id="friendsList">
+        <h3>RELATIONSHIPS</h3>
+        <div id="friendsContent"></div>
+        <div class="friendsClose">[ESC / F] Close</div>
+    </div>
+
+    <!-- Time Skip panel -->
+    <div id="timeSkip">
+        <h3>TIME SKIP</h3>
+        <div id="timeSkipOptions"></div>
+        <div id="timeSkipSliderWrap">
+            <input type="range" id="skipSlider" min="1" max="180" value="1">
+            <span id="skipSliderLabel">1 day</span>
+            <div class="skipBtn" id="skipSliderBtn">Skip</div>
+        </div>
+        <div class="skipClose" id="timeSkipClose">[R / ESC] Close</div>
+    </div>
+
+    <!-- Jail screen -->
+    <div id="jailScreen">
+        <div id="jailIcon">ARRESTED</div>
+        <div id="jailText"></div>
+        <div id="jailDetails"></div>
+    </div>
+
+    <!-- Start screen -->
+    <div id="clickStart">
+        <h1>LIFE</h1>
+        <p>From Womb to Tomb</p>
+        <div class="sub">Click to Begin Your Life</div>
+    </div>
+
+    <!-- Death screen -->
+    <div id="deathScreen">
+        <h1>THE END</h1>
+        <p>You lived a full life of 80 years.</p>
+        <div id="deathSummary"></div>
+        <button onclick="location.reload()">Live Again</button>
+    </div>
+</div>
+
+<!-- Three.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<!-- Game modules (load order matters) -->
+<script src="js/config.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/sounds.js"></script>
+<script src="js/characters.js"></script>
+<script src="js/economy.js"></script>
+<script src="js/dialogue.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/npcs.js"></script>
+<script src="js/player.js"></script>
+<script src="js/environments.js"></script>
+<script src="js/actions.js"></script>
+<script src="js/game.js"></script>
+
+</body>
+</html>
