@@ -643,10 +643,15 @@ LIFE.dialogue.close = function() {
                 // Clear birth scene NPCs (Mom + Doctor) before building world
                 LIFE.npcs.forEach(function(n) { LIFE.scene.remove(n.char.group); });
                 LIFE.npcs = [];
+                // Clear any leftover environment objects (womb/hospital ground planes)
+                LIFE.clearEnvironment();
                 // Build open world
                 LIFE.world.buildWorld();
                 // Spawn NPCs for all zones
                 LIFE.world.spawnAllZoneNPCs();
+                // Force immediate culling pass to set NPC visibility
+                LIFE.world._cullingTimer = 999;
+                LIFE.world.updateCulling(0);
                 LIFE.state.currentStage = 'home';
                 LIFE.state.bounds = 400;
                 LIFE.updatePlayerSize();
@@ -826,6 +831,7 @@ LIFE.dialogue.selectOption = function(idx) {
     if (opt.kids) {
         LIFE.state.hasKids = true;
         LIFE.state.childCount = (LIFE.state.childCount || 0) + 1;
+        if (!LIFE.state.firstChildBornAge) LIFE.state.firstChildBornAge = LIFE.state.age;
         if (!LIFE.state.childNames) LIFE.state.childNames = [];
         setTimeout(function() {
             if (LIFE.state.gamePhase === 'playing') {
@@ -892,6 +898,7 @@ LIFE.dialogue.selectOption = function(idx) {
         if (Math.random() < 0.7) {
             LIFE.state.hasKids = true;
             LIFE.state.childCount = (LIFE.state.childCount || 0) + 1;
+            if (!LIFE.state.firstChildBornAge) LIFE.state.firstChildBornAge = LIFE.state.age;
             if (!LIFE.state.childNames) LIFE.state.childNames = [];
             LIFE.ui.showPopup('You have a baby! Child #' + LIFE.state.childCount, '#e91e63');
             if (LIFE.news) LIFE.news.add('Local family welcomes new baby - congratulations!', 'social');
@@ -1190,7 +1197,7 @@ LIFE.canFlirtWith = function(npc) {
     if (state.married) return false;
     if (npc.type === 'Mom' || npc.type === 'Dad' || npc.type === 'Sibling' ||
         npc.type === 'Your Child' || npc.type === 'Grandchild' || npc.type === 'Inmate') return false;
-    if (npc.isPolice || npc.isDealer || npc.isHiring || npc.isCarSalesman || npc.isVendor) return false;
+    if (npc.isPolice || npc.isDealer || npc.isHiring || npc.isCarSalesman || npc.isRealEstate || npc.isVendor) return false;
     // kids can't be flirted with
     if (npc.type === 'Kid') return false;
     // opposite sex only
@@ -1200,9 +1207,12 @@ LIFE.canFlirtWith = function(npc) {
 
 LIFE.dialogue.talkToNPC = function(npc) {
     if (!npc || !npc.alive || LIFE.dialogue.active) return;
+    // Mark NPC as met (reveals their name if they were a stranger)
+    if (LIFE.meetNPC) LIFE.meetNPC(npc);
+    var state = LIFE.state;
     var type = npc.type;
-    var speakerName = npc.name || type;
-    var age = LIFE.state.age;
+    var speakerName = npc.displayName || npc.name || type;
+    var age = state.age;
 
     // BABY (0-1): can't talk, just gestures
     if (age <= 1) {
@@ -1358,6 +1368,26 @@ LIFE.dialogue.talkToNPC = function(npc) {
         LIFE.dialogue.open(speakerName, greeting, [
             { text: "Show me what you've got!", effects: {}, openVendor: npc.vendorType },
             { text: "Just browsing, thanks.", effects: {}, rep: 0 }
+        ], true);
+        return;
+    }
+
+    // REAL ESTATE AGENT - property buying dialogue
+    if (npc.isRealEstate) {
+        LIFE.dialogue.npc = npc;
+        if (state.age < 18) {
+            LIFE.dialogue.open(speakerName, "Hey there, kiddo! Real estate is for adults. Come back when you're 18!", [
+                { text: "Okay!", effects: {} }
+            ], false);
+            return;
+        }
+        var ownedCount = state.properties ? state.properties.length : 0;
+        var greeting = ownedCount > 0
+            ? "Welcome back! You own " + ownedCount + " propert" + (ownedCount > 1 ? "ies" : "y") + ". Looking to expand your portfolio?"
+            : "Welcome to our office! Interested in buying some property? We've got apartments, condos, houses, and commercial buildings.";
+        LIFE.dialogue.open(speakerName, greeting, [
+            { text: "Show me what's available.", effects: {}, openProperty: true },
+            { text: "Just browsing, thanks.", effects: {} }
         ], true);
         return;
     }
@@ -1676,8 +1706,8 @@ LIFE.dialogue.openHospitalDialogue = function(reason) {
             text = "You've sustained some injuries. Let me take a look at the damage. We may need to do some stitching.";
             options = [
                 { text: "Fix me up, doc ($200)", effects: { health: 20, happiness: 2 }, cost: 200, hospitalExit: true },
-                { text: "Just bandage it up", effects: { health: 8 }, cost: 50, hospitalExit: true },
-                { text: "Is it bad?", effects: { health: 12, happiness: -2 }, cost: 100, hospitalExit: true }
+                { text: "Just bandage it up ($50)", effects: { health: 8 }, cost: 50, hospitalExit: true },
+                { text: "I'll walk it off", effects: { health: 2, happiness: -3 }, hospitalExit: true }
             ];
             break;
 
@@ -1685,8 +1715,8 @@ LIFE.dialogue.openHospitalDialogue = function(reason) {
             text = "You were brought in after a car accident. You have some bruising and we need to check for internal injuries.";
             options = [
                 { text: "Run all the tests ($400)", effects: { health: 18, happiness: -3 }, cost: 400, hospitalExit: true },
-                { text: "I feel okay, just sore", effects: { health: 8 }, cost: 100, hospitalExit: true },
-                { text: "Will I be alright?", effects: { health: 12, happiness: -2 }, cost: 200, hospitalExit: true }
+                { text: "Just patch me up ($100)", effects: { health: 8 }, cost: 100, hospitalExit: true },
+                { text: "I can't afford this, let me go", effects: { health: 3, happiness: -5 }, hospitalExit: true }
             ];
             break;
 

@@ -22,7 +22,7 @@ LIFE.state = {
     friendsOpen: false,
     // romance
     playerGender: null, // 'M' or 'F', chosen at birth
-    spouseName: null, romanceTarget: null, romanceLevel: 0, childCount: 0, childNames: [],
+    spouseName: null, romanceTarget: null, romanceLevel: 0, childCount: 0, childNames: [], firstChildBornAge: null,
     // combat & crime
     hasGun: false, hasSwitchblade: false, kills: 0, shootCooldown: 0,
     wantedLevel: 0, wantedTimer: 0, wantedCooldown: 0,
@@ -54,6 +54,7 @@ LIFE.state = {
     // car
     ownedCar: null, // { name, speed, color, modelIndex }
     inCar: false,
+    carStallTimer: 0, // time car has been stationary (for police arrest check)
     carParkedAt: null, // { x, z } world position where car is parked
     purchasedOnce: [] // one-time purchase tracking
 };
@@ -307,13 +308,16 @@ LIFE.spawnPolice = function() {
     LIFE.police = [];
     var count = LIFE.state.wantedLevel;
     if (count <= 0) return;
-    var b = LIFE.state.bounds * 0.8;
+    // In open world, spawn police near the player (not at bounds edge)
+    var px = LIFE.player ? LIFE.player.group.position.x : 0;
+    var pz = LIFE.player ? LIFE.player.group.position.z : 0;
+    var spawnDist = LIFE.world.built ? 20 : LIFE.state.bounds * 0.8;
     for (var i = 0; i < count; i++) {
         var angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
-        var x = Math.cos(angle) * b;
-        var z = Math.sin(angle) * b;
+        var x = px + Math.cos(angle) * spawnDist;
+        var z = pz + Math.sin(angle) * spawnDist;
         var p = LIFE.createNPC('Police', x, z);
-        p.speed = 7;
+        p.speed = LIFE.getSpeedForAge(LIFE.state.age) * 1.5; // match player sprint
         p.health = 200;
         p.maxHealth = 200;
         p.isPolice = true;
@@ -336,6 +340,17 @@ LIFE.updatePolice = function(dt) {
     // siren
     state.wantedCooldown = (state.wantedCooldown || 0) + dt;
     if (state.wantedCooldown > 4) { state.wantedCooldown = 0; LIFE.sounds.siren(); }
+
+    // track car stall time for arrest immunity while driving
+    if (state.inCar && LIFE.car.model) {
+        if (Math.abs(LIFE.car.currentSpeed) < 0.5) {
+            state.carStallTimer += dt;
+        } else {
+            state.carStallTimer = 0;
+        }
+    } else {
+        state.carStallTimer = 0;
+    }
 
     // check if all cops are dead - you escaped by fighting them off
     var aliveCops = 0;
@@ -390,8 +405,13 @@ LIFE.updatePolice = function(dt) {
             cop.char.parts.leftArm.rotation.x = -sw * 0.4;
             cop.char.parts.rightArm.rotation.x = sw * 0.4;
         } else {
-            LIFE.arrestPlayer();
-            return;
+            // Can't arrest player in a moving vehicle - must be stalled 5+ seconds
+            if (state.inCar && state.carStallTimer < 5) {
+                // cop stays near but can't grab player from moving car
+            } else {
+                LIFE.arrestPlayer();
+                return;
+            }
         }
 
         // police shoot at high wanted - fires real bullets
@@ -452,6 +472,14 @@ LIFE.arrestPlayer = function() {
         // hide world zones if built
         if (LIFE.world.built) {
             if (LIFE.world.insideInterior) {
+                LIFE.npcs.forEach(function(n) {
+                    if (!n._isZoneNPC) LIFE.scene.remove(n.char.group);
+                });
+                LIFE.npcs = [];
+                if (LIFE.world._interiorGroup) {
+                    LIFE.scene.remove(LIFE.world._interiorGroup);
+                    LIFE.world._interiorGroup = null;
+                }
                 LIFE.clearEnvironment();
                 LIFE.world.insideInterior = null;
             }
@@ -479,7 +507,7 @@ LIFE.arrestPlayer = function() {
         return;
     }
 
-    var years = Math.min(15, state.wantedLevel * 2 + state.kills * 3);
+    var years = Math.ceil(state.wantedLevel / 2) + state.kills * 12;
     if (years < 1) years = 1;
     // juveniles get much lighter sentences
     if (state.age < 18) {
@@ -497,7 +525,8 @@ LIFE.arrestPlayer = function() {
     state.gamePhase = 'jail';
     state.jailYears = years;
     state.jailFine = Math.floor(fine);
-    state.jailTimer = years * 30 + 5; // longer jail stays with 20-min days
+    // Jail timer: 8s/year for first 6, then 2s/year after (long sentences don't drag)
+    state.jailTimer = Math.min(years, 6) * 8 + Math.max(0, years - 6) * 2 + 3;
     state._jailStartTimer = state.jailTimer;
     state._jailStartAge = state.age;
     state.jailEventTimer = 5 + Math.random() * 8;
@@ -508,8 +537,15 @@ LIFE.arrestPlayer = function() {
     state.wantedLevel = 0;
     state.bounty = 0; // bounty cleared by serving time
     state.reputation = Math.max(-100, state.reputation - 15);
+    // Display sentence text
+    var sentenceText;
+    if (years >= 50) sentenceText = 'multiple life sentences';
+    else if (years >= 25) sentenceText = 'life in prison';
+    else sentenceText = years + ' years';
     if (LIFE.news) {
-        var crimeMsg = state.kills > 0 ? 'Suspect apprehended after violent crime spree - sentenced to ' + years + ' years.' : 'Local resident arrested and sentenced to ' + years + ' years in prison.';
+        var crimeMsg = state.kills > 0
+            ? 'Suspect apprehended after violent crime spree - sentenced to ' + sentenceText + '.'
+            : 'Local resident arrested and sentenced to ' + sentenceText + '.';
         LIFE.news.add(crimeMsg, 'crime');
     }
     state.stats.happiness = Math.max(0, state.stats.happiness - 20);
@@ -527,18 +563,65 @@ LIFE.arrestPlayer = function() {
     // hide world zones if built
     if (LIFE.world.built) {
         if (LIFE.world.insideInterior) {
+            // Clean up current interior NPCs
+            LIFE.npcs.forEach(function(n) {
+                if (!n._isZoneNPC) LIFE.scene.remove(n.char.group);
+            });
+            LIFE.npcs = [];
+            if (LIFE.world._interiorGroup) {
+                LIFE.scene.remove(LIFE.world._interiorGroup);
+                LIFE.world._interiorGroup = null;
+            }
             LIFE.clearEnvironment();
             LIFE.world.insideInterior = null;
         }
         LIFE.world.hideAllZones();
     }
 
-    // build 3D jail environment
-    state.bounds = LIFE.getBoundsForStage('jail');
-    LIFE.buildEnvironment('jail');
-    LIFE.spawnNPCs('jail');
-    LIFE.updatePlayerSize();
-    LIFE.player.group.position.set(0, 0, 0);
+    if (LIFE.world.built) {
+        // Build jail at police station world position using interior system
+        var jailPos = LIFE.world.INTERIOR_POSITIONS.jail || { x: -60, z: -80 };
+        var cfg = LIFE.STAGES.jail;
+        if (cfg) {
+            LIFE.scene.background.set(cfg.bg);
+            LIFE.scene.fog.color.set(cfg.fog[0]);
+            LIFE.scene.fog.near = cfg.fog[1];
+            LIFE.scene.fog.far = cfg.fog[2];
+        }
+        state.bounds = LIFE.getBoundsForStage('jail');
+
+        var jailGroup = new THREE.Group();
+        jailGroup.position.set(jailPos.x, 0, jailPos.z);
+        LIFE.scene.add(jailGroup);
+        LIFE.world._interiorGroup = jailGroup;
+
+        var origAddEnv = LIFE.addEnv;
+        var origAddCollider = LIFE.addCollider;
+        LIFE.addEnv = function(obj) { jailGroup.add(obj); return obj; };
+        LIFE.addCollider = function(x, z, w, d) {
+            LIFE.colliders.push({
+                minX: (x + jailPos.x) - w / 2, maxX: (x + jailPos.x) + w / 2,
+                minZ: (z + jailPos.z) - d / 2, maxZ: (z + jailPos.z) + d / 2
+            });
+        };
+        LIFE.buildJail();
+        LIFE.addEnv = origAddEnv;
+        LIFE.addCollider = origAddCollider;
+
+        LIFE.world.insideInterior = 'jail';
+        LIFE.world._interiorNPCOffset = jailPos;
+        LIFE.spawnNPCs('jail');
+        LIFE.world._interiorNPCOffset = null;
+        LIFE.updatePlayerSize();
+        LIFE.player.group.position.set(jailPos.x, 0, jailPos.z);
+    } else {
+        // Legacy non-world path
+        state.bounds = LIFE.getBoundsForStage('jail');
+        LIFE.buildEnvironment('jail');
+        LIFE.spawnNPCs('jail');
+        LIFE.updatePlayerSize();
+        LIFE.player.group.position.set(0, 0, 0);
+    }
 
     // show jail HUD
     LIFE.ui.showJailScreen(years, state.jailFine);
@@ -573,7 +656,17 @@ LIFE.exitJail = function() {
     state.currentStage = newStage;
 
     if (LIFE.world.built) {
-        // Clear jail objects
+        // Remove jail NPCs from scene (zone NPCs stay)
+        LIFE.npcs.forEach(function(n) {
+            if (!n._isZoneNPC) LIFE.scene.remove(n.char.group);
+        });
+        LIFE.npcs = [];
+        // Remove jail interior group
+        if (LIFE.world._interiorGroup) {
+            LIFE.scene.remove(LIFE.world._interiorGroup);
+            LIFE.world._interiorGroup = null;
+        }
+        // Clear remaining jail objects
         LIFE.clearEnvironment();
         // Restore world zones
         LIFE.world.showNearbyZones();
@@ -587,9 +680,10 @@ LIFE.exitJail = function() {
         LIFE.scene.fog.color.set(0x87ceeb);
         LIFE.scene.fog.near = 50;
         LIFE.scene.fog.far = 200;
-        // Refresh NPCs
+        // Refresh NPCs and force culling update
         LIFE.world.spawnZoneNPCs(newStage);
-        LIFE.world.refreshNearbyNPCs();
+        LIFE.world._cullingTimer = 999;
+        LIFE.world.updateCulling(0);
         // Re-spawn parked car if owned
         if (state.ownedCar) LIFE.spawnParkedCar();
     } else {
@@ -1565,12 +1659,18 @@ LIFE.advanceYear = function() {
         state.currentStage = newStage;
         if (LIFE.world.built) {
             // Open world: teleport to zone, refresh NPCs
-            var outdoorZones = { home: true, school: true, highschool: true, college: true, city: true, retirement: true, dealership: true, eventcenter: true };
+            // nursery maps to home zone in open world (baby stays at home)
+            var outdoorZones = { home: true, nursery: true, school: true, highschool: true, college: true, city: true, retirement: true, dealership: true, eventcenter: true };
+            var zoneMapping = { nursery: 'home' };
             if (outdoorZones[newStage]) {
                 if (LIFE.world.insideInterior) LIFE.world.exitInterior();
-                var zonePos = LIFE.world.getZonePos(newStage);
+                var targetZone = zoneMapping[newStage] || newStage;
+                var zonePos = LIFE.world.getZonePos(targetZone);
                 LIFE.player.group.position.set(zonePos.x, 0, zonePos.z + 5);
-                LIFE.world.spawnZoneNPCs(newStage);
+                LIFE.world.spawnZoneNPCs(targetZone);
+                // Force immediate culling update at new position
+                LIFE.world._cullingTimer = 999;
+                LIFE.world.updateCulling(0);
                 if (LIFE.isSchoolAge(state.age)) {
                     state.dayPhase = 'classroom';
                     LIFE.transitionDayPhase('classroom');
@@ -2154,7 +2254,11 @@ LIFE.animate = function() {
             var jailFrac = state.jailTimer / (state._jailStartTimer || 1);
             var yearsLeft = Math.max(1, Math.ceil(jailFrac * state.jailYears));
             if (LIFE.ui.$.jailText) {
-                LIFE.ui.$.jailText.textContent = yearsLeft + ' year' + (yearsLeft > 1 ? 's' : '') + ' remaining';
+                var jailDisplayText;
+                if (state.jailYears >= 50) jailDisplayText = 'Multiple life sentences remaining';
+                else if (state.jailYears >= 25) jailDisplayText = 'Life sentence remaining';
+                else jailDisplayText = yearsLeft + ' year' + (yearsLeft > 1 ? 's' : '') + ' remaining';
+                LIFE.ui.$.jailText.textContent = jailDisplayText;
             }
 
             if (state.stats.health <= 0 && !state.deathTriggered) {

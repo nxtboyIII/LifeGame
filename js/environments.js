@@ -307,6 +307,24 @@ LIFE.buildCity = function() {
         });
     }
 
+    // REAL ESTATE OFFICE
+    LIFE.makeBuilding(25, 35, 8, 6, 6, 0x2e7d32);
+    var reCanvas = document.createElement('canvas');
+    reCanvas.width = 256; reCanvas.height = 64;
+    var reCtx = reCanvas.getContext('2d');
+    reCtx.fillStyle = 'rgba(46,125,50,0.8)';
+    reCtx.fillRect(0, 0, 256, 64);
+    reCtx.fillStyle = '#ffffff';
+    reCtx.font = 'bold 24px Arial';
+    reCtx.textAlign = 'center';
+    reCtx.fillText('Real Estate Office', 128, 42);
+    var reTex = new THREE.CanvasTexture(reCanvas);
+    var reSign = new THREE.Sprite(new THREE.SpriteMaterial({ map: reTex, transparent: true, depthTest: false }));
+    reSign.position.set(25, 7.5, 35 + 3.1);
+    reSign.scale.set(3, 0.75, 1);
+    LIFE.addEnv(reSign);
+    LIFE.addEnv(LIFE.makeBox(2, 3, 0.2, 0x5d4037, 25, 1.5, 35 + 3.1)); // door
+
     // park area
     LIFE.makeTree(40, 35); LIFE.makeTree(43, 38); LIFE.makeTree(37, 40);
     LIFE.addSolid(2, 0.5, 0.6, 0x795548, 40, 0.25, 37);

@@ -97,22 +97,40 @@ LIFE.drawChatBubble = function(npc, text) {
     npc.chatTexture.needsUpdate = true;
 };
 
-LIFE.createNPC = function(type, x, z, npcName, forceGender) {
+LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
+    opts = opts || {};
     var isChild = type.includes('Kid') || type.includes('Grandchild') || type === 'Sibling';
     var isStudent = type.includes('Student');
     var isPolice = type === 'Police';
     var isDealer = type === 'Dealer';
     var isHiring = type.indexOf('Hiring') === 0;
     var isCarSalesman = type === 'Car Salesman';
+    var isRealEstate = type === 'Real Estate Agent';
     var vendorTypes = { 'Food Vendor': true, 'Clothes Shop': true, 'Pharmacist': true, 'Bookstore': true, 'Gym Trainer': true, 'Electronics': true, 'Ticket Seller': true };
     var isVendor = !!vendorTypes[type];
     var isInmate = type === 'Inmate';
     // individual name for relationship tracking
     var individualName = npcName || type;
-    var h = isChild ? 0.7 + Math.random() * 0.4
-        : (isStudent ? 1.5 + Math.random() * 0.3
-        : 1.6 + Math.random() * 0.2);
-    if (isPolice) h = 1.8;
+
+    // NPC age system: use provided age or fall back to type-based defaults
+    var npcAge = opts.npcAge;
+    var h;
+    if (npcAge !== undefined && npcAge >= 0) {
+        h = LIFE.getHeightForAge(npcAge);
+    } else {
+        h = isChild ? 0.7 + Math.random() * 0.4
+            : (isStudent ? 1.5 + Math.random() * 0.3
+            : 1.6 + Math.random() * 0.2);
+        if (isPolice) h = 1.8;
+    }
+
+    // Full name: first + last
+    var lastName = opts.lastName || LIFE.LAST_NAMES[Math.floor(Math.random() * LIFE.LAST_NAMES.length)];
+    var fullName = individualName + ' ' + lastName;
+
+    // Determine if player "knows" this NPC (visible title or family)
+    var knownByDefault = !!LIFE.NPC_TITLE_VISIBLE[type] || !!LIFE.NPC_FAMILY_TITLE[type] || isHiring;
+    var met = knownByDefault;
     var skin = LIFE.SKIN_COLORS[Math.floor(Math.random() * LIFE.SKIN_COLORS.length)];
     var isDoctor = type === 'Doctor';
     var isNurse = type === 'Nurse';
@@ -121,6 +139,7 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
         : isDealer ? 0x212121
         : isHiring ? 0x1565c0
         : isCarSalesman ? 0xd32f2f
+        : isRealEstate ? 0x2e7d32
         : isVendor ? (vendorClothes[type] || 0x607d8b)
         : isInmate ? 0xff6f00
         : isDoctor ? 0xfafafa
@@ -176,25 +195,39 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
         ch.group.add(hood);
     }
 
-    // name label
-    var vendorLabels = { 'Food Vendor': 'Food Vendor', 'Clothes Shop': 'Clothes Shop', 'Pharmacist': 'Pharmacist', 'Bookstore': 'Bookstore', 'Gym Trainer': 'Gym Trainer', 'Electronics': 'Electronics', 'Ticket Seller': 'Ticket Seller' };
-    var displayName = isHiring ? type.replace('Hiring ', '') + ' (Hiring)'
-        : isCarSalesman ? 'Car Salesman'
-        : isVendor ? (vendorLabels[type] || type)
-        : (npcName && npcName !== type) ? npcName : type;
-    var canvas = document.createElement('canvas');
-    canvas.width = 256; canvas.height = 64;
-    var ctx = canvas.getContext('2d');
+    // name label - contextual display name based on player's perspective
+    var displayName;
+    if (isHiring) {
+        displayName = type.replace('Hiring ', '') + ' (Hiring)';
+    } else if (LIFE.NPC_TITLE_VISIBLE[type]) {
+        // Occupational title always visible
+        displayName = type;
+    } else if (LIFE.NPC_FAMILY_TITLE[type]) {
+        // Family title always visible
+        displayName = type;
+    } else if (!met) {
+        // Unknown person - show generic label
+        displayName = 'Stranger';
+    } else {
+        // Known person - show their first name
+        displayName = individualName;
+    }
+    // Compute label color for nametag
     var vendorLabelColors = { 'Food Vendor': 'rgba(255,111,0,0.7)', 'Clothes Shop': 'rgba(233,30,99,0.7)', 'Pharmacist': 'rgba(76,175,80,0.7)', 'Bookstore': 'rgba(121,85,72,0.7)', 'Gym Trainer': 'rgba(255,87,34,0.7)', 'Electronics': 'rgba(0,188,212,0.7)', 'Ticket Seller': 'rgba(156,39,176,0.7)' };
-    ctx.fillStyle = isPolice ? 'rgba(13,71,161,0.7)'
+    var labelColor = isPolice ? 'rgba(13,71,161,0.7)'
         : isDealer ? 'rgba(33,33,33,0.8)'
         : isHiring ? 'rgba(21,101,192,0.7)'
         : isCarSalesman ? 'rgba(211,47,47,0.7)'
+        : isRealEstate ? 'rgba(46,125,50,0.7)'
         : isVendor ? (vendorLabelColors[type] || 'rgba(96,125,139,0.7)')
         : isInmate ? 'rgba(255,111,0,0.7)'
         : isDoctor ? 'rgba(76,175,80,0.7)'
         : isNurse ? 'rgba(33,150,243,0.7)'
         : 'rgba(0,0,0,0.5)';
+    var canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 64;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = labelColor;
     ctx.fillRect(4, 4, 248, 56);
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 28px Arial';
@@ -204,7 +237,7 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
     var spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
     var nameSprite = new THREE.Sprite(spriteMat);
     nameSprite.position.y = h + 0.3;
-    nameSprite.scale.set((isHiring || isCarSalesman || isVendor) ? 1.4 : 1, 0.25, 1);
+    nameSprite.scale.set((isHiring || isCarSalesman || isRealEstate || isVendor) ? 1.4 : 1, 0.25, 1);
     ch.group.add(nameSprite);
 
     // health bar
@@ -235,7 +268,7 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
     // ring
     var ringGeo = new THREE.RingGeometry(0.4, 0.5, 16);
     var vendorRingColors = { 'Food Vendor': 0xff6f00, 'Clothes Shop': 0xe91e63, 'Pharmacist': 0x4caf50, 'Bookstore': 0x795548, 'Gym Trainer': 0xff5722, 'Electronics': 0x00bcd4, 'Ticket Seller': 0x9c27b0 };
-    var ringColor = isPolice ? 0xff1744 : isDealer ? 0xff9800 : isHiring ? 0x2196f3 : isCarSalesman ? 0xd32f2f : isVendor ? (vendorRingColors[type] || 0x607d8b) : 0x4fc3f7;
+    var ringColor = isPolice ? 0xff1744 : isDealer ? 0xff9800 : isHiring ? 0x2196f3 : isCarSalesman ? 0xd32f2f : isRealEstate ? 0x2e7d32 : isVendor ? (vendorRingColors[type] || 0x607d8b) : 0x4fc3f7;
     var ringMat = new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: 0, side: THREE.DoubleSide });
     var ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02;
@@ -247,11 +280,17 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
     var maxHp = isPolice ? 200 : 100;
     return {
         char: ch, type: type, name: individualName, gender: gender,
+        fullName: fullName, lastName: lastName,
+        displayName: displayName, _met: met, _labelColor: labelColor,
+        npcAge: npcAge !== undefined ? npcAge : null,
         target: new THREE.Vector3(x + (Math.random()-0.5)*10, 0, z + (Math.random()-0.5)*10),
         waiting: false, waitTimer: Math.random()*3,
-        speed: isChild ? 1.5 : (isPolice ? 7 : (isHiring || isCarSalesman || isVendor ? 0 : (isInmate ? 0.6 : 1.0 + Math.random()*0.5))),
+        speed: isPolice ? 7 : (isHiring || isCarSalesman || isRealEstate || isVendor ? 0 : (isInmate ? 0.6
+            : npcAge !== undefined ? (npcAge < 3 ? 0.5 : npcAge < 6 ? 1.0 : npcAge < 13 ? 1.5 : npcAge >= 70 ? 0.7 : 1.0 + Math.random() * 0.5)
+            : isChild ? 1.5 : 1.0 + Math.random() * 0.5)),
         walkTime: Math.random()*10, reacting: 0,
         ring: ring, ringMat: ringMat, nameSprite: nameSprite,
+        nameCanvas: canvas, nameCtx: ctx, nameTexture: texture,
         health: maxHp, maxHealth: maxHp, alive: true, isPolice: isPolice,
         hpSprite: hpSprite, hpCanvas: hpCanvas, hpCtx: hpCtx, hpTexture: hpTexture,
         chatSprite: chatSprite, chatCanvas: chatCanvas, chatCtx: chatCtx, chatTexture: chatTexture,
@@ -259,9 +298,34 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
         shootTimer: 0,
         fleeing: false, fleeTimer: 0,
         isDealer: isDealer, isHiring: isHiring, isCarSalesman: isCarSalesman,
+        isRealEstate: isRealEstate,
         isVendor: isVendor, vendorType: isVendor ? type : null,
-        stayNear: (isHiring || isCarSalesman || isVendor) ? new THREE.Vector3(x, 0, z) : null
+        stayNear: (isHiring || isCarSalesman || isRealEstate || isVendor) ? new THREE.Vector3(x, 0, z) : null
     };
+};
+
+// Mark an NPC as "met" and reveal their name on the nametag
+LIFE.meetNPC = function(npc) {
+    if (!npc || npc._met) return;
+    npc._met = true;
+    // Update display name to their real name
+    npc.displayName = npc.name;
+    LIFE.updateNPCNametag(npc);
+};
+
+// Redraw an NPC's nametag with current displayName
+LIFE.updateNPCNametag = function(npc) {
+    if (!npc.nameCanvas || !npc.nameCtx) return;
+    var ctx = npc.nameCtx;
+    var canvas = npc.nameCanvas;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = npc._labelColor || 'rgba(0,0,0,0.5)';
+    ctx.fillRect(4, 4, 248, 56);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 28px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(npc.displayName, 128, 42);
+    if (npc.nameTexture) npc.nameTexture.needsUpdate = true;
 };
 
 // Check if a position is inside any collider
@@ -368,7 +432,13 @@ LIFE.spawnNPCs = function(stage) {
         return;
     }
 
-    LIFE.npcs.forEach(function(n) { LIFE.scene.remove(n.char.group); });
+    // When world is built, zone NPCs stay in the scene (managed by world system).
+    // Only remove non-zone NPCs (interior/jail NPCs).
+    LIFE.npcs.forEach(function(n) {
+        if (!n._isZoneNPC) {
+            LIFE.scene.remove(n.char.group);
+        }
+    });
     LIFE.npcs = [];
     var names = (LIFE.NPC_NAMES[stage] || []).slice();
     var b = LIFE.getBoundsForStage(stage) * 0.6;
@@ -393,6 +463,13 @@ LIFE.spawnNPCs = function(stage) {
         }
     }
 
+    // World offset for interior NPCs (so they spawn at the right world position)
+    var npcOffX = 0, npcOffZ = 0;
+    if (LIFE.world._interiorNPCOffset) {
+        npcOffX = LIFE.world._interiorNPCOffset.x;
+        npcOffZ = LIFE.world._interiorNPCOffset.z;
+    }
+
     // spawn regular NPCs with individual names (gendered)
     var usedNames = {};
     var childIndex = 0;
@@ -403,9 +480,11 @@ LIFE.spawnNPCs = function(stage) {
             z = (Math.random()-0.5)*b*2;
             safe = Math.sqrt(x*x+z*z) >= 3;
             if (safe) {
+                // Check colliders using world-space position (with offset for interiors)
+                var wx = x + npcOffX, wz = z + npcOffZ;
                 for (var ci = 0; ci < LIFE.colliders.length; ci++) {
                     var c = LIFE.colliders[ci];
-                    if (x > c.minX - 0.5 && x < c.maxX + 0.5 && z > c.minZ - 0.5 && z < c.maxZ + 0.5) {
+                    if (wx > c.minX - 0.5 && wx < c.maxX + 0.5 && wz > c.minZ - 0.5 && wz < c.maxZ + 0.5) {
                         safe = false; break;
                     }
                 }
@@ -438,7 +517,7 @@ LIFE.spawnNPCs = function(stage) {
             } while (usedNames[individualName] && attempts < 50);
             usedNames[individualName] = true;
         }
-        LIFE.npcs.push(LIFE.createNPC(npcType, x, z, individualName, npcFemale));
+        LIFE.npcs.push(LIFE.createNPC(npcType, x + npcOffX, z + npcOffZ, individualName, npcFemale));
     });
 
     // spawn Hiring Manager NPCs near job buildings in city
@@ -496,8 +575,14 @@ LIFE._clampNPCBounds = function(npc) {
         npc.char.group.position.z = Math.max(npc._zoneCenter.z - zr, Math.min(npc._zoneCenter.z + zr, npc.char.group.position.z));
     } else {
         var bounds = LIFE.state.bounds;
-        npc.char.group.position.x = Math.max(-bounds, Math.min(bounds, npc.char.group.position.x));
-        npc.char.group.position.z = Math.max(-bounds, Math.min(bounds, npc.char.group.position.z));
+        // Clamp around interior world position if applicable
+        var cx = 0, cz = 0;
+        if (LIFE.world.built && LIFE.world.insideInterior && LIFE.world.INTERIOR_POSITIONS) {
+            var ipos = LIFE.world.INTERIOR_POSITIONS[LIFE.world.insideInterior];
+            if (ipos) { cx = ipos.x; cz = ipos.z; }
+        }
+        npc.char.group.position.x = Math.max(cx - bounds, Math.min(cx + bounds, npc.char.group.position.x));
+        npc.char.group.position.z = Math.max(cz - bounds, Math.min(cz + bounds, npc.char.group.position.z));
     }
 };
 
@@ -643,9 +728,15 @@ LIFE.updateNPCs = function(dt) {
                     } while (tries < 10);
                 } else {
                     var b = bounds * 0.6;
+                    // Get interior center offset if in a world-positioned interior
+                    var icx = 0, icz = 0;
+                    if (LIFE.world.built && LIFE.world.insideInterior && LIFE.world.INTERIOR_POSITIONS) {
+                        var ip = LIFE.world.INTERIOR_POSITIONS[LIFE.world.insideInterior];
+                        if (ip) { icx = ip.x; icz = ip.z; }
+                    }
                     do {
-                        tx = (Math.random()-0.5)*b*2;
-                        tz = (Math.random()-0.5)*b*2;
+                        tx = icx + (Math.random()-0.5)*b*2;
+                        tz = icz + (Math.random()-0.5)*b*2;
                         tries++;
                     } while (LIFE.isInsideCollider(tx, tz) && tries < 10);
                 }
@@ -677,7 +768,12 @@ LIFE.updateNPCs = function(dt) {
                 npc.target.set(npc._zoneCenter.x + (Math.random()-0.5)*zrr*2, 0, npc._zoneCenter.z + (Math.random()-0.5)*zrr*2);
             } else {
                 var nb = bounds * 0.6;
-                npc.target.set((Math.random()-0.5)*nb*2, 0, (Math.random()-0.5)*nb*2);
+                var scx = 0, scz = 0;
+                if (LIFE.world.built && LIFE.world.insideInterior && LIFE.world.INTERIOR_POSITIONS) {
+                    var sip = LIFE.world.INTERIOR_POSITIONS[LIFE.world.insideInterior];
+                    if (sip) { scx = sip.x; scz = sip.z; }
+                }
+                npc.target.set(scx + (Math.random()-0.5)*nb*2, 0, scz + (Math.random()-0.5)*nb*2);
             }
         }
 

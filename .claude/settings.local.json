@@ -10,7 +10,10 @@
       "Bash(node -e \"var fs=require\\(''fs''\\); new Function\\(fs.readFileSync\\(''F:/SmallGames/LifeGame/js/ui.js'',''utf8''\\)\\); console.log\\(''ui.js OK''\\);\")",
       "Bash(node -e \"var fs=require\\(''fs''\\); new Function\\(fs.readFileSync\\(''F:/SmallGames/LifeGame/js/player.js'',''utf8''\\)\\); console.log\\(''player.js OK''\\);\")",
       "Bash(node -e \"var fs=require\\(''fs''\\); new Function\\(fs.readFileSync\\(''F:/SmallGames/LifeGame/js/dialogue.js'',''utf8''\\)\\); console.log\\(''dialogue.js OK''\\);\")",
-      "Bash(node -e \"new Function\\(require\\(''fs''\\).readFileSync\\(''js/game.js'',''utf8''\\)\\)\")"
+      "Bash(node -e \"new Function\\(require\\(''fs''\\).readFileSync\\(''js/game.js'',''utf8''\\)\\)\")",
+      "Bash(grep:*)",
+      "Bash(node -c:*)",
+      "Bash(node:*)"
     ]
   }
 }

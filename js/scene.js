@@ -118,9 +118,13 @@ LIFE.makeBuilding = function(x, z, w, h, d, color, roofColor) {
 };
 
 LIFE.makeGround = function(size, color) {
+    var mat = new THREE.MeshPhongMaterial({ color: color });
+    mat.polygonOffset = true;
+    mat.polygonOffsetFactor = -1;
+    mat.polygonOffsetUnits = -1;
     const g = new THREE.Mesh(
         new THREE.PlaneGeometry(size * 2, size * 2),
-        new THREE.MeshPhongMaterial({ color })
+        mat
     );
     g.rotation.x = -Math.PI / 2;
     g.position.y = 0.01;

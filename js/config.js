@@ -59,8 +59,8 @@ LIFE.NPC_NAMES = {
     school:     ['Teacher', 'Kid', 'Kid', 'Kid', 'Kid', 'Kid'],
     highschool: ['Teacher', 'Student', 'Student', 'Student', 'Student', 'Student', 'Student', 'Student', 'Dealer'],
     college:    ['Professor', 'Student', 'Student', 'Student', 'Student', 'Student', 'Student', 'Dealer', 'Bookstore', 'Gym Trainer'],
-    city:       ['Stranger', 'Stranger', 'Stranger', 'Stranger', 'Stranger', 'Neighbor', 'Neighbor', 'Dealer', 'Food Vendor', 'Clothes Shop', 'Electronics'],
-    retirement: ['Old Friend', 'Neighbor', 'Stranger', 'Grandchild', 'Pharmacist'],
+    city:       ['Stranger', 'Stranger', 'Stranger', 'Stranger', 'Stranger', 'Neighbor', 'Neighbor', 'Dealer', 'Food Vendor', 'Clothes Shop', 'Electronics', 'Real Estate Agent'],
+    retirement: ['Neighbor', 'Stranger', 'Stranger', 'Pharmacist'],
     classroom:  ['Teacher', 'Kid', 'Kid', 'Kid'],
     hsclassroom:['Teacher', 'Student', 'Student', 'Student', 'Student'],
     hospital:   ['Doctor', 'Nurse', 'Nurse'],
@@ -118,8 +118,32 @@ LIFE.FEMALE_NAMES = [
 ];
 // combined for backwards compat
 LIFE.NPC_FIRST_NAMES = LIFE.MALE_NAMES.concat(LIFE.FEMALE_NAMES);
+// Last names for NPCs
+LIFE.LAST_NAMES = [
+    'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis',
+    'Rodriguez', 'Martinez', 'Anderson', 'Taylor', 'Thomas', 'Moore', 'Jackson',
+    'Martin', 'Lee', 'Thompson', 'White', 'Harris', 'Clark', 'Lewis', 'Robinson',
+    'Walker', 'Young', 'Allen', 'King', 'Wright', 'Scott', 'Green', 'Baker',
+    'Adams', 'Nelson', 'Hill', 'Ramirez', 'Campbell', 'Mitchell', 'Roberts',
+    'Carter', 'Phillips', 'Evans', 'Turner', 'Torres', 'Parker', 'Collins',
+    'Edwards', 'Stewart', 'Flores', 'Morris', 'Murphy', 'Rivera', 'Cook',
+    'Rogers', 'Morgan', 'Peterson', 'Cooper', 'Reed', 'Bailey', 'Bell', 'Ward'
+];
 // Types that get individual first names (multiple NPCs of same type)
 LIFE.NPC_NEEDS_NAME = { Kid: true, Student: true, Stranger: true, Neighbor: true, Coworker: true, Inmate: true };
+
+// Types where nametag ALWAYS shows their role title (player can see their occupation/role)
+LIFE.NPC_TITLE_VISIBLE = {
+    Teacher: true, Professor: true, Doctor: true, Nurse: true, Police: true,
+    Dealer: true, 'Car Salesman': true, 'Real Estate Agent': true, 'Food Vendor': true, 'Clothes Shop': true,
+    'Pharmacist': true, 'Bookstore': true, 'Gym Trainer': true, 'Electronics': true,
+    'Ticket Seller': true, Boss: true, Inmate: true,
+    Kid: true, Student: true, Neighbor: true, Coworker: true, 'Old Friend': true
+};
+// Types where nametag shows family relationship (always known)
+LIFE.NPC_FAMILY_TITLE = {
+    Mom: true, Dad: true, Sibling: true, Spouse: true, 'Your Child': true, Grandchild: true
+};
 
 LIFE.SKIN_COLORS = [0xffdbac, 0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0xffe0bd, 0xffd5b4];
 LIFE.CLOTHES_COLORS = [0x2196f3, 0xf44336, 0x4caf50, 0xff9800, 0x9c27b0, 0x00bcd4, 0xe91e63, 0x795548, 0x607d8b, 0x3f51b5, 0xcddc39, 0xff5722];

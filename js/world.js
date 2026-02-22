@@ -100,13 +100,17 @@ LIFE.world.endZoneBuild = function(name) {
 // BUILD WORLD
 // ============================================================
 LIFE.world.buildWorld = function() {
-    // Large world ground plane
+    // Large world ground plane (polygonOffset pushes it back in depth to avoid z-fighting with zone grounds)
+    var worldGroundMat = new THREE.MeshPhongMaterial({ color: 0x4a7c3f });
+    worldGroundMat.polygonOffset = true;
+    worldGroundMat.polygonOffsetFactor = 1;
+    worldGroundMat.polygonOffsetUnits = 1;
     var worldGround = new THREE.Mesh(
         new THREE.PlaneGeometry(800, 800),
-        new THREE.MeshPhongMaterial({ color: 0x4a7c3f })
+        worldGroundMat
     );
     worldGround.rotation.x = -Math.PI / 2;
-    worldGround.position.y = -0.15;
+    worldGround.position.y = -0.05;
     worldGround.receiveShadow = true;
     LIFE.scene.add(worldGround);
     LIFE.world.worldGround = worldGround;
@@ -125,6 +129,9 @@ LIFE.world.buildWorld = function() {
 
     // Hospital exterior (building shell only)
     LIFE.world.buildHospitalExterior();
+
+    // Police station exterior
+    LIFE.world.buildPoliceStation();
 
     // Roads connecting zones
     LIFE.world.buildRoads();
@@ -228,6 +235,79 @@ LIFE.world.buildHospitalExterior = function() {
         colliders: [{
             minX: cx - 6, maxX: cx + 6,
             minZ: cz - 5, maxZ: cz + 5
+        }],
+        npcs: [],
+        center: new THREE.Vector3(cx, 0, cz),
+        radius: 15
+    };
+};
+
+// ============================================================
+// POLICE STATION EXTERIOR (building shell in world)
+// ============================================================
+LIFE.world.buildPoliceStation = function() {
+    var cx = -60, cz = -80;
+    LIFE.world._jailWorldPos = { x: cx, z: cz };
+    var group = new THREE.Group();
+    group.position.set(cx, 0, cz);
+
+    // Ground patch
+    var ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(30, 30),
+        new THREE.MeshPhongMaterial({ color: 0x9e9e9e })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0.01;
+    ground.receiveShadow = true;
+    group.add(ground);
+
+    // Building body
+    var body = LIFE.makeBox(10, 6, 8, 0x455a64, 0, 3, 0);
+    group.add(body);
+    // Roof
+    group.add(LIFE.makeBox(11, 0.3, 9, 0x37474f, 0, 6.15, 0));
+
+    // Windows (barred look)
+    var winMat = new THREE.MeshPhongMaterial({ color: 0x90a4ae, emissive: 0x334455, emissiveIntensity: 0.2 });
+    for (var wx = -3; wx <= 3; wx += 3) {
+        var w = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.1), winMat);
+        w.position.set(wx, 3.5, 4.06);
+        group.add(w);
+        // bars
+        for (var bx = -0.3; bx <= 0.3; bx += 0.15) {
+            var bar = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.8, 0.12), new THREE.MeshPhongMaterial({ color: 0x333333 }));
+            bar.position.set(wx + bx, 3.5, 4.08);
+            group.add(bar);
+        }
+    }
+
+    // Door
+    group.add(LIFE.makeBox(2, 3.5, 0.2, 0x3e2723, 0, 1.75, 4.1));
+
+    // Police sign
+    var signCanvas = document.createElement('canvas');
+    signCanvas.width = 256; signCanvas.height = 64;
+    var ctx = signCanvas.getContext('2d');
+    ctx.fillStyle = 'rgba(25,118,210,0.9)';
+    ctx.fillRect(0, 0, 256, 64);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('POLICE STATION', 128, 42);
+    var tex = new THREE.CanvasTexture(signCanvas);
+    var sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+    sign.position.set(0, 7.5, 4.1);
+    sign.scale.set(3, 0.75, 1);
+    group.add(sign);
+
+    LIFE.scene.add(group);
+
+    // Store as zone
+    LIFE.world.zones['police_station'] = {
+        group: group,
+        colliders: [{
+            minX: cx - 5, maxX: cx + 5,
+            minZ: cz - 4, maxZ: cz + 4
         }],
         npcs: [],
         center: new THREE.Vector3(cx, 0, cz),
@@ -483,6 +563,16 @@ LIFE.world.buildRoads = function() {
         { x: -10, z: -145 }
     ], 3, pathY, pathMat, 40, roads);
 
+    // 15) Home → Police Station: road heading west-northwest
+    var r15 = LIFE.world._buildSplineRoad([
+        { x: -5, z: -8 },
+        { x: -20, z: -30 },
+        { x: -40, z: -55 },
+        { x: -55, z: -72 },
+        { x: -58, z: -78 }
+    ], 5, roadY, roadMat, 45, roads);
+    LIFE.world._buildSplineLine(r15.curve, lineY, 2.5, 2, 0.15, lineMat, roads);
+
     LIFE.scene.add(roads);
     LIFE.world._roadsGroup = roads;
 };
@@ -543,6 +633,15 @@ LIFE.world.tryEnterDoor = function() {
 // ============================================================
 // INTERIOR ENTER / EXIT
 // ============================================================
+// World positions for each interior (where they actually exist on the map)
+LIFE.world.INTERIOR_POSITIONS = {
+    classroom:   { x: 0,    z: -150 },   // inside school
+    hsclassroom: { x: 120,  z: -150 },   // inside highschool
+    hospital:    { x: -150, z: 0 },      // inside hospital
+    playerhome:  { x: 0,    z: 0 },      // inside home zone
+    jail:        { x: -60,  z: -80 }     // inside police station
+};
+
 LIFE.world.enterInterior = function(name, door) {
     if (LIFE.world.insideInterior) return; // already inside
 
@@ -557,13 +656,16 @@ LIFE.world.enterInterior = function(name, door) {
         LIFE.world._savedPlayerPos = { x: door.exitX, z: door.exitZ };
     }
 
-    // Hide all world zone groups + world ground
+    // Hide all world zone groups + world ground + zone NPCs
     LIFE.world.hideAllZones();
 
     // Clear any lingering envObjects and colliders
     LIFE.clearEnvironment();
 
-    // Build interior using existing builder
+    // Determine world position for this interior
+    var pos = LIFE.world.INTERIOR_POSITIONS[name] || { x: 0, z: 0 };
+
+    // Build interior using existing builder, inside a group at the world position
     var cfg = LIFE.STAGES[name];
     if (cfg) {
         LIFE.scene.background.set(cfg.bg);
@@ -573,6 +675,28 @@ LIFE.world.enterInterior = function(name, door) {
     }
     LIFE.state.bounds = LIFE.getBoundsForStage(name);
 
+    // Create interior group at correct world position
+    var interiorGroup = new THREE.Group();
+    interiorGroup.position.set(pos.x, 0, pos.z);
+    LIFE.scene.add(interiorGroup);
+    LIFE.world._interiorGroup = interiorGroup;
+
+    // Redirect addEnv/addCollider to use interior group with world offset
+    var origAddEnv = LIFE.addEnv;
+    var origAddCollider = LIFE.addCollider;
+    LIFE.addEnv = function(obj) {
+        interiorGroup.add(obj);
+        return obj;
+    };
+    LIFE.addCollider = function(x, z, w, d) {
+        LIFE.colliders.push({
+            minX: (x + pos.x) - w / 2,
+            maxX: (x + pos.x) + w / 2,
+            minZ: (z + pos.z) - d / 2,
+            maxZ: (z + pos.z) + d / 2
+        });
+    };
+
     var builders = {
         classroom: LIFE.buildClassroom,
         hsclassroom: LIFE.buildHSClassroom,
@@ -581,12 +705,20 @@ LIFE.world.enterInterior = function(name, door) {
     };
     if (builders[name]) builders[name]();
 
+    // Restore original functions
+    LIFE.addEnv = origAddEnv;
+    LIFE.addCollider = origAddCollider;
+
     LIFE.world.insideInterior = name;
 
-    // Spawn NPCs for interior
+    // Spawn NPCs for interior at world position
+    LIFE.world._interiorNPCOffset = pos;
     LIFE.spawnNPCs(name);
+    LIFE.world._interiorNPCOffset = null;
+
     LIFE.updatePlayerSize();
-    LIFE.player.group.position.set(0, 0, 3);
+    // Position player at the interior's world position
+    LIFE.player.group.position.set(pos.x, 0, pos.z + 3);
 
     LIFE.ambientLight.intensity = 0.5;
     LIFE.dirLight.intensity = 0.8;
@@ -595,7 +727,22 @@ LIFE.world.enterInterior = function(name, door) {
 LIFE.world.exitInterior = function() {
     if (!LIFE.world.insideInterior) return;
 
-    // Clear interior objects
+    // Remove interior NPCs from scene (classroom Teacher, Kids, etc.)
+    // Zone NPCs are kept — they're managed by the world system
+    LIFE.npcs.forEach(function(n) {
+        if (!n._isZoneNPC) {
+            LIFE.scene.remove(n.char.group);
+        }
+    });
+    LIFE.npcs = [];
+
+    // Remove interior group (contains all interior meshes at world position)
+    if (LIFE.world._interiorGroup) {
+        LIFE.scene.remove(LIFE.world._interiorGroup);
+        LIFE.world._interiorGroup = null;
+    }
+
+    // Clear any remaining interior objects and colliders
     LIFE.clearEnvironment();
 
     // Restore world zones
@@ -621,8 +768,9 @@ LIFE.world.exitInterior = function() {
     }
     LIFE.world._savedPlayerPos = null;
 
-    // Rebuild active NPC list from nearby zones
-    LIFE.world.refreshNearbyNPCs();
+    // Force immediate culling update to set zone/NPC visibility
+    LIFE.world._cullingTimer = 999;
+    LIFE.world.updateCulling(0);
 
     LIFE.updatePlayerSize();
 };
@@ -633,6 +781,15 @@ LIFE.world.exitInterior = function() {
 LIFE.world.hideAllZones = function() {
     for (var name in LIFE.world.zones) {
         LIFE.world.zones[name].group.visible = false;
+        // Also hide zone NPCs (they're in LIFE.scene, not zone groups)
+        var npcs = LIFE.world.zones[name].npcs;
+        if (npcs) {
+            for (var i = 0; i < npcs.length; i++) {
+                if (npcs[i].char && npcs[i].char.group) {
+                    npcs[i].char.group.visible = false;
+                }
+            }
+        }
     }
     if (LIFE.world.worldGround) LIFE.world.worldGround.visible = false;
     if (LIFE.world._roadsGroup) LIFE.world._roadsGroup.visible = false;
@@ -725,9 +882,12 @@ LIFE.world.detectZone = function(px, pz) {
             closestZone = name;
         }
     }
-    // Also check hospital exterior
+    // Also check hospital exterior and police station
     if (Math.sqrt((px + 150) * (px + 150) + pz * pz) < 15) {
         closestZone = 'hospital_ext';
+    }
+    if (Math.sqrt((px + 60) * (px + 60) + (pz + 80) * (pz + 80)) < 15) {
+        closestZone = 'police_station';
     }
 
     if (closestZone !== LIFE.world._currentZone) {
@@ -737,7 +897,7 @@ LIFE.world.detectZone = function(px, pz) {
                 home: 'Home', school: 'Elementary School', highschool: 'High School',
                 college: 'University', city: 'City', retirement: 'Retirement Community',
                 hospital_ext: 'Hospital', dealership: 'Auto Dealership',
-                eventcenter: 'Event Center'
+                eventcenter: 'Event Center', police_station: 'Police Station'
             };
             LIFE.world.showZonePopup(labels[closestZone] || closestZone);
         }
@@ -758,6 +918,43 @@ LIFE.world.showZonePopup = function(text) {
 // ============================================================
 // NPC MANAGEMENT
 // ============================================================
+// Determine an appropriate age for an NPC based on their type and the player's age
+LIFE.world.getNPCAge = function(npcType, state, childIdx) {
+    var pAge = state.age;
+    switch (npcType) {
+        case 'Mom': return pAge + 25 + Math.floor(Math.random() * 5);
+        case 'Dad': return pAge + 27 + Math.floor(Math.random() * 5);
+        case 'Sibling': return Math.max(1, pAge + (Math.random() < 0.5 ? -2 - Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 3)));
+        case 'Spouse': return state.spouseAge || (pAge + Math.floor(Math.random() * 6) - 3);
+        case 'Your Child':
+            var born = state.firstChildBornAge || (pAge - 5);
+            return Math.max(0, pAge - born - (childIdx || 0) * 2);
+        case 'Grandchild':
+            var gcAge = state.firstChildBornAge ? pAge - state.firstChildBornAge - 20 : 3;
+            return Math.max(0, Math.min(gcAge, 10));
+        case 'Old Friend': return pAge + Math.floor(Math.random() * 10) - 5;
+        case 'Teacher': return 30 + Math.floor(Math.random() * 25);
+        case 'Professor': return 35 + Math.floor(Math.random() * 30);
+        case 'Kid': return 5 + Math.floor(Math.random() * 7);
+        case 'Student':
+            if (pAge >= 12 && pAge <= 17) return 12 + Math.floor(Math.random() * 6);
+            return 18 + Math.floor(Math.random() * 5);
+        case 'Stranger': return 18 + Math.floor(Math.random() * 55);
+        case 'Neighbor': return 25 + Math.floor(Math.random() * 45);
+        case 'Coworker': return 22 + Math.floor(Math.random() * 40);
+        case 'Boss': return 35 + Math.floor(Math.random() * 25);
+        case 'Police': return 25 + Math.floor(Math.random() * 20);
+        case 'Dealer': return 18 + Math.floor(Math.random() * 25);
+        case 'Doctor': return 30 + Math.floor(Math.random() * 30);
+        case 'Nurse': return 24 + Math.floor(Math.random() * 30);
+        case 'Inmate': return 20 + Math.floor(Math.random() * 40);
+        case 'Pharmacist': return 28 + Math.floor(Math.random() * 35);
+        case 'Car Salesman': return 28 + Math.floor(Math.random() * 20);
+        case 'Real Estate Agent': return 30 + Math.floor(Math.random() * 25);
+        default: return 25 + Math.floor(Math.random() * 35);
+    }
+};
+
 LIFE.world.spawnZoneNPCs = function(zoneName) {
     var def = LIFE.ZONE_DEFS[zoneName];
     if (!def) return;
@@ -785,6 +982,23 @@ LIFE.world.spawnZoneNPCs = function(zoneName) {
         }
     }
 
+    // Conditional NPCs for retirement zone
+    if (zoneName === 'retirement') {
+        // Grandchild: only if player has kids AND oldest child is 20+ (old enough to have their own kid)
+        var oldestChildAge = state.hasKids && state.firstChildBornAge
+            ? (state.age - state.firstChildBornAge) : 0;
+        if (oldestChildAge >= 20) {
+            names.push('Grandchild');
+        }
+        // Old Friend: only if player has actual close friends (relationship level >= 25)
+        var hasOldFriend = false;
+        var rels = state.relationships || {};
+        for (var rn in rels) {
+            if (rels[rn].level >= 25 && rn !== state.spouseName) { hasOldFriend = true; break; }
+        }
+        if (hasOldFriend) names.push('Old Friend');
+    }
+
     // Dynamic work NPCs in city
     if (zoneName === 'city') {
         var career = state.career;
@@ -802,22 +1016,44 @@ LIFE.world.spawnZoneNPCs = function(zoneName) {
     for (var ni = 0; ni < names.length; ni++) {
         var npcType = names[ni];
         var x, z, safe, tries = 0;
-        do {
-            x = def.cx + (Math.random() - 0.5) * b * 2;
-            z = def.cz + (Math.random() - 0.5) * b * 2;
-            safe = true;
-            // Check against zone colliders
-            for (var ci = 0; ci < zone.colliders.length; ci++) {
-                var c = zone.colliders[ci];
-                if (x > c.minX - 0.5 && x < c.maxX + 0.5 && z > c.minZ - 0.5 && z < c.maxZ + 0.5) {
-                    safe = false; break;
+
+        // Fixed spawn positions for key NPCs
+        if (npcType === 'Car Salesman' && zoneName === 'dealership') {
+            // Right in front of the dealership building (building is at local 0,-8)
+            x = def.cx;
+            z = def.cz - 2;
+        } else if (npcType === 'Real Estate Agent' && zoneName === 'city') {
+            // Inside the real estate office (building at local 25,35, door at z+3)
+            x = def.cx + 25;
+            z = def.cz + 35;
+        } else if (npcType === 'Mom' && zoneName === 'home') {
+            // Inside the house (house is at local 0,-5, door at z=0)
+            x = def.cx - 2;
+            z = def.cz - 6;
+        } else if (npcType === 'Dad' && zoneName === 'home') {
+            x = def.cx + 2;
+            z = def.cz - 6;
+        } else if (npcType === 'Sibling' && zoneName === 'home') {
+            x = def.cx;
+            z = def.cz - 3;
+        } else {
+            do {
+                x = def.cx + (Math.random() - 0.5) * b * 2;
+                z = def.cz + (Math.random() - 0.5) * b * 2;
+                safe = true;
+                // Check against zone colliders
+                for (var ci = 0; ci < zone.colliders.length; ci++) {
+                    var c = zone.colliders[ci];
+                    if (x > c.minX - 0.5 && x < c.maxX + 0.5 && z > c.minZ - 0.5 && z < c.maxZ + 0.5) {
+                        safe = false; break;
+                    }
                 }
-            }
-            // Don't spawn too close to zone center (where player might be)
-            var cdx = x - def.cx, cdz = z - def.cz;
-            if (Math.sqrt(cdx * cdx + cdz * cdz) < 3) safe = false;
-            tries++;
-        } while (!safe && tries < 30);
+                // Don't spawn too close to zone center (where player might be)
+                var cdx = x - def.cx, cdz = z - def.cz;
+                if (Math.sqrt(cdx * cdx + cdz * cdz) < 3) safe = false;
+                tries++;
+            } while (!safe && tries < 30);
+        }
 
         // Pre-determine gender
         var npcFemale;
@@ -844,7 +1080,12 @@ LIFE.world.spawnZoneNPCs = function(zoneName) {
             usedNames[individualName] = true;
         }
 
-        var npc = LIFE.createNPC(npcType, x, z, individualName, npcFemale);
+        // Determine NPC age based on type and player's current age
+        var npcAge = LIFE.world.getNPCAge(npcType, state, childIndex > 0 ? childIndex - 1 : 0);
+
+        var npc = LIFE.createNPC(npcType, x, z, individualName, npcFemale, { npcAge: npcAge });
+        npc._isZoneNPC = true;
+        npc._zoneName = zoneName;
         npc._zoneCenter = new THREE.Vector3(def.cx, 0, def.cz);
         npc._zoneRadius = def.radius;
 
@@ -857,7 +1098,7 @@ LIFE.world.spawnZoneNPCs = function(zoneName) {
         } else if (nightOwlTypes[npcType]) {
             npc._nightActive = Math.random() < 0.5;
             npc._earlyBird = true;
-        } else if (npc.isVendor || npc.isCarSalesman) {
+        } else if (npc.isVendor || npc.isCarSalesman || npc.isRealEstate) {
             // Vendors active during business hours (earlyBird), closed at night
             npc._nightActive = false;
             npc._earlyBird = true;
@@ -875,8 +1116,11 @@ LIFE.world.spawnZoneNPCs = function(zoneName) {
         var cityDef = LIFE.ZONE_DEFS.city;
         LIFE.JOB_BUILDINGS.forEach(function(jb) {
             var hireNPC = LIFE.createNPC('Hiring ' + jb.label,
-                jb.x + cityDef.cx, jb.z + cityDef.cz + 6);
+                jb.x + cityDef.cx, jb.z + cityDef.cz + 6, undefined, undefined,
+                { npcAge: 35 + Math.floor(Math.random() * 20) });
             hireNPC.careerType = jb.career;
+            hireNPC._isZoneNPC = true;
+            hireNPC._zoneName = 'city';
             hireNPC._zoneCenter = new THREE.Vector3(cityDef.cx, 0, cityDef.cz);
             hireNPC._zoneRadius = cityDef.radius;
             hireNPC.stayNear = new THREE.Vector3(jb.x + cityDef.cx, 0, jb.z + cityDef.cz);
@@ -898,16 +1142,13 @@ LIFE.world.refreshNearbyNPCs = function() {
     for (var name in LIFE.world.zones) {
         var zone = LIFE.world.zones[name];
         if (!zone.npcs || !zone.group.visible) continue;
-        var dx = px - zone.center.x;
-        var dz = pz - zone.center.z;
-        var dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist < zone.radius + 30) {
-            for (var i = 0; i < zone.npcs.length; i++) {
-                var npc = zone.npcs[i];
-                // Only include visible NPCs (respects time-of-day hiding)
-                if (npc.char && npc.char.group && npc.char.group.visible) {
-                    result.push(npc);
-                }
+        // Include ALL NPCs from visible zones - zone culling already
+        // handles show/hide at 120/140 units, no extra distance check needed
+        for (var i = 0; i < zone.npcs.length; i++) {
+            var npc = zone.npcs[i];
+            // Only include visible NPCs (respects time-of-day hiding)
+            if (npc.char && npc.char.group && npc.char.group.visible) {
+                result.push(npc);
             }
         }
     }

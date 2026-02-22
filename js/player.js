@@ -200,8 +200,14 @@ LIFE.updatePlayer = function(dt) {
     // Only clamp to bounds when NOT in open world, or when inside an interior
     if (!LIFE.world.built || LIFE.world.insideInterior) {
         var b = state.bounds;
-        player.group.position.x = Math.max(-b, Math.min(b, player.group.position.x));
-        player.group.position.z = Math.max(-b, Math.min(b, player.group.position.z));
+        // Clamp around the interior's world position (not always 0,0)
+        var cx = 0, cz = 0;
+        if (LIFE.world.built && LIFE.world.insideInterior && LIFE.world.INTERIOR_POSITIONS) {
+            var ipos = LIFE.world.INTERIOR_POSITIONS[LIFE.world.insideInterior];
+            if (ipos) { cx = ipos.x; cz = ipos.z; }
+        }
+        player.group.position.x = Math.max(cx - b, Math.min(cx + b, player.group.position.x));
+        player.group.position.z = Math.max(cz - b, Math.min(cz + b, player.group.position.z));
     }
     LIFE.resolveCollisions(player.group.position);
 
@@ -229,9 +235,9 @@ LIFE.updatePlayer = function(dt) {
     if (state.age >= 1 && state.age < 3 && isMoving) player.group.rotation.z = Math.sin(state.walkTime * 2) * 0.12;
     else player.group.rotation.z *= 0.9;
 
-    // nearest living NPC
+    // nearest living NPC (range 6 to match visual proximity expectations)
     state.nearestNPC = null;
-    var minDist = 4;
+    var minDist = 6;
     LIFE.npcs.forEach(function(npc) {
         if (!npc.alive) return;
         var ndx = npc.char.group.position.x - player.group.position.x;

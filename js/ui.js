@@ -208,11 +208,16 @@ LIFE.ui.updateNPCHint = function() {
             else if (rel.level <= -40) relText = ' (Hostile)';
             else if (rel.level <= -15) relText = ' (Unfriendly)';
         }
-        var displayName = npc.name || npc.type;
-        if (npc.type.indexOf('Hiring') === 0) displayName = npc.type.replace('Hiring ', '') + ' Manager';
-        // show type in parentheses if name differs from type
-        else if (npc.name !== npc.type) displayName = npc.name + ' (' + npc.type + ')';
-        hint.textContent = 'Press T to talk to ' + displayName + relText;
+        var hintName;
+        if (npc.type.indexOf('Hiring') === 0) {
+            hintName = npc.type.replace('Hiring ', '') + ' Manager';
+        } else if (npc._met && npc.name !== npc.type && !LIFE.NPC_TITLE_VISIBLE[npc.type] && !LIFE.NPC_FAMILY_TITLE[npc.type]) {
+            // Known person - show name with type
+            hintName = npc.name + ' (' + npc.type + ')';
+        } else {
+            hintName = npc.displayName || npc.name || npc.type;
+        }
+        hint.textContent = 'Press T to talk to ' + hintName + relText;
     } else {
         hint.style.display = 'none';
     }
@@ -829,6 +834,7 @@ LIFE.ui.openShop = function() {
             if (LIFE.economy.buyItem(i)) {
                 LIFE.sounds.money();
                 LIFE.ui.showPopup(item.name + ' purchased!', '#4caf50');
+                LIFE.state.shopOpen = false;
                 LIFE.ui.openShop(); // refresh
             } else {
                 LIFE.ui.showPopup("Can't afford!", '#ef5350');
@@ -847,16 +853,6 @@ LIFE.ui.openShop = function() {
         invDiv.onclick = function() { LIFE.ui.closeShop(); setTimeout(function() { LIFE.ui.openInvestmentShop(); }, 50); };
         items.appendChild(invDiv);
     }
-    if (age >= 20) {
-        var propDiv = document.createElement('div');
-        propDiv.className = 'shopItem';
-        propDiv.style.color = '#4caf50';
-        propDiv.style.borderColor = 'rgba(76,175,80,0.3)';
-        propDiv.innerHTML = '<span class="shopName">Real Estate</span><span class="shopStat">Buy properties for rental income</span>';
-        propDiv.onclick = function() { LIFE.ui.closeShop(); setTimeout(function() { LIFE.ui.openPropertyShop(); }, 50); };
-        items.appendChild(propDiv);
-    }
-
     var closeDiv = document.createElement('div');
     closeDiv.className = 'shopItem shopClose';
     closeDiv.textContent = '[ESC] Close Shop';
@@ -911,6 +907,7 @@ LIFE.ui.openDealerShop = function() {
                 if (item.type === 'switchblade') msg = 'Switchblade acquired! Punch damage increased.';
                 if (item.type === 'drug') { msg = item.name + ' used!'; LIFE.sounds.drug(); }
                 LIFE.ui.showPopup(msg, '#ff9800');
+                LIFE.state.shopOpen = false;
                 LIFE.ui.openDealerShop(); // refresh
             } else {
                 LIFE.ui.showPopup("Can't afford!", '#ef5350');
@@ -980,6 +977,7 @@ LIFE.ui.openVendorShop = function(vendorType) {
             if (LIFE.economy.buyVendorItem(vendorType, i)) {
                 LIFE.sounds.money();
                 LIFE.ui.showPopup(item.name + ' purchased!', titleColor);
+                LIFE.state.shopOpen = false;
                 LIFE.ui.openVendorShop(vendorType); // refresh
             } else {
                 LIFE.ui.showPopup("Can't afford!", '#ef5350');
@@ -1042,6 +1040,7 @@ LIFE.ui.openPropertyShop = function() {
             if (LIFE.economy.buyProperty(i)) {
                 LIFE.sounds.money();
                 LIFE.ui.showPopup(prop.name + ' purchased!', '#4caf50');
+                LIFE.state.shopOpen = false;
                 LIFE.ui.openPropertyShop();
             } else {
                 LIFE.ui.showPopup("Can't afford!", '#ef5350');
@@ -1106,6 +1105,7 @@ LIFE.ui.openInvestmentShop = function() {
             if (LIFE.economy.buyInvestment(i)) {
                 LIFE.sounds.money();
                 LIFE.ui.showPopup(inv.name + ' invested!', '#ffeb3b');
+                LIFE.state.shopOpen = false;
                 LIFE.ui.openInvestmentShop();
             } else {
                 LIFE.ui.showPopup("Can't afford!", '#ef5350');
