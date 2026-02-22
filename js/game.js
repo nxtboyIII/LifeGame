@@ -45,7 +45,10 @@ LIFE.state = {
     hospitalReason: null, // 'illness', 'injury', 'parentCheckin', 'nearDeath', 'foodPoisoning'
     hospitalReturnStage: null,
     hospitalReturnPos: null,
-    hospitalTimer: 0
+    hospitalTimer: 0,
+    // infant
+    heldByParent: false,
+    _birthHospital: false
 };
 
 // ============================================================
@@ -1217,20 +1220,37 @@ LIFE.advanceYear = function() {
 
 LIFE.startPlaying = function() {
     LIFE.state.gamePhase = 'playing'; LIFE.state.age = 0; LIFE.state.yearTimer = 0;
-    LIFE.state.currentStage = 'nursery';
-    LIFE.buildEnvironment('nursery'); LIFE.createPlayer();
-    LIFE.player.group.position.set(0, 0, 0); LIFE.spawnNPCs('nursery');
+    // start in hospital birth scene
+    LIFE.state.currentStage = 'hospital';
+    LIFE.state.bounds = LIFE.getBoundsForStage('hospital');
+    LIFE.buildEnvironment('hospital'); LIFE.createPlayer();
+    LIFE.player.group.position.set(2, 0, 0);
+    // no NPCs in birth hospital - just the doctor dialogue
     LIFE.ui.showGameUI(); LIFE.ui.updateActionButtons();
     LIFE.ui.showStageMessage('You are born!'); LIFE.ui.$.age.textContent = '0';
     LIFE.sounds.birth();
 
-    // Gender selection at birth
+    // Gender selection at birth - in hospital
     setTimeout(function() {
         if (!LIFE.dialogue.active && LIFE.state.gamePhase === 'playing') {
-            LIFE.dialogue.open('Doctor', "Congratulations! It's a healthy baby!", [
-                { text: "It's a Boy!", effects: { happiness: 5 }, setGender: 'M' },
-                { text: "It's a Girl!", effects: { happiness: 5 }, setGender: 'F' }
+            LIFE.dialogue.open('Doctor', "Congratulations! It's a healthy baby! Welcome to the world, little one.", [
+                { text: "It's a Boy!", effects: { happiness: 5 }, setGender: 'M', response: {
+                    text: "A beautiful baby boy! Mom and baby are both doing great. Let's get you home.",
+                    options: [
+                        { text: "*yawn*", effects: { happiness: 3 } },
+                        { text: "*tiny cry*", effects: { happiness: 2 }, sound: 'cry' }
+                    ]
+                }},
+                { text: "It's a Girl!", effects: { happiness: 5 }, setGender: 'F', response: {
+                    text: "A beautiful baby girl! Mom and baby are both doing great. Let's get you home.",
+                    options: [
+                        { text: "*yawn*", effects: { happiness: 3 } },
+                        { text: "*tiny cry*", effects: { happiness: 2 }, sound: 'cry' }
+                    ]
+                }}
             ], true);
+            // transition to nursery after dialogue closes
+            LIFE.state._birthHospital = true;
         }
     }, 1500);
 };

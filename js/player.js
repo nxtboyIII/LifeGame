@@ -102,6 +102,24 @@ LIFE.updatePlayer = function(dt) {
 
     var isCrawling = state.age < 2;
     var isNewborn = state.age === 0 && state.yearTimer < 20;
+
+    // infant held by parent - follow Mom NPC
+    if (state.heldByParent && state.age <= 0) {
+        var mom = null;
+        for (var ni = 0; ni < LIFE.npcs.length; ni++) {
+            if (LIFE.npcs[ni].type === 'Mom' && LIFE.npcs[ni].alive) { mom = LIFE.npcs[ni]; break; }
+        }
+        if (mom) {
+            var mp = mom.char.group.position;
+            var mh = mom.char.height || 1.2;
+            player.group.position.set(mp.x, mh * 0.6, mp.z + 0.25);
+            player.group.rotation.y = mom.char.group.rotation.y;
+        }
+        // stop being held once age advances past 0
+        return;
+    }
+    if (state.heldByParent && state.age > 0) state.heldByParent = false;
+
     var moveX = 0, moveZ = 0;
 
     if (!isNewborn && speed > 0) {

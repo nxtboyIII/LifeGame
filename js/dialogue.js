@@ -635,6 +635,22 @@ LIFE.dialogue.close = function() {
     if (wasBlocking) {
         LIFE.lockCursor();
     }
+    // birth hospital -> transition to nursery
+    if (LIFE.state._birthHospital) {
+        LIFE.state._birthHospital = false;
+        setTimeout(function() {
+            if (LIFE.state.gamePhase === 'playing') {
+                LIFE.state.currentStage = 'nursery';
+                LIFE.state.bounds = LIFE.getBoundsForStage('nursery');
+                LIFE.buildEnvironment('nursery');
+                LIFE.spawnNPCs('nursery');
+                LIFE.updatePlayerSize();
+                LIFE.player.group.position.set(0, 0, 0);
+                LIFE.state.heldByParent = true;
+                LIFE.ui.showStageMessage('Home sweet home');
+            }
+        }, 1000);
+    }
 };
 
 LIFE.dialogue.selectOption = function(idx) {
