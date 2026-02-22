@@ -59,8 +59,11 @@ LIFE.damagePlayer = function(amount, source) {
 // ============================================================
 LIFE.resolveCollisions = function(pos) {
     var radius = 0.3;
-    for (var i = 0; i < LIFE.colliders.length; i++) {
-        var c = LIFE.colliders[i];
+    var colliders = (LIFE.world.built && !LIFE.world.insideInterior)
+        ? LIFE.world.getActiveColliders()
+        : LIFE.colliders;
+    for (var i = 0; i < colliders.length; i++) {
+        var c = colliders[i];
         var closestX = Math.max(c.minX, Math.min(pos.x, c.maxX));
         var closestZ = Math.max(c.minZ, Math.min(pos.z, c.maxZ));
         var dx = pos.x - closestX;
@@ -93,6 +96,12 @@ LIFE.updatePlayer = function(dt) {
     var player = LIFE.player;
     if (!player || state.gamePhase === 'death' || state.gamePhase === 'womb') return;
     if ((LIFE.dialogue.active && LIFE.dialogue.blocking) || state.shopOpen || state.friendsOpen) return;
+
+    // Driving mode - delegate to car update
+    if (state.inCar) {
+        LIFE.updateCarDriving(dt);
+        return;
+    }
 
     var speed = LIFE.getSpeedForAge(state.age, state.yearTimer);
 
@@ -188,9 +197,12 @@ LIFE.updatePlayer = function(dt) {
         if (player.group.position.y <= 0) { player.group.position.y = 0; state.playerVelY = 0; state.isGrounded = true; }
     }
 
-    var b = state.bounds;
-    player.group.position.x = Math.max(-b, Math.min(b, player.group.position.x));
-    player.group.position.z = Math.max(-b, Math.min(b, player.group.position.z));
+    // Only clamp to bounds when NOT in open world, or when inside an interior
+    if (!LIFE.world.built || LIFE.world.insideInterior) {
+        var b = state.bounds;
+        player.group.position.x = Math.max(-b, Math.min(b, player.group.position.x));
+        player.group.position.z = Math.max(-b, Math.min(b, player.group.position.z));
+    }
     LIFE.resolveCollisions(player.group.position);
 
     // walk animation
@@ -243,7 +255,13 @@ LIFE.updateCamera = function() {
 
     var camDist, camHeight, shoulderOffset, lerpSpeed;
 
-    if (inCombatMode) {
+    if (state.inCar && LIFE.car.model) {
+        // Driving camera - behind and above car
+        camDist = 8;
+        camHeight = 4;
+        shoulderOffset = 0;
+        lerpSpeed = 0.12;
+    } else if (inCombatMode) {
         // over-the-shoulder shooter view (above and behind)
         camDist = 2.5;
         camHeight = h + 0.4;
@@ -279,7 +297,15 @@ LIFE.updateCamera = function() {
     LIFE.camera.position.y += (tY - LIFE.camera.position.y) * lerpSpeed;
     LIFE.camera.position.z += (tZ - LIFE.camera.position.z) * lerpSpeed;
 
-    if (inCombatMode) {
+    if (state.inCar && LIFE.car.model) {
+        // Look at the car, slightly ahead
+        var carRot = LIFE.car.model.rotation.y;
+        LIFE.camera.lookAt(
+            LIFE.car.model.position.x + Math.sin(carRot) * 5,
+            1.5,
+            LIFE.car.model.position.z + Math.cos(carRot) * 5
+        );
+    } else if (inCombatMode) {
         // look ahead of the player, not at them
         var lookAhead = 10;
         LIFE.camera.lookAt(

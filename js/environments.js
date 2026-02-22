@@ -2,6 +2,10 @@
 // ENVIRONMENT BUILDING
 // ============================================================
 LIFE.buildEnvironment = function(stage) {
+    // If world is built and this is an outdoor zone, skip (already in world)
+    var outdoorZones = { home: true, school: true, highschool: true, college: true, city: true, retirement: true, dealership: true, eventcenter: true };
+    if (LIFE.world.built && outdoorZones[stage]) return;
+
     LIFE.clearEnvironment();
     const cfg = LIFE.STAGES[stage];
     if (!cfg) return;
@@ -96,9 +100,9 @@ LIFE.buildNursery = function() {
 
 // ---------- HOME ----------
 LIFE.buildHome = function() {
-    LIFE.makeGround(60, 0x4a7c3f);
-    // house floor
-    LIFE.addEnv(LIFE.makeBox(14, 0.1, 10, 0xdeb887, 0, 0.05, -5));
+    LIFE.makeGround(32, 0x4a7c3f);
+    // house floor (raised above zone ground to avoid z-fighting)
+    LIFE.addEnv(LIFE.makeBox(14, 0.1, 10, 0xdeb887, 0, 0.08, -5));
     // walls (solid)
     LIFE.addSolid(14, 3.5, 0.3, 0xfff8e1, 0, 1.75, -10);
     LIFE.addSolid(0.3, 3.5, 10, 0xfff8e1, -7, 1.75, -5);
@@ -120,7 +124,7 @@ LIFE.buildHome = function() {
 
 // ---------- SCHOOL (Elementary) ----------
 LIFE.buildSchool = function() {
-    LIFE.makeGround(80, 0x4a7c3f);
+    LIFE.makeGround(42, 0x4a7c3f);
     // school building (auto collider via makeBuilding)
     LIFE.makeBuilding(0, -15, 20, 5, 8, 0xc62828, 0x8b0000);
     LIFE.addSolid(2, 3, 0.3, 0x5d4037, 0, 1.5, -11.2);
@@ -148,7 +152,7 @@ LIFE.buildSchool = function() {
 
 // ---------- HIGH SCHOOL ----------
 LIFE.buildHighSchool = function() {
-    LIFE.makeGround(80, 0x556b2f);
+    LIFE.makeGround(42, 0x556b2f);
     LIFE.makeBuilding(0, -18, 28, 8, 10, 0x78909c, 0x546e7a);
     LIFE.addSolid(3, 4, 0.3, 0x5d4037, 0, 2, -13.2);
     // gym
@@ -169,7 +173,7 @@ LIFE.buildHighSchool = function() {
 
 // ---------- COLLEGE ----------
 LIFE.buildCollege = function() {
-    LIFE.makeGround(100, 0x3d6b35);
+    LIFE.makeGround(52, 0x3d6b35);
     LIFE.makeBuilding(-15, -15, 14, 10, 10, 0xbcaaa4, 0x8d6e63);
     LIFE.makeBuilding(15, -10, 12, 7, 10, 0xa1887f, 0x795548);
     LIFE.makeBuilding(20, 15, 10, 12, 8, 0xffcc80, 0xff9800);
@@ -205,7 +209,7 @@ LIFE.buildCollege = function() {
 // ---------- CITY ----------
 LIFE.buildCity = function() {
     LIFE.state.homeDoor = null; // clear stale home door reference
-    LIFE.makeGround(120, 0x555555);
+    LIFE.makeGround(62, 0x555555);
     // roads
     LIFE.addEnv(LIFE.makeBox(100, 0.02, 6, 0x333333, 0, 0.01, 0));
     LIFE.addEnv(LIFE.makeBox(6, 0.02, 100, 0x333333, 0, 0.01, 0));
@@ -791,7 +795,7 @@ LIFE.buildExecution = function() {
 
 // ---------- RETIREMENT ----------
 LIFE.buildRetirement = function() {
-    LIFE.makeGround(80, 0x5a8f4a);
+    LIFE.makeGround(42, 0x5a8f4a);
     // paths
     LIFE.addEnv(LIFE.makeBox(30, 0.02, 2, 0xd7ccc8, 0, 0.01, 0));
     LIFE.addEnv(LIFE.makeBox(2, 0.02, 30, 0xd7ccc8, 0, 0.01, 0));
@@ -979,4 +983,195 @@ LIFE.buildDeath = function() {
     LIFE.makeGround(40, 0x111111);
     LIFE.ambientLight.intensity = 0.15;
     LIFE.dirLight.intensity = 0.1;
+};
+
+// ---------- CAR DEALERSHIP ----------
+LIFE.buildDealership = function() {
+    LIFE.makeGround(28, 0xbdbdbd);
+
+    // Main showroom building
+    LIFE.makeBuilding(0, -8, 16, 6, 10, 0x263238);
+    // Glass front
+    var glassMat = new THREE.MeshPhongMaterial({ color: 0xbbdefb, emissive: 0x335577, emissiveIntensity: 0.4, transparent: true, opacity: 0.5 });
+    var glassFront = new THREE.Mesh(new THREE.BoxGeometry(14, 5, 0.1), glassMat);
+    glassFront.position.set(0, 3, -3.06);
+    LIFE.addEnv(glassFront);
+
+    // Dealership sign
+    var signCanvas = document.createElement('canvas');
+    signCanvas.width = 512; signCanvas.height = 96;
+    var ctx = signCanvas.getContext('2d');
+    ctx.fillStyle = '#d32f2f';
+    ctx.fillRect(0, 0, 512, 96);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('AUTO DEALERSHIP', 256, 64);
+    var signTex = new THREE.CanvasTexture(signCanvas);
+    var sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: signTex, transparent: true, depthTest: false }));
+    sign.position.set(0, 8, -8);
+    sign.scale.set(6, 1.1, 1);
+    LIFE.addEnv(sign);
+
+    // Display lot - concrete pad
+    LIFE.addEnv(LIFE.makeBox(20, 0.05, 16, 0x9e9e9e, 0, 0.025, 8));
+
+    // Display cars on the lot
+    var displayColors = [0xef5350, 0x42a5f5, 0x212121, 0xffc107, 0x2e7d32, 0x78909c];
+    var carNames = LIFE.CAR_MODELS || [];
+    for (var i = 0; i < Math.min(carNames.length, 6); i++) {
+        var cx = -8 + (i % 3) * 8;
+        var cz = i < 3 ? 4 : 12;
+        var car = carNames[i];
+        // Car body
+        var carBody = LIFE.makeBox(1.8, 0.7, 3.5, car.color, cx, 0.4, cz);
+        LIFE.addEnv(carBody);
+        // Car cabin (top part)
+        LIFE.addEnv(LIFE.makeBox(1.5, 0.5, 1.8, car.color, cx, 0.95, cz - 0.2));
+        // Windows
+        var winM = new THREE.MeshPhongMaterial({ color: 0xbbdefb, emissive: 0x445566, emissiveIntensity: 0.3, transparent: true, opacity: 0.6 });
+        var win1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 1.6), winM);
+        win1.position.set(cx + 0.76, 0.95, cz - 0.2);
+        LIFE.addEnv(win1);
+        var win2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 1.6), winM);
+        win2.position.set(cx - 0.76, 0.95, cz - 0.2);
+        LIFE.addEnv(win2);
+        // Wheels (dark cylinders)
+        var wheelMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+        var wheelGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.15, 8);
+        var positions = [
+            [cx - 0.85, 0.25, cz + 1], [cx + 0.85, 0.25, cz + 1],
+            [cx - 0.85, 0.25, cz - 1.2], [cx + 0.85, 0.25, cz - 1.2]
+        ];
+        for (var w = 0; w < 4; w++) {
+            var wheel = new THREE.Mesh(wheelGeo, wheelMat);
+            wheel.rotation.z = Math.PI / 2;
+            wheel.position.set(positions[w][0], positions[w][1], positions[w][2]);
+            LIFE.addEnv(wheel);
+        }
+        // Price tag
+        var tagCanvas = document.createElement('canvas');
+        tagCanvas.width = 256; tagCanvas.height = 64;
+        var tctx = tagCanvas.getContext('2d');
+        tctx.fillStyle = 'rgba(0,0,0,0.75)';
+        tctx.fillRect(0, 0, 256, 64);
+        tctx.fillStyle = '#ffffff';
+        tctx.font = 'bold 20px Arial';
+        tctx.textAlign = 'center';
+        tctx.fillText(car.name, 128, 24);
+        tctx.fillStyle = '#66bb6a';
+        tctx.font = 'bold 22px Arial';
+        tctx.fillText('$' + car.cost.toLocaleString(), 128, 52);
+        var tagTex = new THREE.CanvasTexture(tagCanvas);
+        var tagSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tagTex, transparent: true, depthTest: false }));
+        tagSprite.position.set(cx, 2, cz);
+        tagSprite.scale.set(2, 0.5, 1);
+        LIFE.addEnv(tagSprite);
+    }
+
+    // Decorative elements
+    // Flags / pennants pole
+    LIFE.addEnv(LIFE.makeBox(0.1, 6, 0.1, 0x757575, -10, 3, 0));
+    LIFE.addEnv(LIFE.makeBox(0.1, 6, 0.1, 0x757575, 10, 3, 0));
+
+    // Parking spaces painted lines
+    for (var p = 0; p < 4; p++) {
+        LIFE.addEnv(LIFE.makeBox(0.08, 0.02, 4, 0xffffff, -6 + p * 4, 0.04, 8));
+    }
+};
+
+// ============================================================
+// EVENT CENTER
+// ============================================================
+LIFE.buildEventCenter = function() {
+    LIFE.makeGround(36, 0x555555);
+
+    // Main venue building - large concert hall
+    LIFE.makeBuilding(0, -10, 24, 12, 16, 0x37474f, 0x263238);
+
+    // Venue sign
+    var signCanvas = document.createElement('canvas');
+    signCanvas.width = 512; signCanvas.height = 96;
+    var ctx = signCanvas.getContext('2d');
+    ctx.fillStyle = '#9c27b0';
+    ctx.fillRect(0, 0, 512, 96);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 44px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('EVENT CENTER', 256, 64);
+    var signTex = new THREE.CanvasTexture(signCanvas);
+    var sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: signTex, transparent: true, depthTest: false }));
+    sign.position.set(0, 14, -18);
+    sign.scale.set(6, 1.1, 1);
+    LIFE.addEnv(sign);
+
+    // Outdoor amphitheater / stage area
+    // Stage platform
+    LIFE.addSolid(10, 1.5, 6, 0x4a148c, 0, 0.75, 12);
+    // Stage back wall
+    LIFE.addEnv(LIFE.makeBox(10, 5, 0.3, 0x311b92, 0, 3, 15));
+    // Stage lights (colored boxes on poles)
+    var lightColors = [0xff1744, 0x2979ff, 0x00e676, 0xffea00, 0xff6d00, 0xd500f9];
+    for (var li = 0; li < 6; li++) {
+        var lx = -4 + li * 1.6;
+        LIFE.addEnv(LIFE.makeBox(0.08, 3, 0.08, 0x424242, lx, 5, 15.1));
+        var bulb = LIFE.makeBox(0.3, 0.3, 0.3, lightColors[li], lx, 6.3, 15.1);
+        bulb.material = new THREE.MeshPhongMaterial({ color: lightColors[li], emissive: lightColors[li], emissiveIntensity: 0.5 });
+        LIFE.addEnv(bulb);
+    }
+
+    // Big event screen behind stage
+    var screenMat = new THREE.MeshPhongMaterial({ color: 0x111111, emissive: 0x222244, emissiveIntensity: 0.3 });
+    var screen = new THREE.Mesh(new THREE.BoxGeometry(8, 4, 0.2), screenMat);
+    screen.position.set(0, 5.5, 15.15);
+    LIFE.addEnv(screen);
+
+    // Seating rows (tiered benches)
+    for (var row = 0; row < 4; row++) {
+        var rz = 4 - row * 3;
+        var ry = row * 0.3;
+        LIFE.addEnv(LIFE.makeBox(12, 0.5, 1.5, 0x616161, 0, ry + 0.25, rz));
+    }
+
+    // Ticket booth (left side)
+    LIFE.addSolid(3, 3, 3, 0x6a1b9a, -14, 1.5, 0);
+    var boothCanvas = document.createElement('canvas');
+    boothCanvas.width = 256; boothCanvas.height = 64;
+    var bctx = boothCanvas.getContext('2d');
+    bctx.fillStyle = 'rgba(156,39,176,0.8)';
+    bctx.fillRect(0, 0, 256, 64);
+    bctx.fillStyle = '#ffffff';
+    bctx.font = 'bold 28px Arial';
+    bctx.textAlign = 'center';
+    bctx.fillText('TICKETS', 128, 44);
+    var boothTex = new THREE.CanvasTexture(boothCanvas);
+    var boothSign = new THREE.Sprite(new THREE.SpriteMaterial({ map: boothTex, transparent: true, depthTest: false }));
+    boothSign.position.set(-14, 4, 0);
+    boothSign.scale.set(2, 0.5, 1);
+    LIFE.addEnv(boothSign);
+
+    // Food stands (right side)
+    LIFE.addSolid(3, 2.5, 3, 0xbf360c, 14, 1.25, -2);
+    LIFE.addSolid(3, 2.5, 3, 0xe65100, 14, 1.25, 4);
+
+    // Decorative lamp posts
+    for (var lp = 0; lp < 6; lp++) {
+        var lpx = -15 + lp * 6;
+        LIFE.addEnv(LIFE.makeBox(0.12, 4, 0.12, 0x424242, lpx, 2, -6));
+        var lamp = LIFE.makeBox(0.5, 0.3, 0.5, 0xffeb3b, lpx, 4.2, -6);
+        lamp.material = new THREE.MeshPhongMaterial({ color: 0xffeb3b, emissive: 0xffeb3b, emissiveIntensity: 0.3 });
+        LIFE.addEnv(lamp);
+    }
+
+    // Parking area
+    LIFE.addEnv(LIFE.makeBox(20, 0.05, 12, 0x424242, 0, 0.02, -22));
+    for (var pk = 0; pk < 5; pk++) {
+        LIFE.addEnv(LIFE.makeBox(0.08, 0.02, 5, 0xffffff, -8 + pk * 4, 0.04, -22));
+    }
+
+    // Trees around perimeter
+    LIFE.makeTree(-20, 10, 0.8);
+    LIFE.makeTree(20, 10, 0.8);
+    LIFE.makeTree(-20, -15, 0.9);
+    LIFE.makeTree(20, -15, 0.9);
 };

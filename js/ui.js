@@ -430,6 +430,11 @@ LIFE.ui.renderOverviewTab = function(container) {
         rows.push(['Children', childText]);
     }
 
+    // Car
+    if (state.ownedCar) {
+        rows.push(['Car', state.ownedCar.name]);
+    }
+
     // Properties
     if (state.properties && state.properties.length > 0) {
         var propNames = state.properties.map(function(p) { return p.name; });
@@ -806,6 +811,7 @@ LIFE.ui.openShop = function() {
 
     LIFE.SHOP_ITEMS.forEach(function(item, i) {
         if (item.minAge > age) return;
+        if (item.once && LIFE.state.purchasedOnce && LIFE.state.purchasedOnce.indexOf(item.name) >= 0) return;
         var div = document.createElement('div');
         var price = item.cost;
         if (LIFE.state.stats.charisma > 50) price = Math.round(price * 0.9);
@@ -883,6 +889,7 @@ LIFE.ui.openDealerShop = function() {
 
     LIFE.DEALER_ITEMS.forEach(function(item, i) {
         if (item.minAge > age) return;
+        if (item.once && LIFE.state.purchasedOnce && LIFE.state.purchasedOnce.indexOf(item.name) >= 0) return;
         var div = document.createElement('div');
         var price = item.cost;
         if (LIFE.state.stats.charisma > 50) price = Math.round(price * 0.9);
@@ -925,6 +932,69 @@ LIFE.ui.closeShop = function() {
     LIFE.state.shopOpen = false;
     LIFE.ui.$.shopBox.style.display = 'none';
     LIFE.lockCursor();
+};
+
+// ============================================================
+// VENDOR SHOP (themed per vendor type)
+// ============================================================
+LIFE.ui.openVendorShop = function(vendorType) {
+    if (LIFE.dialogue.active || LIFE.state.shopOpen) return;
+    var vendorItems = LIFE.VENDOR_ITEMS[vendorType];
+    if (!vendorItems) return;
+    LIFE.state.shopOpen = true;
+    LIFE.unlockCursor();
+
+    var items = LIFE.ui.$.shopItems;
+    items.innerHTML = '';
+    var age = LIFE.state.age;
+
+    var vendorTitleColors = { 'Food Vendor': '#ff6f00', 'Clothes Shop': '#e91e63', 'Pharmacist': '#4caf50', 'Bookstore': '#795548', 'Gym Trainer': '#ff5722', 'Electronics': '#00bcd4' };
+    var titleColor = vendorTitleColors[vendorType] || '#607d8b';
+
+    var title = document.createElement('div');
+    title.className = 'shopItem';
+    title.style.textAlign = 'center';
+    title.style.color = titleColor;
+    title.style.borderColor = titleColor + '44';
+    title.textContent = '--- ' + vendorType.toUpperCase() + ' ---';
+    items.appendChild(title);
+
+    vendorItems.forEach(function(item, i) {
+        if (item.minAge > age) return;
+        var alreadyOwned = item.once && LIFE.state.purchasedOnce && LIFE.state.purchasedOnce.indexOf(item.name) >= 0;
+        if (alreadyOwned) return; // hide already-owned one-time items
+        var div = document.createElement('div');
+        var price = item.cost;
+        if (LIFE.state.stats.charisma > 50) price = Math.round(price * 0.9);
+        var cantAfford = LIFE.state.money < price;
+        div.className = 'shopItem' + (cantAfford ? ' cantAfford' : '');
+        var tags = '';
+        if (item.once) tags += '<span class="shopTag good">One-time</span>';
+        if (item.rep > 0) tags += '<span class="shopTag good">+Rep</span>';
+        if (item.rep < 0) tags += '<span class="shopTag bad">-Rep</span>';
+        div.innerHTML = '<span class="shopName">' + item.name + '</span>' +
+            '<span class="shopTags">' + tags + '</span>' +
+            '<span class="shopStat">+' + item.amount + ' ' + item.stat + '</span>' +
+            '<span class="shopCost">$' + price + '</span>';
+        div.onclick = function() {
+            if (LIFE.economy.buyVendorItem(vendorType, i)) {
+                LIFE.sounds.money();
+                LIFE.ui.showPopup(item.name + ' purchased!', titleColor);
+                LIFE.ui.openVendorShop(vendorType); // refresh
+            } else {
+                LIFE.ui.showPopup("Can't afford!", '#ef5350');
+            }
+        };
+        items.appendChild(div);
+    });
+
+    var closeDiv = document.createElement('div');
+    closeDiv.className = 'shopItem shopClose';
+    closeDiv.textContent = '[ESC] Close';
+    closeDiv.onclick = function() { LIFE.ui.closeShop(); };
+    items.appendChild(closeDiv);
+
+    LIFE.ui.$.shopBox.style.display = 'block';
 };
 
 // ============================================================

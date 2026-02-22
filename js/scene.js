@@ -11,9 +11,9 @@ LIFE.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 LIFE.scene = new THREE.Scene();
 LIFE.scene.background = new THREE.Color(0x87ceeb);
-LIFE.scene.fog = new THREE.Fog(0x87ceeb, 30, 80);
+LIFE.scene.fog = new THREE.Fog(0x87ceeb, 50, 200);
 
-LIFE.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 200);
+LIFE.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
 
 LIFE.ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 LIFE.scene.add(LIFE.ambientLight);
@@ -23,12 +23,13 @@ LIFE.dirLight.position.set(10, 20, 10);
 LIFE.dirLight.castShadow = true;
 LIFE.dirLight.shadow.mapSize.set(1024, 1024);
 LIFE.dirLight.shadow.camera.near = 0.5;
-LIFE.dirLight.shadow.camera.far = 60;
-LIFE.dirLight.shadow.camera.left = -30;
-LIFE.dirLight.shadow.camera.right = 30;
-LIFE.dirLight.shadow.camera.top = 30;
-LIFE.dirLight.shadow.camera.bottom = -30;
+LIFE.dirLight.shadow.camera.far = 120;
+LIFE.dirLight.shadow.camera.left = -50;
+LIFE.dirLight.shadow.camera.right = 50;
+LIFE.dirLight.shadow.camera.top = 50;
+LIFE.dirLight.shadow.camera.bottom = -50;
 LIFE.scene.add(LIFE.dirLight);
+LIFE.scene.add(LIFE.dirLight.target);
 
 LIFE.clock = new THREE.Clock();
 
@@ -122,6 +123,7 @@ LIFE.makeGround = function(size, color) {
         new THREE.MeshPhongMaterial({ color })
     );
     g.rotation.x = -Math.PI / 2;
+    g.position.y = 0.01;
     g.receiveShadow = true;
     return LIFE.addEnv(g);
 };

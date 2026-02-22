@@ -28,7 +28,9 @@ LIFE.STAGES = {
     classroom:    { ages: [-5, -5], bg: 0xfff8e1, fog: [0xfff8e1, 10, 25], ground: 0xf5deb3 },
     hsclassroom:  { ages: [-6, -6], bg: 0xf0f0f0, fog: [0xf0f0f0, 10, 25], ground: 0xbdbdbd },
     // hospital (teleported to, not age-mapped)
-    hospital:     { ages: [-7, -7], bg: 0xf5f5f5, fog: [0xf5f5f5, 12, 30], ground: 0xe0e0e0 }
+    hospital:     { ages: [-7, -7], bg: 0xf5f5f5, fog: [0xf5f5f5, 12, 30], ground: 0xe0e0e0 },
+    // event center (in open world, not age-mapped)
+    eventcenter:  { ages: [-8, -8], bg: 0x87ceeb, fog: [0x87ceeb, 30, 80], ground: 0x555555 }
 };
 
 // ============================================================
@@ -56,12 +58,14 @@ LIFE.NPC_NAMES = {
     home:       ['Mom', 'Dad', 'Sibling'],
     school:     ['Teacher', 'Kid', 'Kid', 'Kid', 'Kid', 'Kid'],
     highschool: ['Teacher', 'Student', 'Student', 'Student', 'Student', 'Student', 'Student', 'Student', 'Dealer'],
-    college:    ['Professor', 'Student', 'Student', 'Student', 'Student', 'Student', 'Student', 'Dealer'],
-    city:       ['Stranger', 'Stranger', 'Stranger', 'Stranger', 'Stranger', 'Neighbor', 'Neighbor', 'Dealer'],
-    retirement: ['Old Friend', 'Neighbor', 'Stranger', 'Grandchild'],
+    college:    ['Professor', 'Student', 'Student', 'Student', 'Student', 'Student', 'Student', 'Dealer', 'Bookstore', 'Gym Trainer'],
+    city:       ['Stranger', 'Stranger', 'Stranger', 'Stranger', 'Stranger', 'Neighbor', 'Neighbor', 'Dealer', 'Food Vendor', 'Clothes Shop', 'Electronics'],
+    retirement: ['Old Friend', 'Neighbor', 'Stranger', 'Grandchild', 'Pharmacist'],
     classroom:  ['Teacher', 'Kid', 'Kid', 'Kid'],
     hsclassroom:['Teacher', 'Student', 'Student', 'Student', 'Student'],
-    hospital:   ['Doctor', 'Nurse', 'Nurse']
+    hospital:   ['Doctor', 'Nurse', 'Nurse'],
+    dealership: ['Car Salesman'],
+    eventcenter: ['Ticket Seller', 'Food Vendor', 'Stranger', 'Stranger']
 };
 
 // Job buildings placed in city (x, z, career, label)
@@ -87,6 +91,16 @@ LIFE.PROPERTY_BUILDINGS = [
     { x: 40,  z: 15,  propIdx: 2, label: 'House',     color: 0xffcc80, w: 10, h: 5, d: 8, isHome: true },
     { x: 40,  z: -15, propIdx: 3, label: 'Luxury House', color: 0xffd54f, w: 12, h: 6, d: 10, isHome: true },
     { x: -25, z: 35,  propIdx: 5, label: 'Commercial', color: 0x607d8b, w: 10, h: 7, d: 8 }
+];
+
+// Cars available at dealership
+LIFE.CAR_MODELS = [
+    { name: 'Used Sedan',     cost: 3000,   speed: 12,  color: 0x78909c, minAge: 16 },
+    { name: 'Compact',        cost: 8000,   speed: 14,  color: 0x42a5f5, minAge: 16 },
+    { name: 'SUV',            cost: 18000,  speed: 13,  color: 0x2e7d32, minAge: 18 },
+    { name: 'Sports Car',     cost: 45000,  speed: 20,  color: 0xef5350, minAge: 18 },
+    { name: 'Luxury Sedan',   cost: 80000,  speed: 16,  color: 0x212121, minAge: 21 },
+    { name: 'Supercar',       cost: 200000, speed: 25,  color: 0xffc107, minAge: 21 }
 ];
 
 // NPC first names split by gender

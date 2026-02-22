@@ -50,7 +50,215 @@ LIFE.state = {
     // infant
     heldByParent: false,
     _birthHospital: false,
-    _baseBeauty: 50
+    _baseBeauty: 50,
+    // car
+    ownedCar: null, // { name, speed, color, modelIndex }
+    inCar: false,
+    carParkedAt: null, // { x, z } world position where car is parked
+    purchasedOnce: [] // one-time purchase tracking
+};
+
+// ============================================================
+// EVENT SYSTEM
+// ============================================================
+LIFE.EVENT_TYPES = [
+    { name: 'Rock Concert', cost: 50, hapBonus: 10, minAge: 12, flavor: "The crowd goes wild!", description: "A local rock band is playing their biggest hits tonight!", fame: 2 },
+    { name: 'Pop Concert', cost: 80, hapBonus: 12, minAge: 10, flavor: "Amazing performance!", description: "A famous pop star is in town for a one-night show!", fame: 3 },
+    { name: 'Jazz Night', cost: 40, hapBonus: 8, minAge: 18, flavor: "Smooth vibes all evening.", description: "An intimate jazz session with talented local musicians.", fame: 0 },
+    { name: 'Comedy Show', cost: 35, hapBonus: 10, minAge: 14, flavor: "Your sides are hurting from laughing!", description: "Stand-up comedians are performing tonight - prepare to laugh!", fame: 1 },
+    { name: 'EDM Festival', cost: 100, hapBonus: 15, minAge: 16, flavor: "The bass drops hit different!", description: "A massive electronic music festival with lights and lasers!", fame: 2 },
+    { name: 'Classical Concert', cost: 60, hapBonus: 8, minAge: 10, flavor: "A truly moving experience.", description: "The city orchestra performs timeless classical masterpieces.", fame: 1 },
+    { name: 'Hip Hop Show', cost: 70, hapBonus: 12, minAge: 14, flavor: "Bars were absolutely fire!", description: "Top hip hop artists performing live on stage!", fame: 2 },
+    { name: 'Charity Gala', cost: 150, hapBonus: 8, minAge: 20, flavor: "You feel great about contributing.", description: "A formal charity event raising money for a good cause.", fame: 3, rep: 10 },
+    { name: 'Food Festival', cost: 25, hapBonus: 10, minAge: 5, flavor: "So much delicious food!", description: "Dozens of food vendors with cuisines from around the world.", fame: 0 },
+    { name: 'Art Exhibition', cost: 30, hapBonus: 6, minAge: 8, flavor: "Some pieces really spoke to you.", description: "Local and international artists showcase their work.", fame: 1 },
+    { name: 'Sports Match', cost: 45, hapBonus: 10, minAge: 8, flavor: "What a game!", description: "The home team is playing a big rivalry match tonight!", fame: 1 },
+    { name: 'Movie Premiere', cost: 40, hapBonus: 8, minAge: 10, flavor: "That was an incredible film!", description: "A new blockbuster movie is having its premiere screening!", fame: 2 },
+    { name: 'Magic Show', cost: 30, hapBonus: 8, minAge: 5, flavor: "How did they DO that?!", description: "A world-famous magician performing mind-bending tricks!", fame: 1 },
+    { name: 'Rap Battle', cost: 20, hapBonus: 10, minAge: 14, flavor: "Bars on bars!", description: "Underground rap battle tournament - who will win?", fame: 1 },
+    { name: 'Dance Competition', cost: 35, hapBonus: 9, minAge: 10, flavor: "Those moves were insane!", description: "Dance crews from across the city compete for the title!", fame: 1 }
+];
+
+LIFE.events = {
+    current: null,      // current active event { name, cost, hapBonus, ... }
+    timer: 0,           // countdown to next event (in game seconds)
+    duration: 0,        // how long current event lasts
+    _scheduleInterval: 300 // check every ~5 game-minutes
+};
+
+LIFE.events.scheduleEvent = function() {
+    var state = LIFE.state;
+    var eligible = [];
+    for (var i = 0; i < LIFE.EVENT_TYPES.length; i++) {
+        var e = LIFE.EVENT_TYPES[i];
+        if (state.age >= e.minAge) eligible.push(e);
+    }
+    if (eligible.length === 0) return;
+    var evt = eligible[Math.floor(Math.random() * eligible.length)];
+    LIFE.events.current = evt;
+    LIFE.events.duration = 400 + Math.random() * 200; // lasts 400-600 game seconds
+    LIFE.news.add(evt.name + ' happening at the Event Center! Tickets: $' + evt.cost, 'event');
+};
+
+LIFE.events.update = function(dt) {
+    if (LIFE.state.gamePhase !== 'playing') return;
+    if (LIFE.state.age < 3) return;
+    LIFE.events.timer -= dt;
+    if (LIFE.events.current) {
+        LIFE.events.duration -= dt;
+        if (LIFE.events.duration <= 0) {
+            LIFE.events.current = null;
+            LIFE.events._crowdSpawned = false;
+            LIFE.events.timer = 200 + Math.random() * 300;
+        }
+        // Spawn extra crowd NPCs at event center when event is active
+        if (!LIFE.events._crowdSpawned && LIFE.world.built && LIFE.world.zones.eventcenter) {
+            LIFE.events._crowdSpawned = true;
+            var zone = LIFE.world.zones.eventcenter;
+            var def = LIFE.ZONE_DEFS.eventcenter;
+            var crowdTypes = ['Stranger', 'Stranger', 'Stranger', 'Stranger', 'Stranger'];
+            for (var ci = 0; ci < crowdTypes.length; ci++) {
+                var cx = def.cx + (Math.random() - 0.5) * 20;
+                var cz = def.cz + (Math.random() - 0.5) * 20;
+                var crowd = LIFE.createNPC(crowdTypes[ci], cx, cz);
+                crowd._zoneCenter = new THREE.Vector3(def.cx, 0, def.cz);
+                crowd._zoneRadius = def.radius;
+                crowd._eventCrowd = true;
+                zone.npcs.push(crowd);
+            }
+        }
+    } else if (LIFE.events.timer <= 0) {
+        if (Math.random() < 0.6) {
+            LIFE.events.scheduleEvent();
+        }
+        LIFE.events.timer = 200 + Math.random() * 300;
+    }
+};
+
+// ============================================================
+// NEWS BANNER SYSTEM (Plague Inc style)
+// ============================================================
+LIFE.news = {
+    queue: [],          // pending news items [{text, type, color}]
+    active: null,       // currently displaying
+    _timer: 0,
+    _gap: 8,            // seconds between news items
+    _initialized: false
+};
+
+LIFE.NEWS_RANDOM = [
+    // World news (flavor)
+    "Scientists discover new species of deep-sea fish.",
+    "Record-breaking heatwave sweeps across the country.",
+    "Stock market hits all-time high amid economic growth.",
+    "New smartphone model breaks pre-order records.",
+    "Local park wins 'Best Community Space' award.",
+    "City announces new public transportation routes.",
+    "Internet speeds to double following infrastructure upgrade.",
+    "Astronomers discover potentially habitable exoplanet.",
+    "National sports team advances to championship finals.",
+    "Celebrity couple announces surprise wedding.",
+    "New study finds coffee may actually be good for you.",
+    "Housing prices continue to rise in major cities.",
+    "Tech giant announces revolutionary AI assistant.",
+    "Local bakery wins national award for best pastries.",
+    "Space agency plans manned mission to Mars by 2040.",
+    "Global music streaming hits 1 billion users.",
+    "City council approves new waterfront development.",
+    "Electric vehicle sales surpass gas cars for first time.",
+    "Famous artist's painting sells for record $50 million.",
+    "Unemployment rate drops to historic low.",
+    "New social media platform gains 100 million users in a week.",
+    "World population projected to reach 9 billion.",
+    "Scientists develop promising new cancer treatment.",
+    "Major airline announces budget flights to 50 new cities.",
+    "Video game industry revenue exceeds film and music combined.",
+    "Local school wins national robotics competition.",
+    "New restaurant trend: insect-based cuisine goes mainstream.",
+    "City celebrates 200th anniversary with massive parade.",
+    "Climate summit agrees on new carbon reduction targets."
+];
+
+LIFE.news.add = function(text, type) {
+    var colors = {
+        event: '#ce93d8', milestone: '#4fc3f7', crime: '#ef5350',
+        career: '#66bb6a', world: '#90a4ae', social: '#ffeb3b',
+        fame: '#ff9800'
+    };
+    LIFE.news.queue.push({ text: text, type: type || 'world', color: colors[type] || '#90a4ae' });
+};
+
+LIFE.news.addGameNews = function() {
+    var state = LIFE.state;
+    // Context-sensitive game news based on player's life
+    if (state.kills > 0 && Math.random() < 0.3) {
+        LIFE.news.add('Police search for suspect in string of violent attacks.', 'crime');
+    }
+    if (state.wantedLevel > 2 && Math.random() < 0.4) {
+        LIFE.news.add('Manhunt underway after dangerous fugitive spotted in city.', 'crime');
+    }
+    if (state.fame > 50 && Math.random() < 0.3) {
+        var fameLevel = LIFE.economy.getFameLevel();
+        LIFE.news.add(fameLevel.title + ' spotted at local venue - fans go wild!', 'fame');
+    }
+    if (state.reputation > 60 && Math.random() < 0.2) {
+        LIFE.news.add('Community honors local hero for outstanding contributions.', 'social');
+    }
+    if (state.reputation < -50 && Math.random() < 0.3) {
+        LIFE.news.add('Residents express concern over rising crime in neighborhood.', 'crime');
+    }
+    if (state.married && Math.random() < 0.1) {
+        LIFE.news.add('Study finds married couples live longer on average.', 'world');
+    }
+    if (state.career && state.career !== 'none' && Math.random() < 0.15) {
+        var career = LIFE.economy.getCareer();
+        if (career) LIFE.news.add(career.title + ' sector sees record growth this quarter.', 'career');
+    }
+    if (state.money > 100000 && Math.random() < 0.15) {
+        LIFE.news.add('Local economy booms as real estate investments surge.', 'career');
+    }
+    if (state.drugUses > 3 && Math.random() < 0.2) {
+        LIFE.news.add('Health officials warn about rising substance abuse rates.', 'crime');
+    }
+    // Always add random world news
+    if (Math.random() < 0.5) {
+        var rn = LIFE.NEWS_RANDOM[Math.floor(Math.random() * LIFE.NEWS_RANDOM.length)];
+        LIFE.news.add(rn, 'world');
+    }
+};
+
+LIFE.news.update = function(dt) {
+    if (LIFE.state.gamePhase !== 'playing') return;
+    var el = document.getElementById('newsBanner');
+    if (!el) return;
+
+    if (LIFE.news.active) {
+        // Active news is being shown - CSS animation handles it
+        LIFE.news._timer -= dt;
+        if (LIFE.news._timer <= 0) {
+            LIFE.news.active = null;
+            el.classList.remove('show');
+        }
+    } else {
+        LIFE.news._gap -= dt;
+        if (LIFE.news._gap <= 0) {
+            if (LIFE.news.queue.length > 0) {
+                var item = LIFE.news.queue.shift();
+                LIFE.news.active = item;
+                LIFE.news._timer = 12; // show for 12 seconds (matches CSS animation)
+                // Force animation restart by removing and re-adding class
+                el.classList.remove('show');
+                var textEl = el.querySelector('.newsText');
+                var iconEl = el.querySelector('.newsIcon');
+                if (textEl) textEl.textContent = item.text;
+                if (iconEl) iconEl.style.color = item.color;
+                // Force reflow to restart animation
+                void el.offsetWidth;
+                el.classList.add('show');
+            }
+            LIFE.news._gap = 5 + Math.random() * 8;
+        }
+    }
 };
 
 // ============================================================
@@ -213,6 +421,16 @@ LIFE.arrestPlayer = function() {
     if (LIFE.state.gamePhase === 'jail' || LIFE.state.gamePhase === 'execution') return;
     var state = LIFE.state;
 
+    // Force exit car if driving
+    if (state.inCar) {
+        state.inCar = false;
+        if (LIFE.car.model) { LIFE.scene.remove(LIFE.car.model); LIFE.car.model = null; }
+        LIFE.car.currentSpeed = 0;
+        if (LIFE.player) LIFE.player.group.visible = true;
+        // Car gets impounded (removed)
+        if (LIFE.car.parkedModel) { LIFE.scene.remove(LIFE.car.parkedModel); LIFE.car.parkedModel = null; }
+    }
+
     // DEATH PENALTY check - too many kills or max wanted with high kill count (adults only)
     if (state.age >= 18 && (state.kills >= 5 || (state.wantedLevel >= 5 && state.kills >= 3))) {
         LIFE.cleanupBullets();
@@ -231,6 +449,14 @@ LIFE.arrestPlayer = function() {
         state.gamePhase = 'execution';
         state.executionTimer = 0;
         state.executionPhase = 0;
+        // hide world zones if built
+        if (LIFE.world.built) {
+            if (LIFE.world.insideInterior) {
+                LIFE.clearEnvironment();
+                LIFE.world.insideInterior = null;
+            }
+            LIFE.world.hideAllZones();
+        }
         state.bounds = LIFE.getBoundsForStage('execution');
         LIFE.buildEnvironment('execution');
         LIFE.updatePlayerSize();
@@ -282,6 +508,10 @@ LIFE.arrestPlayer = function() {
     state.wantedLevel = 0;
     state.bounty = 0; // bounty cleared by serving time
     state.reputation = Math.max(-100, state.reputation - 15);
+    if (LIFE.news) {
+        var crimeMsg = state.kills > 0 ? 'Suspect apprehended after violent crime spree - sentenced to ' + years + ' years.' : 'Local resident arrested and sentenced to ' + years + ' years in prison.';
+        LIFE.news.add(crimeMsg, 'crime');
+    }
     state.stats.happiness = Math.max(0, state.stats.happiness - 20);
 
     // CONFISCATE contraband items
@@ -293,6 +523,15 @@ LIFE.arrestPlayer = function() {
     // clean up bullets
     LIFE.cleanupBullets();
     LIFE.despawnPolice();
+
+    // hide world zones if built
+    if (LIFE.world.built) {
+        if (LIFE.world.insideInterior) {
+            LIFE.clearEnvironment();
+            LIFE.world.insideInterior = null;
+        }
+        LIFE.world.hideAllZones();
+    }
 
     // build 3D jail environment
     state.bounds = LIFE.getBoundsForStage('jail');
@@ -332,10 +571,34 @@ LIFE.exitJail = function() {
     LIFE.ui.$.controls.textContent = 'WASD: Move | Mouse: Look | Space: Jump | 1-4: Actions | E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info | G: Enter Home';
     var newStage = LIFE.getStageForAge(state.age);
     state.currentStage = newStage;
-    LIFE.buildEnvironment(newStage);
-    LIFE.spawnNPCs(newStage);
+
+    if (LIFE.world.built) {
+        // Clear jail objects
+        LIFE.clearEnvironment();
+        // Restore world zones
+        LIFE.world.showNearbyZones();
+        LIFE.world.insideInterior = null;
+        // Teleport to correct zone
+        var zonePos = LIFE.world.getZonePos(newStage);
+        LIFE.player.group.position.set(zonePos.x, 0, zonePos.z + 5);
+        state.bounds = 400;
+        // Restore atmosphere
+        LIFE.scene.background.set(0x87ceeb);
+        LIFE.scene.fog.color.set(0x87ceeb);
+        LIFE.scene.fog.near = 50;
+        LIFE.scene.fog.far = 200;
+        // Refresh NPCs
+        LIFE.world.spawnZoneNPCs(newStage);
+        LIFE.world.refreshNearbyNPCs();
+        // Re-spawn parked car if owned
+        if (state.ownedCar) LIFE.spawnParkedCar();
+    } else {
+        LIFE.buildEnvironment(newStage);
+        LIFE.spawnNPCs(newStage);
+        LIFE.player.group.position.set(0, 0, 0);
+    }
+
     LIFE.updatePlayerSize();
-    LIFE.player.group.position.set(0, 0, 0);
     LIFE.ui.updateActionButtons();
     LIFE.ui.$.age.textContent = state.age;
     LIFE.ui.showStageMessage('Released from prison. Age ' + state.age);
@@ -595,11 +858,25 @@ LIFE.tryEnterExitHome = function() {
     var state = LIFE.state;
 
     // EXIT HOSPITAL → back to where we were
-    if (state.currentStage === 'hospital') {
+    if (state.currentStage === 'hospital' || LIFE.world.insideInterior === 'hospital') {
         LIFE.exitHospital();
         return;
     }
 
+    // In open world: use world door system
+    if (LIFE.world.built) {
+        // EXIT any interior
+        if (LIFE.world.insideInterior) {
+            LIFE.world.exitInterior();
+            LIFE.ui.showPopup('Left ' + LIFE.world.insideInterior, '#ff9800');
+            return;
+        }
+        // ENTER a door
+        LIFE.world.tryEnterDoor();
+        return;
+    }
+
+    // --- Legacy (non-world) behavior ---
     // EXIT HOME → back to city
     if (state.currentStage === 'playerhome') {
         var cityPos = state._cityReturnPos || { x: 0, z: 0 };
@@ -680,7 +957,7 @@ LIFE.spawnHomeNPCs = function() {
 LIFE.sendToHospital = function(reason) {
     var state = LIFE.state;
     if (state.gamePhase !== 'playing') return;
-    if (state.currentStage === 'hospital') return;
+    if (state.currentStage === 'hospital' || LIFE.world.insideInterior === 'hospital') return;
 
     // save where we were
     state.hospitalReason = reason;
@@ -691,13 +968,18 @@ LIFE.sendToHospital = function(reason) {
     };
     state.hospitalTimer = 0;
 
-    // transition to hospital
-    state.currentStage = 'hospital';
-    state.bounds = LIFE.getBoundsForStage('hospital');
-    LIFE.buildEnvironment('hospital');
-    LIFE.spawnNPCs('hospital');
-    LIFE.updatePlayerSize();
-    LIFE.player.group.position.set(0, 0, 3);
+    if (LIFE.world.built) {
+        state.currentStage = 'hospital';
+        LIFE.world.enterInterior('hospital');
+    } else {
+        // transition to hospital
+        state.currentStage = 'hospital';
+        state.bounds = LIFE.getBoundsForStage('hospital');
+        LIFE.buildEnvironment('hospital');
+        LIFE.spawnNPCs('hospital');
+        LIFE.updatePlayerSize();
+        LIFE.player.group.position.set(0, 0, 3);
+    }
 
     var msgs = {
         nearDeath: 'Rushed to the hospital!',
@@ -727,22 +1009,41 @@ LIFE.exitHospital = function() {
     state.hospitalReturnStage = null;
     state.hospitalReturnPos = null;
     state.currentStage = returnStage;
-    state.bounds = LIFE.getBoundsForStage(returnStage);
-    LIFE.buildEnvironment(returnStage);
-    LIFE.spawnNPCs(returnStage);
-    LIFE.updatePlayerSize();
-    LIFE.player.group.position.set(returnPos.x, 0, returnPos.z);
 
-    // if school age, restore day phase
-    if (LIFE.isSchoolAge(state.age)) {
-        var dayTimer = state.yearTimer % LIFE.DAY_DURATION;
-        var phase = 'classroom';
-        for (var i = 0; i < LIFE.SCHOOL_PHASES.length; i++) {
-            var sp = LIFE.SCHOOL_PHASES[i];
-            if (dayTimer >= sp.start && dayTimer < sp.end) { phase = sp.name; break; }
+    if (LIFE.world.built) {
+        // Save return pos so exitInterior uses it
+        LIFE.world._savedPlayerPos = { x: returnPos.x, z: returnPos.z };
+        LIFE.world.exitInterior();
+
+        // if school age, restore day phase
+        if (LIFE.isSchoolAge(state.age)) {
+            var dayTimer = state.yearTimer % LIFE.DAY_DURATION;
+            var phase = 'classroom';
+            for (var i = 0; i < LIFE.SCHOOL_PHASES.length; i++) {
+                var sp = LIFE.SCHOOL_PHASES[i];
+                if (dayTimer >= sp.start && dayTimer < sp.end) { phase = sp.name; break; }
+            }
+            state.dayPhase = phase;
+            LIFE.transitionDayPhase(phase);
         }
-        state.dayPhase = phase;
-        LIFE.transitionDayPhase(phase);
+    } else {
+        state.bounds = LIFE.getBoundsForStage(returnStage);
+        LIFE.buildEnvironment(returnStage);
+        LIFE.spawnNPCs(returnStage);
+        LIFE.updatePlayerSize();
+        LIFE.player.group.position.set(returnPos.x, 0, returnPos.z);
+
+        // if school age, restore day phase
+        if (LIFE.isSchoolAge(state.age)) {
+            var dayTimer2 = state.yearTimer % LIFE.DAY_DURATION;
+            var phase2 = 'classroom';
+            for (var j = 0; j < LIFE.SCHOOL_PHASES.length; j++) {
+                var sp2 = LIFE.SCHOOL_PHASES[j];
+                if (dayTimer2 >= sp2.start && dayTimer2 < sp2.end) { phase2 = sp2.name; break; }
+            }
+            state.dayPhase = phase2;
+            LIFE.transitionDayPhase(phase2);
+        }
     }
 
     LIFE.ui.showPopup('Discharged from hospital', '#4caf50');
@@ -908,6 +1209,24 @@ LIFE.transitionDayPhase = function(phase) {
     var state = LIFE.state;
     var isHS = state.age >= 12;
 
+    if (LIFE.world.built) {
+        if (phase === 'classroom') {
+            LIFE.world.enterInterior(isHS ? 'hsclassroom' : 'classroom');
+            LIFE.ui.showPopup('School time!', '#4fc3f7');
+        } else if (phase === 'schoolyard') {
+            if (LIFE.world.insideInterior) LIFE.world.exitInterior();
+            var schoolZone = isHS ? 'highschool' : 'school';
+            var def = LIFE.ZONE_DEFS[schoolZone];
+            if (def) LIFE.player.group.position.set(def.cx, 0, def.cz + 5);
+            LIFE.ui.showPopup('Recess!', '#66bb6a');
+        } else {
+            if (LIFE.world.insideInterior) LIFE.world.exitInterior();
+            LIFE.player.group.position.set(0, 0, 5);
+            LIFE.ui.showPopup('Home from school!', '#ff9800');
+        }
+        return;
+    }
+
     var buildStage;
     if (phase === 'classroom') {
         buildStage = isHS ? 'hsclassroom' : 'classroom';
@@ -1052,7 +1371,7 @@ document.addEventListener('keydown', function(e) {
     if (state.gamePhase !== 'playing' && state.gamePhase !== 'jail') return;
 
     if (e.code === 'KeyE' && state.gamePhase === 'playing') LIFE.advanceYear();
-    if (e.code === 'KeyT' && state.nearestNPC && !LIFE.dialogue.active) {
+    if (e.code === 'KeyT' && state.nearestNPC && !LIFE.dialogue.active && !state.inCar) {
         LIFE.dialogue.talkToNPC(state.nearestNPC);
     }
     // punch works in jail too (Digit1 = punch)
@@ -1067,8 +1386,11 @@ document.addEventListener('keydown', function(e) {
         if (e.code === 'KeyF' && !LIFE.dialogue.active && !state.shopOpen) {
             LIFE.ui.openFriends();
         }
-        if (e.code === 'KeyG' && !LIFE.dialogue.active && !state.shopOpen) {
+        if (e.code === 'KeyG' && !LIFE.dialogue.active && !state.shopOpen && !state.inCar) {
             LIFE.tryEnterExitHome();
+        }
+        if (e.code === 'KeyV' && !LIFE.dialogue.active && !state.shopOpen) {
+            LIFE.toggleCar();
         }
         if (e.code === 'KeyR' && !LIFE.dialogue.active && !state.shopOpen && !state.friendsOpen) {
             LIFE.ui.openTimeSkip();
@@ -1155,6 +1477,9 @@ LIFE.advanceYear = function() {
 
     var state = LIFE.state;
 
+    // Exit car before advancing year
+    if (state.inCar) LIFE.exitCar();
+
     // BLOCK YEAR SKIP during police chase
     if (state.wantedLevel > 0) {
         LIFE.ui.showPopup("Can't skip - police are after you!", '#ff1744');
@@ -1238,16 +1563,37 @@ LIFE.advanceYear = function() {
     var newStage = LIFE.getStageForAge(state.age);
     if (newStage !== state.currentStage) {
         state.currentStage = newStage;
-        // if entering a school stage, start in classroom
-        if (LIFE.isSchoolAge(state.age)) {
-            state.dayPhase = 'classroom';
-            LIFE.transitionDayPhase('classroom');
+        if (LIFE.world.built) {
+            // Open world: teleport to zone, refresh NPCs
+            var outdoorZones = { home: true, school: true, highschool: true, college: true, city: true, retirement: true, dealership: true, eventcenter: true };
+            if (outdoorZones[newStage]) {
+                if (LIFE.world.insideInterior) LIFE.world.exitInterior();
+                var zonePos = LIFE.world.getZonePos(newStage);
+                LIFE.player.group.position.set(zonePos.x, 0, zonePos.z + 5);
+                LIFE.world.spawnZoneNPCs(newStage);
+                if (LIFE.isSchoolAge(state.age)) {
+                    state.dayPhase = 'classroom';
+                    LIFE.transitionDayPhase('classroom');
+                } else {
+                    state.dayPhase = null;
+                }
+            } else {
+                state.dayPhase = null;
+                LIFE.buildEnvironment(newStage);
+                LIFE.spawnNPCs(newStage);
+                LIFE.player.group.position.set(0, 0, 0);
+            }
         } else {
-            state.dayPhase = null;
-            LIFE.buildEnvironment(newStage);
-            LIFE.spawnNPCs(newStage);
+            if (LIFE.isSchoolAge(state.age)) {
+                state.dayPhase = 'classroom';
+                LIFE.transitionDayPhase('classroom');
+            } else {
+                state.dayPhase = null;
+                LIFE.buildEnvironment(newStage);
+                LIFE.spawnNPCs(newStage);
+            }
+            LIFE.player.group.position.set(0, 0, 0);
         }
-        LIFE.player.group.position.set(0, 0, 0);
     } else if (LIFE.isSchoolAge(state.age)) {
         // same school stage, new year - reset to classroom
         state.dayPhase = 'classroom';
@@ -1265,6 +1611,16 @@ LIFE.advanceYear = function() {
     LIFE.dirLight.intensity = state.age >= 70 ? Math.max(0.1, 0.8 - (state.age - 70) * 0.05) : 0.8;
 
     if (LIFE.STAGE_MESSAGES[state.age]) LIFE.ui.showStageMessage(LIFE.STAGE_MESSAGES[state.age]);
+
+    // Generate news for the year
+    if (state.age >= 3) {
+        LIFE.news.addGameNews();
+        // Milestone news
+        if (LIFE.STAGE_MESSAGES[state.age] && state.age > 0) {
+            var milestoneMsg = { 5: 'Local child begins elementary school.', 12: 'Teen starts high school - new chapter begins.', 18: 'Young adult heads off to college.', 23: 'Graduate enters the workforce.', 65: 'Long-time resident celebrates retirement.' };
+            if (milestoneMsg[state.age]) LIFE.news.add(milestoneMsg[state.age], 'milestone');
+        }
+    }
 
     // bounty check - police may recognize you
     if (state.bounty > 0 && state.age >= 13 && Math.random() < Math.min(0.4, state.bounty / 5000)) {
@@ -1383,6 +1739,13 @@ LIFE.triggerDeath = function(cause) {
     if (cause) state.deathCause = cause;
     state.gamePhase = 'death';
     LIFE.executionData = null;
+    // Exit car if driving
+    if (state.inCar) {
+        state.inCar = false;
+        if (LIFE.car.model) { LIFE.scene.remove(LIFE.car.model); LIFE.car.model = null; }
+        if (LIFE.player) LIFE.player.group.visible = true;
+    }
+    if (LIFE.car.parkedModel) { LIFE.scene.remove(LIFE.car.parkedModel); LIFE.car.parkedModel = null; }
     LIFE.ui.hideGameUI(); LIFE.ui.hideJailScreen(); LIFE.despawnPolice(); LIFE.cleanupBullets();
     if (LIFE.ui.$.controls) LIFE.ui.$.controls.style.color = '';
     LIFE.buildEnvironment('death'); LIFE.sounds.death();
@@ -1674,6 +2037,20 @@ LIFE.animate = function() {
             LIFE.updateBullets(dt);
             LIFE.updateActionAnim(dt);
             LIFE.updateCamera();
+
+            // Event and news systems
+            LIFE.events.update(dt);
+            LIFE.news.update(dt);
+
+            // Open world culling and shadow following
+            if (LIFE.world.built && !LIFE.world.insideInterior) {
+                LIFE.world.updateCulling(dt);
+                if (LIFE.player) {
+                    var px = LIFE.player.group.position.x;
+                    var pz = LIFE.player.group.position.z;
+                    LIFE.dirLight.target.position.set(px, 0, pz);
+                }
+            }
 
             // stat cascades
             if (state.stats.happiness < 15) state.stats.health = Math.max(0, state.stats.health - 0.08 * dt);

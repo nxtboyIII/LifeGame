@@ -635,19 +635,29 @@ LIFE.dialogue.close = function() {
     if (wasBlocking) {
         LIFE.lockCursor();
     }
-    // birth hospital -> transition to nursery
+    // birth hospital -> transition to home (build world if needed)
     if (LIFE.state._birthHospital) {
         LIFE.state._birthHospital = false;
         setTimeout(function() {
             if (LIFE.state.gamePhase === 'playing') {
-                LIFE.state.currentStage = 'nursery';
-                LIFE.state.bounds = LIFE.getBoundsForStage('nursery');
-                LIFE.buildEnvironment('nursery');
-                LIFE.spawnNPCs('nursery');
+                // Clear birth scene NPCs (Mom + Doctor) before building world
+                LIFE.npcs.forEach(function(n) { LIFE.scene.remove(n.char.group); });
+                LIFE.npcs = [];
+                // Build open world
+                LIFE.world.buildWorld();
+                // Spawn NPCs for all zones
+                LIFE.world.spawnAllZoneNPCs();
+                LIFE.state.currentStage = 'home';
+                LIFE.state.bounds = 400;
                 LIFE.updatePlayerSize();
-                LIFE.player.group.position.set(0, 0, 0);
+                // Position player at home zone center
+                LIFE.player.group.position.set(0, 0, 5);
                 LIFE.state.heldByParent = true;
                 LIFE.ui.showStageMessage('Home sweet home');
+                // Seed initial news
+                LIFE.news.add('New baby born at local hospital - family overjoyed!', 'social');
+                LIFE.news.add(LIFE.NEWS_RANDOM[Math.floor(Math.random() * LIFE.NEWS_RANDOM.length)], 'world');
+                LIFE.events.timer = 100 + Math.random() * 200;
             }
         }, 1000);
     }
@@ -748,6 +758,17 @@ LIFE.dialogue.selectOption = function(idx) {
         }, 100);
         return; // skip the response phase
     }
+    if (opt.openVendor) {
+        LIFE.dialogue.active = false;
+        LIFE.dialogue.blocking = false;
+        LIFE.dialogue.current = null;
+        LIFE.dialogue.elements.box.style.display = 'none';
+        var vType = opt.openVendor;
+        setTimeout(function() {
+            if (LIFE.state.gamePhase === 'playing') LIFE.ui.openVendorShop(vType);
+        }, 100);
+        return;
+    }
     if (opt.openProperty) {
         LIFE.dialogue.active = false;
         LIFE.dialogue.blocking = false;
@@ -814,6 +835,11 @@ LIFE.dialogue.selectOption = function(idx) {
     }
     if (opt.sound) LIFE.sounds[opt.sound]();
 
+    // CAR PURCHASE
+    if (opt._carIndex !== undefined) {
+        LIFE.buyCar(opt._carIndex);
+    }
+
     // FLIRTING - NPC responds in dialogue instead of popup
     if (opt.flirt && opt.flirtTarget) {
         var charismaBonus = LIFE.state.stats.charisma * 0.005;
@@ -858,6 +884,7 @@ LIFE.dialogue.selectOption = function(idx) {
         LIFE.state.married = true;
         LIFE.state.spouseName = opt.marry;
         LIFE.ui.showPopup('You married ' + opt.marry + '!', '#e91e63');
+        if (LIFE.news) LIFE.news.add('Local couple ties the knot in beautiful ceremony.', 'social');
     }
 
     // HAVING KIDS
@@ -867,6 +894,7 @@ LIFE.dialogue.selectOption = function(idx) {
             LIFE.state.childCount = (LIFE.state.childCount || 0) + 1;
             if (!LIFE.state.childNames) LIFE.state.childNames = [];
             LIFE.ui.showPopup('You have a baby! Child #' + LIFE.state.childCount, '#e91e63');
+            if (LIFE.news) LIFE.news.add('Local family welcomes new baby - congratulations!', 'social');
             // trigger child naming dialogue after current dialogue closes
             setTimeout(function() {
                 if (LIFE.state.gamePhase === 'playing') {
@@ -1162,7 +1190,7 @@ LIFE.canFlirtWith = function(npc) {
     if (state.married) return false;
     if (npc.type === 'Mom' || npc.type === 'Dad' || npc.type === 'Sibling' ||
         npc.type === 'Your Child' || npc.type === 'Grandchild' || npc.type === 'Inmate') return false;
-    if (npc.isPolice || npc.isDealer || npc.isHiring) return false;
+    if (npc.isPolice || npc.isDealer || npc.isHiring || npc.isCarSalesman || npc.isVendor) return false;
     // kids can't be flirted with
     if (npc.type === 'Kid') return false;
     // opposite sex only
@@ -1277,6 +1305,106 @@ LIFE.dialogue.talkToNPC = function(npc) {
             LIFE.dialogue.open(speakerName, yka.npcText, yka.options, false);
             return;
         }
+    }
+
+    // TICKET SELLER - special event vendor
+    if (npc.vendorType === 'Ticket Seller') {
+        LIFE.dialogue.npc = npc;
+        var evt = LIFE.events && LIFE.events.current;
+        if (evt) {
+            var ticketCost = evt.cost || 50;
+            LIFE.dialogue.open(speakerName, "Tonight's event: " + evt.name + "! Tickets are $" + ticketCost + ". Want in?", [
+                { text: "Yeah, give me a ticket!", effects: { happiness: evt.hapBonus || 8 }, cost: ticketCost, rep: 2,
+                  response: { text: "Enjoy the show! " + (evt.flavor || "It's going to be amazing!"), options: [
+                    { text: "This is awesome!", effects: { happiness: 3 }, rep: 1 }
+                  ]}
+                },
+                { text: "What's the event about?", effects: {}, rep: 0,
+                  response: { text: evt.description || "It's a great show, trust me!", options: [
+                    { text: "Sounds fun! I'll take a ticket!", effects: { happiness: evt.hapBonus || 8 }, cost: ticketCost, rep: 2 },
+                    { text: "Maybe next time.", effects: {}, rep: 0 }
+                  ]}
+                },
+                { text: "Just here for merch.", effects: {}, openVendor: 'Ticket Seller' },
+                { text: "No thanks.", effects: {}, rep: 0 }
+            ], true);
+        } else {
+            LIFE.dialogue.open(speakerName, "No events right now, but we've got merch! Want to take a look?", [
+                { text: "Show me the merch!", effects: {}, openVendor: 'Ticket Seller' },
+                { text: "When's the next event?", effects: {}, rep: 0,
+                  response: { text: "Should be soon! Keep an eye on the news.", options: [
+                    { text: "Thanks!", effects: {}, rep: 1 }
+                  ]}
+                },
+                { text: "No thanks.", effects: {}, rep: 0 }
+            ], true);
+        }
+        return;
+    }
+
+    // VENDOR NPCs - open themed shops
+    if (npc.isVendor && npc.vendorType) {
+        LIFE.dialogue.npc = npc;
+        var vendorGreetings = {
+            'Food Vendor': ["Hey there! Hungry? We've got the best food in town!", "Welcome! Take a look at our menu!"],
+            'Clothes Shop': ["Welcome to our boutique! Looking for something stylish?", "Come on in! New arrivals just this week!"],
+            'Pharmacist': ["Hello! How can I help you today?", "Welcome! We carry everything to keep you healthy."],
+            'Bookstore': ["Welcome, fellow reader! Looking for a good book?", "Hello! We've got bestsellers and classics alike!"],
+            'Gym Trainer': ["Hey! Ready to get in shape?", "Welcome to the gym! Let's get those gains!"],
+            'Electronics': ["Hey! Check out the latest tech!", "Welcome! Looking to upgrade your gear?"]
+        };
+        var greetings = vendorGreetings[npc.vendorType] || ["Welcome! Take a look around."];
+        var greeting = greetings[Math.floor(Math.random() * greetings.length)];
+        LIFE.dialogue.open(speakerName, greeting, [
+            { text: "Show me what you've got!", effects: {}, openVendor: npc.vendorType },
+            { text: "Just browsing, thanks.", effects: {}, rep: 0 }
+        ], true);
+        return;
+    }
+
+    // CAR SALESMAN - car buying dialogue
+    if (npc.isCarSalesman) {
+        LIFE.dialogue.npc = npc;
+        if (state.age < 16) {
+            LIFE.dialogue.open(speakerName, "Hey there! Come back when you're old enough to drive!", [
+                { text: "Okay!", effects: {} }
+            ], false);
+            return;
+        }
+
+        var carOptions = [];
+        var models = LIFE.CAR_MODELS || [];
+        for (var ci = 0; ci < models.length; ci++) {
+            var cm = models[ci];
+            if (state.age < cm.minAge) continue;
+            var canAfford = state.money >= cm.cost;
+            var owned = state.ownedCar && state.ownedCar.modelIndex === ci;
+            if (owned) continue; // skip already owned model
+            (function(idx, model, affordable) {
+                carOptions.push({
+                    text: model.name + ' - $' + model.cost.toLocaleString() + (affordable ? '' : ' (Can\'t afford)'),
+                    effects: {},
+                    _carIndex: idx
+                });
+            })(ci, cm, canAfford);
+        }
+
+        if (carOptions.length === 0) {
+            var msg = state.ownedCar ? "Looks like you already have the best we offer! Enjoy your " + state.ownedCar.name + "!" : "Sorry, we don't have anything in your age range right now. Come back later!";
+            LIFE.dialogue.open(speakerName, msg, [
+                { text: "Thanks anyway!", effects: {} }
+            ], false);
+            return;
+        }
+
+        var greeting = state.ownedCar
+            ? "Looking to upgrade from that " + state.ownedCar.name + "? I'll give you a fair trade-in! What catches your eye?"
+            : "Welcome to the Auto Dealership! We've got the perfect ride for you. What are you interested in?";
+
+        carOptions.push({ text: "Just browsing, thanks.", effects: {} });
+
+        LIFE.dialogue.open(speakerName, greeting, carOptions, true);
+        return;
     }
 
     // HIRING MANAGER NPCs - job application dialogue

@@ -19,6 +19,13 @@ LIFE.NPC_CHAT = {
     'Spouse':    ["Love you!", "What's for dinner?", "Let's go out tonight!", "You look nice today!"],
     'Your Child':["Mom! Dad! Look!", "Can I have a snack?", "I drew a picture!", "Are we there yet?"],
     'Dealer':    ["Psst... got the goods.", "Looking for something?", "I got what you need...", "Keep it quiet."],
+    'Food Vendor':  ["Fresh food here!", "Best prices in town!", "Come try our specials!", "Hot and ready!"],
+    'Clothes Shop': ["New arrivals today!", "Looking for something stylish?", "Sale this week!", "We've got your size!"],
+    'Pharmacist':   ["Feeling under the weather?", "We've got what you need.", "Health is wealth!", "Stay healthy!"],
+    'Bookstore':    ["Knowledge is power!", "New bestsellers in stock!", "Looking for a good read?", "Books make great gifts!"],
+    'Gym Trainer':  ["No pain, no gain!", "Ready to get fit?", "Let's work those muscles!", "Fitness is a lifestyle!"],
+    'Electronics':  ["Check out the latest tech!", "Great deals today!", "Upgrade your life!", "New models just arrived!"],
+    'Ticket Seller':["Got your tickets?", "Big show tonight!", "Best seats in the house!", "Don't miss out!"],
     'Coworker':  ["Coffee break?", "Meetings all day...", "The boss is coming!", "TGIF!"],
     'Boss':      ["Get back to work!", "Good job today.", "Need that report ASAP.", "Let's discuss your performance."],
     'Inmate':    ["Don't mess with me.", "How long you in for?", "Keep your head down.", "First time?"],
@@ -96,6 +103,9 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
     var isPolice = type === 'Police';
     var isDealer = type === 'Dealer';
     var isHiring = type.indexOf('Hiring') === 0;
+    var isCarSalesman = type === 'Car Salesman';
+    var vendorTypes = { 'Food Vendor': true, 'Clothes Shop': true, 'Pharmacist': true, 'Bookstore': true, 'Gym Trainer': true, 'Electronics': true, 'Ticket Seller': true };
+    var isVendor = !!vendorTypes[type];
     var isInmate = type === 'Inmate';
     // individual name for relationship tracking
     var individualName = npcName || type;
@@ -106,9 +116,12 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
     var skin = LIFE.SKIN_COLORS[Math.floor(Math.random() * LIFE.SKIN_COLORS.length)];
     var isDoctor = type === 'Doctor';
     var isNurse = type === 'Nurse';
+    var vendorClothes = { 'Food Vendor': 0xff6f00, 'Clothes Shop': 0xe91e63, 'Pharmacist': 0x4caf50, 'Bookstore': 0x795548, 'Gym Trainer': 0xff5722, 'Electronics': 0x00bcd4, 'Ticket Seller': 0x9c27b0 };
     var clothes = isPolice ? 0x1a237e
         : isDealer ? 0x212121
         : isHiring ? 0x1565c0
+        : isCarSalesman ? 0xd32f2f
+        : isVendor ? (vendorClothes[type] || 0x607d8b)
         : isInmate ? 0xff6f00
         : isDoctor ? 0xfafafa
         : isNurse ? 0x90caf9
@@ -125,7 +138,7 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
         isFemale = LIFE.state.playerGender !== 'F';
     } else if (type === 'Your Child') {
         isFemale = Math.random() < 0.5;
-    } else if (isPolice || isDealer || isInmate) {
+    } else if (isPolice || isDealer || isInmate || isCarSalesman || type === 'Gym Trainer') {
         isFemale = false;
     } else if (isNurse) {
         isFemale = Math.random() < 0.7; // nurses mostly female
@@ -164,14 +177,20 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
     }
 
     // name label
+    var vendorLabels = { 'Food Vendor': 'Food Vendor', 'Clothes Shop': 'Clothes Shop', 'Pharmacist': 'Pharmacist', 'Bookstore': 'Bookstore', 'Gym Trainer': 'Gym Trainer', 'Electronics': 'Electronics', 'Ticket Seller': 'Ticket Seller' };
     var displayName = isHiring ? type.replace('Hiring ', '') + ' (Hiring)'
+        : isCarSalesman ? 'Car Salesman'
+        : isVendor ? (vendorLabels[type] || type)
         : (npcName && npcName !== type) ? npcName : type;
     var canvas = document.createElement('canvas');
     canvas.width = 256; canvas.height = 64;
     var ctx = canvas.getContext('2d');
+    var vendorLabelColors = { 'Food Vendor': 'rgba(255,111,0,0.7)', 'Clothes Shop': 'rgba(233,30,99,0.7)', 'Pharmacist': 'rgba(76,175,80,0.7)', 'Bookstore': 'rgba(121,85,72,0.7)', 'Gym Trainer': 'rgba(255,87,34,0.7)', 'Electronics': 'rgba(0,188,212,0.7)', 'Ticket Seller': 'rgba(156,39,176,0.7)' };
     ctx.fillStyle = isPolice ? 'rgba(13,71,161,0.7)'
         : isDealer ? 'rgba(33,33,33,0.8)'
         : isHiring ? 'rgba(21,101,192,0.7)'
+        : isCarSalesman ? 'rgba(211,47,47,0.7)'
+        : isVendor ? (vendorLabelColors[type] || 'rgba(96,125,139,0.7)')
         : isInmate ? 'rgba(255,111,0,0.7)'
         : isDoctor ? 'rgba(76,175,80,0.7)'
         : isNurse ? 'rgba(33,150,243,0.7)'
@@ -185,7 +204,7 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
     var spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
     var nameSprite = new THREE.Sprite(spriteMat);
     nameSprite.position.y = h + 0.3;
-    nameSprite.scale.set(isHiring ? 1.4 : 1, 0.25, 1);
+    nameSprite.scale.set((isHiring || isCarSalesman || isVendor) ? 1.4 : 1, 0.25, 1);
     ch.group.add(nameSprite);
 
     // health bar
@@ -215,7 +234,9 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
 
     // ring
     var ringGeo = new THREE.RingGeometry(0.4, 0.5, 16);
-    var ringMat = new THREE.MeshBasicMaterial({ color: isPolice ? 0xff1744 : (isDealer ? 0xff9800 : (isHiring ? 0x2196f3 : 0x4fc3f7)), transparent: true, opacity: 0, side: THREE.DoubleSide });
+    var vendorRingColors = { 'Food Vendor': 0xff6f00, 'Clothes Shop': 0xe91e63, 'Pharmacist': 0x4caf50, 'Bookstore': 0x795548, 'Gym Trainer': 0xff5722, 'Electronics': 0x00bcd4, 'Ticket Seller': 0x9c27b0 };
+    var ringColor = isPolice ? 0xff1744 : isDealer ? 0xff9800 : isHiring ? 0x2196f3 : isCarSalesman ? 0xd32f2f : isVendor ? (vendorRingColors[type] || 0x607d8b) : 0x4fc3f7;
+    var ringMat = new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: 0, side: THREE.DoubleSide });
     var ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02;
     ch.group.add(ring);
@@ -228,7 +249,7 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
         char: ch, type: type, name: individualName, gender: gender,
         target: new THREE.Vector3(x + (Math.random()-0.5)*10, 0, z + (Math.random()-0.5)*10),
         waiting: false, waitTimer: Math.random()*3,
-        speed: isChild ? 1.5 : (isPolice ? 7 : (isHiring ? 0 : (isInmate ? 0.6 : 1.0 + Math.random()*0.5))),
+        speed: isChild ? 1.5 : (isPolice ? 7 : (isHiring || isCarSalesman || isVendor ? 0 : (isInmate ? 0.6 : 1.0 + Math.random()*0.5))),
         walkTime: Math.random()*10, reacting: 0,
         ring: ring, ringMat: ringMat, nameSprite: nameSprite,
         health: maxHp, maxHealth: maxHp, alive: true, isPolice: isPolice,
@@ -237,8 +258,9 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender) {
         chatTimer: 0, chatCooldown: 3 + Math.random() * 5,
         shootTimer: 0,
         fleeing: false, fleeTimer: 0,
-        isDealer: isDealer, isHiring: isHiring,
-        stayNear: isHiring ? new THREE.Vector3(x, 0, z) : null
+        isDealer: isDealer, isHiring: isHiring, isCarSalesman: isCarSalesman,
+        isVendor: isVendor, vendorType: isVendor ? type : null,
+        stayNear: (isHiring || isCarSalesman || isVendor) ? new THREE.Vector3(x, 0, z) : null
     };
 };
 
@@ -330,6 +352,7 @@ LIFE.killNPC = function(npc) {
     state.enemies++;
     LIFE.sounds.npcDeath();
     LIFE.ui.showPopup(npc.name + ' has died!', '#ff1744');
+    if (LIFE.news) LIFE.news.add('Tragedy strikes - ' + npc.type + ' found dead in ' + (LIFE.world._currentZone || 'local area') + '.', 'crime');
     LIFE.updateRelationship(npc.name, -100);
     if (state.nearestNPC === npc) state.nearestNPC = null;
 
@@ -338,6 +361,13 @@ LIFE.killNPC = function(npc) {
 };
 
 LIFE.spawnNPCs = function(stage) {
+    // If world is built and this is an outdoor zone, delegate to world system
+    var outdoorZones = { home: true, school: true, highschool: true, college: true, city: true, retirement: true, dealership: true, eventcenter: true };
+    if (LIFE.world.built && outdoorZones[stage]) {
+        LIFE.world.spawnZoneNPCs(stage);
+        return;
+    }
+
     LIFE.npcs.forEach(function(n) { LIFE.scene.remove(n.char.group); });
     LIFE.npcs = [];
     var names = (LIFE.NPC_NAMES[stage] || []).slice();
@@ -389,7 +419,7 @@ LIFE.spawnNPCs = function(stage) {
         else if (npcType === 'Dad') npcFemale = false;
         else if (npcType === 'Spouse') npcFemale = LIFE.state.playerGender !== 'F';
         else if (npcType === 'Your Child') npcFemale = Math.random() < 0.5;
-        else if (npcType === 'Police' || npcType === 'Dealer' || npcType === 'Inmate') npcFemale = false;
+        else if (npcType === 'Police' || npcType === 'Dealer' || npcType === 'Inmate' || npcType === 'Gym Trainer') npcFemale = false;
         else npcFemale = Math.random() < 0.5;
 
         var individualName = npcType;
@@ -459,6 +489,18 @@ LIFE.NPC_DIALOGUES['Your Child'] = [
     ]}
 ];
 
+LIFE._clampNPCBounds = function(npc) {
+    if (LIFE.world.built && !LIFE.world.insideInterior && npc._zoneCenter) {
+        var zr = npc._zoneRadius || 30;
+        npc.char.group.position.x = Math.max(npc._zoneCenter.x - zr, Math.min(npc._zoneCenter.x + zr, npc.char.group.position.x));
+        npc.char.group.position.z = Math.max(npc._zoneCenter.z - zr, Math.min(npc._zoneCenter.z + zr, npc.char.group.position.z));
+    } else {
+        var bounds = LIFE.state.bounds;
+        npc.char.group.position.x = Math.max(-bounds, Math.min(bounds, npc.char.group.position.x));
+        npc.char.group.position.z = Math.max(-bounds, Math.min(bounds, npc.char.group.position.z));
+    }
+};
+
 LIFE.updateNPCs = function(dt) {
     var bounds = LIFE.state.bounds;
     var nearestNPC = LIFE.state.nearestNPC;
@@ -518,8 +560,7 @@ LIFE.updateNPCs = function(dt) {
             }
             if (npc.fleeTimer <= 0) npc.fleeing = false;
             // clamp to bounds and collisions
-            npc.char.group.position.x = Math.max(-bounds, Math.min(bounds, npc.char.group.position.x));
-            npc.char.group.position.z = Math.max(-bounds, Math.min(bounds, npc.char.group.position.z));
+            LIFE._clampNPCBounds(npc);
             LIFE.resolveCollisions(npc.char.group.position);
             return;
         }
@@ -540,8 +581,7 @@ LIFE.updateNPCs = function(dt) {
                 npc.char.parts.rightLeg.rotation.x = -eswing;
                 npc.char.parts.leftArm.rotation.x = -eswing * 0.4;
                 npc.char.parts.rightArm.rotation.x = eswing * 0.4;
-                npc.char.group.position.x = Math.max(-bounds, Math.min(bounds, npc.char.group.position.x));
-                npc.char.group.position.z = Math.max(-bounds, Math.min(bounds, npc.char.group.position.z));
+                LIFE._clampNPCBounds(npc);
                 LIFE.resolveCollisions(npc.char.group.position);
                 return;
             }
@@ -557,8 +597,7 @@ LIFE.updateNPCs = function(dt) {
                 npc.char.group.position.x -= (rdx / rdist) * rs;
                 npc.char.group.position.z -= (rdz / rdist) * rs;
                 npc.char.group.rotation.y = Math.atan2(rdx, rdz);
-                npc.char.group.position.x = Math.max(-bounds, Math.min(bounds, npc.char.group.position.x));
-                npc.char.group.position.z = Math.max(-bounds, Math.min(bounds, npc.char.group.position.z));
+                LIFE._clampNPCBounds(npc);
                 LIFE.resolveCollisions(npc.char.group.position);
                 return;
             }
@@ -594,13 +633,22 @@ LIFE.updateNPCs = function(dt) {
             npc.char.parts.leftLeg.rotation.x *= 0.9; npc.char.parts.rightLeg.rotation.x *= 0.9;
             npc.char.parts.leftArm.rotation.x *= 0.9; npc.char.parts.rightArm.rotation.x *= 0.9;
             if (npc.waitTimer <= 0) {
-                var b = bounds * 0.6;
                 var tx, tz, tries = 0;
-                do {
-                    tx = (Math.random()-0.5)*b*2;
-                    tz = (Math.random()-0.5)*b*2;
-                    tries++;
-                } while (LIFE.isInsideCollider(tx, tz) && tries < 10);
+                if (LIFE.world.built && !LIFE.world.insideInterior && npc._zoneCenter) {
+                    var zr = (npc._zoneRadius || 30) * 0.6;
+                    do {
+                        tx = npc._zoneCenter.x + (Math.random()-0.5)*zr*2;
+                        tz = npc._zoneCenter.z + (Math.random()-0.5)*zr*2;
+                        tries++;
+                    } while (tries < 10);
+                } else {
+                    var b = bounds * 0.6;
+                    do {
+                        tx = (Math.random()-0.5)*b*2;
+                        tz = (Math.random()-0.5)*b*2;
+                        tries++;
+                    } while (LIFE.isInsideCollider(tx, tz) && tries < 10);
+                }
                 npc.target.set(tx, 0, tz);
                 npc.waiting = false;
             }
@@ -619,14 +667,18 @@ LIFE.updateNPCs = function(dt) {
         var swing = Math.sin(npc.walkTime) * 0.4;
         npc.char.parts.leftLeg.rotation.x = swing; npc.char.parts.rightLeg.rotation.x = -swing;
         npc.char.parts.leftArm.rotation.x = -swing*0.6; npc.char.parts.rightArm.rotation.x = swing*0.6;
-        npc.char.group.position.x = Math.max(-bounds, Math.min(bounds, npc.char.group.position.x));
-        npc.char.group.position.z = Math.max(-bounds, Math.min(bounds, npc.char.group.position.z));
+        LIFE._clampNPCBounds(npc);
         // collision check - if NPC hits a building, push back and pick a new target
         LIFE.resolveCollisions(npc.char.group.position);
         if (Math.abs(npc.char.group.position.x - prevX) < s * 0.1 && Math.abs(npc.char.group.position.z - prevZ) < s * 0.1 && s > 0.001) {
             // NPC got stuck on a collider, pick a new target
-            var nb = bounds * 0.6;
-            npc.target.set((Math.random()-0.5)*nb*2, 0, (Math.random()-0.5)*nb*2);
+            if (LIFE.world.built && !LIFE.world.insideInterior && npc._zoneCenter) {
+                var zrr = (npc._zoneRadius || 30) * 0.6;
+                npc.target.set(npc._zoneCenter.x + (Math.random()-0.5)*zrr*2, 0, npc._zoneCenter.z + (Math.random()-0.5)*zrr*2);
+            } else {
+                var nb = bounds * 0.6;
+                npc.target.set((Math.random()-0.5)*nb*2, 0, (Math.random()-0.5)*nb*2);
+            }
         }
 
         // hiring managers stay near their building

@@ -8,7 +8,7 @@ body.unlocked { cursor: default; }
 
 /* ===== Age display ===== */
 #ageBox {
-    position: absolute; top: 20px; left: 20px;
+    position: absolute; top: 30px; left: 20px;
     background: rgba(0,0,0,0.6); padding: 12px 20px; border-radius: 12px;
     font-size: 18px; border-left: 4px solid #81c784;
 }
@@ -16,7 +16,7 @@ body.unlocked { cursor: default; }
 
 /* ===== Money display ===== */
 #moneyBox {
-    position: absolute; top: 20px; right: 20px;
+    position: absolute; top: 30px; right: 20px;
     background: rgba(0,0,0,0.6); padding: 10px 18px; border-radius: 12px;
     font-size: 22px; color: #66bb6a; font-weight: bold;
 }
@@ -24,7 +24,7 @@ body.unlocked { cursor: default; }
 
 /* ===== Stats display ===== */
 #statsBox {
-    position: absolute; top: 80px; left: 20px;
+    position: absolute; top: 108px; left: 20px;
     background: rgba(0,0,0,0.45); padding: 10px 14px; border-radius: 8px;
     font-size: 12px; line-height: 1.8;
 }
@@ -60,14 +60,14 @@ body.unlocked { cursor: default; }
 
 /* ===== Career display ===== */
 #careerText {
-    position: absolute; top: 60px; right: 20px;
+    position: absolute; top: 70px; right: 20px;
     background: rgba(0,0,0,0.4); padding: 4px 12px; border-radius: 6px;
     font-size: 13px; color: #90a4ae; display: none;
 }
 
 /* ===== Wanted level stars ===== */
 #wantedLevel {
-    position: absolute; top: 20px; left: 50%; transform: translateX(200px);
+    position: absolute; top: 30px; left: 50%; transform: translateX(200px);
     font-size: 22px; letter-spacing: 4px;
     text-shadow: 0 0 8px rgba(255,23,68,0.6);
     display: none;
@@ -117,7 +117,7 @@ body.unlocked { cursor: default; }
 
 /* ===== Speed display ===== */
 #speedDisplay {
-    position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+    position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
     font-size: 26px; font-weight: bold; color: #ffeb3b;
     text-shadow: 0 0 10px rgba(255,235,59,0.3);
     cursor: pointer; pointer-events: auto;
@@ -127,7 +127,7 @@ body.unlocked { cursor: default; }
 
 /* ===== Timer bar ===== */
 #timerWrap {
-    position: absolute; top: 36px; left: 50%; transform: translateX(-50%);
+    position: absolute; top: 58px; left: 50%; transform: translateX(-50%);
     width: 300px; height: 12px; background: rgba(255,255,255,0.2);
     border-radius: 6px; overflow: hidden;
 }
@@ -137,9 +137,54 @@ body.unlocked { cursor: default; }
     border-radius: 6px; transition: width 0.3s;
 }
 #skipHint {
-    position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
-    font-size: 13px; opacity: 0.6; margin-top: 4px;
+    position: absolute; top: 136px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; opacity: 0.5; margin-top: 4px;
 }
+
+/* ===== News Banner (Plague Inc style) ===== */
+#newsBanner {
+    position: absolute; top: 0; left: 0; width: 100%;
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 20px;
+    background: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.7) 5%, rgba(0,0,0,0.7) 95%, transparent 100%);
+    font-size: 12px; white-space: nowrap;
+    pointer-events: none; z-index: 40;
+    transform: translateX(100%);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+#newsBanner.show {
+    opacity: 1;
+    animation: newsSlide 12s linear forwards;
+}
+@keyframes newsSlide {
+    0% { transform: translateX(100%); }
+    5% { transform: translateX(0%); }
+    85% { transform: translateX(0%); }
+    100% { transform: translateX(-100%); }
+}
+.newsIcon {
+    font-size: 13px; color: #90a4ae;
+    text-shadow: 0 0 8px currentColor;
+    flex-shrink: 0;
+}
+.newsText {
+    color: rgba(255,255,255,0.85);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    letter-spacing: 0.3px;
+}
+
+/* ===== Zone popup ===== */
+#zonePopup {
+    position: absolute; top: 18%; left: 50%; transform: translateX(-50%);
+    font-size: 28px; font-weight: bold; letter-spacing: 2px;
+    text-transform: uppercase;
+    text-shadow: 0 0 20px rgba(0,0,0,0.8), 0 2px 8px rgba(0,0,0,0.6);
+    opacity: 0; transition: opacity 0.5s;
+    pointer-events: none; white-space: nowrap;
+    color: rgba(255,255,255,0.9);
+}
+#zonePopup.show { opacity: 1; }
 
 /* ===== Stage text ===== */
 #stageText {
@@ -461,7 +506,7 @@ body.unlocked { cursor: default; }
 
 /* ===== Date/Time display ===== */
 #dateTime {
-    position: absolute; top: 54px; left: 50%; transform: translateX(-50%);
+    position: absolute; top: 74px; left: 50%; transform: translateX(-50%);
     font-size: 22px; font-weight: bold; color: rgba(255,255,255,0.9);
     background: rgba(0,0,0,0.55); padding: 8px 24px; border-radius: 8px;
     display: none; white-space: nowrap; letter-spacing: 0.5px;
@@ -471,7 +516,7 @@ body.unlocked { cursor: default; }
 
 /* ===== Day Phase indicator ===== */
 #dayPhaseHint {
-    position: absolute; top: 75px; left: 50%; transform: translateX(-50%);
+    position: absolute; top: 118px; left: 50%; transform: translateX(-50%);
     font-size: 11px; padding: 2px 10px; border-radius: 4px;
     display: none; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase;
 }

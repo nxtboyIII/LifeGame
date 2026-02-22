@@ -76,24 +76,84 @@ LIFE.SHOP_ITEMS = [
     { name: 'Snack',          cost: 5,     stat: 'happiness',    amount: 1,  minAge: 5 },
     { name: 'Lunch',          cost: 12,    stat: 'happiness',    amount: 2,  minAge: 10 },
     { name: 'New Clothes',    cost: 60,    stat: 'charisma',     amount: 3,  minAge: 12 },
-    { name: 'Gym Pass',       cost: 80,    stat: 'health',       amount: 5,  minAge: 16 },
-    { name: 'Online Course',  cost: 150,   stat: 'intelligence', amount: 5,  minAge: 18 },
+    { name: 'Gym Pass',       cost: 80,    stat: 'health',       amount: 5,  minAge: 16, once: true },
+    { name: 'Online Course',  cost: 150,   stat: 'intelligence', amount: 5,  minAge: 18, once: true },
     { name: 'Vacation',       cost: 500,   stat: 'happiness',    amount: 10, minAge: 23 },
-    { name: 'Car',            cost: 5000,  stat: 'charisma',     amount: 15, minAge: 18 },
+    { name: 'Bicycle',         cost: 200,   stat: 'health',       amount: 5,  minAge: 10, once: true },
     // good items
-    { name: 'Self-Help Book', cost: 80,    stat: 'intelligence', amount: 4,  minAge: 12 },
+    { name: 'Self-Help Book', cost: 80,    stat: 'intelligence', amount: 4,  minAge: 12, once: true },
     { name: 'Gift Basket',    cost: 100,   stat: 'charisma',     amount: 5,  minAge: 14, rep: 5 },
-    { name: 'First Aid Kit',  cost: 150,   stat: 'health',       amount: 8,  minAge: 14 },
+    { name: 'First Aid Kit',  cost: 150,   stat: 'health',       amount: 8,  minAge: 14, once: true },
     { name: 'Therapy',        cost: 500,   stat: 'happiness',    amount: 12, minAge: 18 },
-    { name: 'Volunteer Kit',  cost: 50,    stat: 'charisma',     amount: 3,  minAge: 14, rep: 10 },
+    { name: 'Volunteer Kit',  cost: 50,    stat: 'charisma',     amount: 3,  minAge: 14, rep: 10, once: true },
     { name: 'Charity Donation',cost: 1000, stat: 'happiness',    amount: 8,  minAge: 20, rep: 15 },
     { name: 'Community Meal', cost: 200,   stat: 'happiness',    amount: 5,  minAge: 16, rep: 8 }
 ];
 
+// Vendor-specific items (keyed by vendor type)
+LIFE.VENDOR_ITEMS = {
+    'Food Vendor': [
+        { name: 'Hot Dog',         cost: 3,     stat: 'happiness',    amount: 2,  minAge: 5 },
+        { name: 'Pizza Slice',     cost: 5,     stat: 'happiness',    amount: 3,  minAge: 5 },
+        { name: 'Smoothie',        cost: 8,     stat: 'health',       amount: 2,  minAge: 8 },
+        { name: 'Full Meal',       cost: 20,    stat: 'happiness',    amount: 5,  minAge: 10 },
+        { name: 'Protein Shake',   cost: 15,    stat: 'health',       amount: 4,  minAge: 14 },
+        { name: 'Fancy Dinner',    cost: 80,    stat: 'happiness',    amount: 8,  minAge: 18 }
+    ],
+    'Clothes Shop': [
+        { name: 'T-Shirt',         cost: 15,    stat: 'charisma',     amount: 1,  minAge: 5 },
+        { name: 'Nice Outfit',     cost: 60,    stat: 'charisma',     amount: 3,  minAge: 12 },
+        { name: 'Designer Clothes',cost: 200,   stat: 'charisma',     amount: 6,  minAge: 16 },
+        { name: 'Formal Suit',     cost: 400,   stat: 'charisma',     amount: 8,  minAge: 20 },
+        { name: 'Luxury Watch',    cost: 1500,  stat: 'charisma',     amount: 5,  minAge: 25, once: true },
+        { name: 'Designer Shoes',  cost: 300,   stat: 'charisma',     amount: 4,  minAge: 16 }
+    ],
+    'Pharmacist': [
+        { name: 'Vitamins',        cost: 10,    stat: 'health',       amount: 3,  minAge: 5 },
+        { name: 'Cold Medicine',   cost: 15,    stat: 'health',       amount: 4,  minAge: 8 },
+        { name: 'Pain Killers',    cost: 20,    stat: 'health',       amount: 5,  minAge: 14 },
+        { name: 'Supplements',     cost: 40,    stat: 'health',       amount: 6,  minAge: 16 },
+        { name: 'Prescription',    cost: 100,   stat: 'health',       amount: 10, minAge: 18 },
+        { name: 'First Aid Kit',   cost: 50,    stat: 'health',       amount: 8,  minAge: 10, once: true }
+    ],
+    'Bookstore': [
+        { name: 'Comic Book',      cost: 5,     stat: 'happiness',    amount: 2,  minAge: 5 },
+        { name: 'Novel',           cost: 12,    stat: 'intelligence', amount: 2,  minAge: 8 },
+        { name: 'Textbook',        cost: 40,    stat: 'intelligence', amount: 4,  minAge: 12 },
+        { name: 'Self-Help Book',  cost: 25,    stat: 'charisma',     amount: 3,  minAge: 14 },
+        { name: 'Encyclopedia Set',cost: 150,   stat: 'intelligence', amount: 8,  minAge: 16, once: true },
+        { name: 'Online Course',   cost: 200,   stat: 'intelligence', amount: 6,  minAge: 18 }
+    ],
+    'Gym Trainer': [
+        { name: 'Workout Session', cost: 15,    stat: 'health',       amount: 3,  minAge: 12 },
+        { name: 'Personal Training',cost: 50,   stat: 'health',       amount: 6,  minAge: 16 },
+        { name: 'Gym Membership',  cost: 120,   stat: 'health',       amount: 10, minAge: 14, once: true },
+        { name: 'Yoga Class',      cost: 25,    stat: 'happiness',    amount: 4,  minAge: 14 },
+        { name: 'Martial Arts',    cost: 80,    stat: 'health',       amount: 8,  minAge: 16 },
+        { name: 'Sports Equipment',cost: 200,   stat: 'health',       amount: 5,  minAge: 10, once: true }
+    ],
+    'Ticket Seller': [
+        { name: 'Event T-Shirt',   cost: 20,    stat: 'happiness',    amount: 3,  minAge: 5 },
+        { name: 'Concert Poster',  cost: 15,    stat: 'happiness',    amount: 2,  minAge: 5 },
+        { name: 'VIP Upgrade',     cost: 100,   stat: 'happiness',    amount: 8,  minAge: 16 },
+        { name: 'Season Pass',     cost: 200,   stat: 'happiness',    amount: 10, minAge: 14, once: true },
+        { name: 'Backstage Pass',  cost: 150,   stat: 'charisma',     amount: 6,  minAge: 18 },
+        { name: 'Signed Merch',    cost: 80,    stat: 'happiness',    amount: 5,  minAge: 10 }
+    ],
+    'Electronics': [
+        { name: 'Phone Case',      cost: 10,    stat: 'happiness',    amount: 1,  minAge: 10 },
+        { name: 'Headphones',      cost: 30,    stat: 'happiness',    amount: 3,  minAge: 10, once: true },
+        { name: 'Tablet',          cost: 200,   stat: 'intelligence', amount: 4,  minAge: 12, once: true },
+        { name: 'Laptop',          cost: 600,   stat: 'intelligence', amount: 6,  minAge: 14, once: true },
+        { name: 'Gaming Console',  cost: 400,   stat: 'happiness',    amount: 8,  minAge: 10, once: true },
+        { name: 'Smartphone',      cost: 500,   stat: 'charisma',     amount: 5,  minAge: 14, once: true }
+    ]
+};
+
 // Contraband - only available from Dealers
 LIFE.DEALER_ITEMS = [
-    { name: 'Switchblade',    cost: 200,   stat: 'charisma',     amount: 2,  minAge: 14, rep: -5,  type: 'switchblade' },
-    { name: 'Pistol',         cost: 2500,  stat: 'charisma',     amount: 2,  minAge: 18, rep: -10, type: 'gun' },
+    { name: 'Switchblade',    cost: 200,   stat: 'charisma',     amount: 2,  minAge: 14, rep: -5,  type: 'switchblade', once: true },
+    { name: 'Pistol',         cost: 2500,  stat: 'charisma',     amount: 2,  minAge: 18, rep: -10, type: 'gun', once: true },
     { name: 'Party Drugs',    cost: 50,    stat: 'happiness',    amount: 15, minAge: 16, rep: -5,  type: 'drug', healthCost: 10 },
     { name: 'Steroids',       cost: 300,   stat: 'health',       amount: 15, minAge: 18, rep: -3,  type: 'drug', healthCost: 5 },
     { name: 'Shady Deal',     cost: 100,   stat: 'charisma',     amount: 2,  minAge: 16, rep: -8,  type: 'drug', moneyBonus: 500 }
@@ -337,6 +397,7 @@ LIFE.economy.checkPromotion = function() {
         state.careerXP = 0;
         var newCareer = LIFE.CAREERS[promo.next];
         LIFE.ui.showPopup('Promoted to ' + newCareer.title + '!', '#ffeb3b');
+        if (LIFE.news) LIFE.news.add('Local resident promoted to ' + newCareer.title + ' - career on the rise!', 'career');
         state.money += 1000;
         state.stats.happiness = Math.min(100, state.stats.happiness + 8);
     }
@@ -350,6 +411,7 @@ LIFE.economy.buyProperty = function(index) {
     if (!LIFE.state.properties) LIFE.state.properties = [];
     LIFE.state.properties.push({ name: prop.name, cost: prop.cost, rent: prop.rent });
     LIFE.state.stats.happiness = Math.min(100, LIFE.state.stats.happiness + prop.hapBonus);
+    if (LIFE.news) LIFE.news.add(prop.name + ' sold for $' + prop.cost.toLocaleString() + ' - real estate market stays hot.', 'career');
 
     // If buying a home-type property, set homeDoor immediately so G key works
     if (LIFE.PROPERTY_BUILDINGS) {
@@ -401,6 +463,8 @@ LIFE.economy.spend = function(cost) {
 LIFE.economy.buyItem = function(index) {
     var item = LIFE.SHOP_ITEMS[index];
     if (!item || item.minAge > LIFE.state.age) return false;
+    // check once-only
+    if (item.once && LIFE.state.purchasedOnce && LIFE.state.purchasedOnce.indexOf(item.name) >= 0) return false;
     // price modifier from charisma/reputation
     var price = item.cost;
     if (LIFE.state.stats.charisma > 50) price = Math.round(price * 0.9);
@@ -427,12 +491,40 @@ LIFE.economy.buyItem = function(index) {
         LIFE.state.drugUses++;
         LIFE.sounds.drug();
     }
+    if (item.once) {
+        if (!LIFE.state.purchasedOnce) LIFE.state.purchasedOnce = [];
+        LIFE.state.purchasedOnce.push(item.name);
+    }
+    return true;
+};
+
+LIFE.economy.buyVendorItem = function(vendorType, index) {
+    var items = LIFE.VENDOR_ITEMS[vendorType];
+    if (!items) return false;
+    var item = items[index];
+    if (!item || item.minAge > LIFE.state.age) return false;
+    // check once-only
+    if (item.once && LIFE.state.purchasedOnce && LIFE.state.purchasedOnce.indexOf(item.name) >= 0) return false;
+    var price = item.cost;
+    if (LIFE.state.stats.charisma > 50) price = Math.round(price * 0.9);
+    if (!LIFE.economy.spend(price)) return false;
+    LIFE.state.stats[item.stat] = Math.min(100, LIFE.state.stats[item.stat] + item.amount);
+    if (item.rep) {
+        LIFE.state.reputation = Math.max(-100, Math.min(100, LIFE.state.reputation + item.rep));
+        LIFE.ui.showRepChange(item.rep);
+    }
+    // track once-only purchases
+    if (item.once) {
+        if (!LIFE.state.purchasedOnce) LIFE.state.purchasedOnce = [];
+        LIFE.state.purchasedOnce.push(item.name);
+    }
     return true;
 };
 
 LIFE.economy.buyDealerItem = function(index) {
     var item = LIFE.DEALER_ITEMS[index];
     if (!item || item.minAge > LIFE.state.age) return false;
+    if (item.once && LIFE.state.purchasedOnce && LIFE.state.purchasedOnce.indexOf(item.name) >= 0) return false;
     var price = item.cost;
     if (LIFE.state.stats.charisma > 50) price = Math.round(price * 0.9);
     if (!LIFE.economy.spend(price)) return false;
@@ -457,6 +549,10 @@ LIFE.economy.buyDealerItem = function(index) {
         LIFE.state.drugUses++;
         LIFE.sounds.drug();
     }
+    if (item.once) {
+        if (!LIFE.state.purchasedOnce) LIFE.state.purchasedOnce = [];
+        LIFE.state.purchasedOnce.push(item.name);
+    }
     return true;
 };
 
@@ -474,6 +570,7 @@ LIFE.economy.getLifeSummary = function() {
     lines.push('Married: ' + (s.married ? (s.spouseName || 'Yes') : 'No'));
     lines.push('Children: ' + (s.childCount || 0));
     lines.push('Savings: $' + Math.floor(Math.max(0, s.money)).toLocaleString());
+    if (s.ownedCar) lines.push('Car: ' + s.ownedCar.name);
     if (s.properties && s.properties.length > 0) {
         lines.push('Properties: ' + s.properties.length);
         var totalRent = 0;
