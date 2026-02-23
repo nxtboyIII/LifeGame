@@ -325,7 +325,7 @@ LIFE.updateCamera = function() {
 
     var h = LIFE.getHeightForAge(Math.max(0, state.age));
     var equipped = LIFE.getEquipped ? LIFE.getEquipped() : 'Fists';
-    var inCombatMode = (equipped === 'Pistol' && state.age >= 13);
+    var inCombatMode = ((equipped === 'Pistol' || equipped === 'AK-47' || equipped === 'Shotgun') && state.age >= 13);
 
     var camDist, camHeight, shoulderOffset, lerpSpeed;
 

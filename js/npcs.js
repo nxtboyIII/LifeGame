@@ -58,6 +58,9 @@ LIFE.NPC_CHAT = {
     'Spouse':    ["Love you!", "What's for dinner?", "Let's go out tonight!", "You look nice today!"],
     'Your Child':["Mom! Dad! Look!", "Can I have a snack?", "I drew a picture!", "Are we there yet?"],
     'Dealer':    ["Psst... got the goods.", "Looking for something?", "I got what you need...", "Keep it quiet."],
+    'Organ Buyer': ["Fresh specimens?", "I pay top dollar for... parts.", "The clinic needs supplies...", "Got anything organic?"],
+    'Fence':       ["Got anything hot?", "I don't ask questions.", "Everything has a price.", "Discreet transactions only."],
+    'Arms Dealer': ["Need firepower?", "Military grade, no serial numbers.", "Cash only, no names.", "I can get you anything."],
     'Food Vendor':  ["Fresh food here!", "Best prices in town!", "Come try our specials!", "Hot and ready!"],
     'Clothes Shop': ["New arrivals today!", "Looking for something stylish?", "Sale this week!", "We've got your size!"],
     'Pharmacist':   ["Feeling under the weather?", "We've got what you need.", "Health is wealth!", "Stay healthy!"],
@@ -267,6 +270,18 @@ LIFE._generateNPCLoot = function(npc) {
         if (Math.random() < 0.4) items.push({ name: 'Switchblade', isMoney: false });
         if (Math.random() < 0.3) items.push({ name: 'Pistol', isMoney: false });
         if (Math.random() < 0.2) items.push({ name: 'Gold Ring', isMoney: false });
+    } else if (type === 'Organ Buyer') {
+        money = 100 + Math.floor(Math.random() * 300);
+        items.push({ name: 'Medkit', isMoney: false });
+        if (Math.random() < 0.3) items.push({ name: 'Adrenaline Shot', isMoney: false });
+    } else if (type === 'Fence') {
+        money = 80 + Math.floor(Math.random() * 220);
+        if (Math.random() < 0.3) items.push({ name: 'Gold Ring', isMoney: false });
+        if (Math.random() < 0.4) items.push({ name: 'Watch', isMoney: false });
+    } else if (type === 'Arms Dealer') {
+        money = 100 + Math.floor(Math.random() * 400);
+        if (Math.random() < 0.4) items.push({ name: 'Pistol', isMoney: false });
+        if (Math.random() < 0.2) items.push({ name: 'AK-47', isMoney: false });
     } else if (type === 'Mom' || type === 'Dad') {
         money = 20 + Math.floor(Math.random() * 80);
         if (Math.random() < 0.3) items.push({ name: 'Phone', isMoney: false });
@@ -303,6 +318,10 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
     var isStudent = type.includes('Student');
     var isPolice = type === 'Police';
     var isDealer = type === 'Dealer';
+    var isOrganBuyer = type === 'Organ Buyer';
+    var isFence = type === 'Fence';
+    var isArmsDealer = type === 'Arms Dealer';
+    var isShadyNPC = isOrganBuyer || isFence || isArmsDealer;
     var isHiring = type.indexOf('Hiring') === 0;
     var isCarSalesman = type === 'Car Salesman';
     var isRealEstate = type === 'Real Estate Agent';
@@ -337,6 +356,9 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
     var vendorClothes = { 'Food Vendor': 0xff6f00, 'Clothes Shop': 0xe91e63, 'Pharmacist': 0x4caf50, 'Bookstore': 0x795548, 'Gym Trainer': 0xff5722, 'Electronics': 0x00bcd4, 'Ticket Seller': 0x9c27b0 };
     var clothes = isPolice ? 0x1a237e
         : isDealer ? 0x212121
+        : isOrganBuyer ? 0x4a0000
+        : isFence ? 0x37474f
+        : isArmsDealer ? 0x33691e
         : isHiring ? 0x1565c0
         : isCarSalesman ? 0xd32f2f
         : isRealEstate ? 0x2e7d32
@@ -357,7 +379,7 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
         isFemale = LIFE.state.playerGender !== 'F';
     } else if (type === 'Your Child') {
         isFemale = Math.random() < 0.5;
-    } else if (isPolice || isDealer || isInmate || isCarSalesman || type === 'Gym Trainer') {
+    } else if (isPolice || isDealer || isInmate || isCarSalesman || isShadyNPC || type === 'Gym Trainer') {
         isFemale = false;
     } else if (isNurse) {
         isFemale = Math.random() < 0.7; // nurses mostly female
@@ -395,6 +417,36 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
         ch.group.add(hood);
     }
 
+    // Organ Buyer: blood-stained apron
+    if (isOrganBuyer) {
+        var apron = new THREE.Mesh(
+            new THREE.BoxGeometry(0.32, 0.4, 0.06),
+            LIFE.getMaterial({ color: 0x6a0000 })
+        );
+        apron.position.set(0, h * 0.45, 0.12);
+        ch.group.add(apron);
+    }
+
+    // Fence: dark beanie
+    if (isFence) {
+        var beanie = new THREE.Mesh(
+            new THREE.BoxGeometry(0.26, 0.12, 0.26),
+            LIFE.getMaterial({ color: 0x263238 })
+        );
+        beanie.position.y = h + 0.24;
+        ch.group.add(beanie);
+    }
+
+    // Arms Dealer: military beret
+    if (isArmsDealer) {
+        var beret = new THREE.Mesh(
+            new THREE.BoxGeometry(0.28, 0.06, 0.28),
+            LIFE.getMaterial({ color: 0x2e5916 })
+        );
+        beret.position.y = h + 0.24;
+        ch.group.add(beret);
+    }
+
     // name label - contextual display name based on player's perspective
     var displayName;
     if (isHiring) {
@@ -416,6 +468,9 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
     var vendorLabelColors = { 'Food Vendor': 'rgba(255,111,0,0.7)', 'Clothes Shop': 'rgba(233,30,99,0.7)', 'Pharmacist': 'rgba(76,175,80,0.7)', 'Bookstore': 'rgba(121,85,72,0.7)', 'Gym Trainer': 'rgba(255,87,34,0.7)', 'Electronics': 'rgba(0,188,212,0.7)', 'Ticket Seller': 'rgba(156,39,176,0.7)' };
     var labelColor = isPolice ? 'rgba(13,71,161,0.7)'
         : isDealer ? 'rgba(33,33,33,0.8)'
+        : isOrganBuyer ? 'rgba(74,0,0,0.8)'
+        : isFence ? 'rgba(55,71,79,0.8)'
+        : isArmsDealer ? 'rgba(51,105,30,0.8)'
         : isHiring ? 'rgba(21,101,192,0.7)'
         : isCarSalesman ? 'rgba(211,47,47,0.7)'
         : isRealEstate ? 'rgba(46,125,50,0.7)'
@@ -437,7 +492,7 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
     var spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
     var nameSprite = new THREE.Sprite(spriteMat);
     nameSprite.position.y = h + 0.3;
-    nameSprite.scale.set((isHiring || isCarSalesman || isRealEstate || isVendor) ? 1.4 : 1, 0.25, 1);
+    nameSprite.scale.set((isHiring || isCarSalesman || isRealEstate || isVendor || isShadyNPC) ? 1.4 : 1, 0.25, 1);
     ch.group.add(nameSprite);
 
     // health bar
@@ -468,7 +523,7 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
     // ring
     var ringGeo = new THREE.RingGeometry(0.4, 0.5, 16);
     var vendorRingColors = { 'Food Vendor': 0xff6f00, 'Clothes Shop': 0xe91e63, 'Pharmacist': 0x4caf50, 'Bookstore': 0x795548, 'Gym Trainer': 0xff5722, 'Electronics': 0x00bcd4, 'Ticket Seller': 0x9c27b0 };
-    var ringColor = isPolice ? 0xff1744 : isDealer ? 0xff9800 : isHiring ? 0x2196f3 : isCarSalesman ? 0xd32f2f : isRealEstate ? 0x2e7d32 : isVendor ? (vendorRingColors[type] || 0x607d8b) : 0x4fc3f7;
+    var ringColor = isPolice ? 0xff1744 : isDealer ? 0xff9800 : isOrganBuyer ? 0x8b0000 : isFence ? 0x546e7a : isArmsDealer ? 0x558b2f : isHiring ? 0x2196f3 : isCarSalesman ? 0xd32f2f : isRealEstate ? 0x2e7d32 : isVendor ? (vendorRingColors[type] || 0x607d8b) : 0x4fc3f7;
     var ringMat = new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: 0, side: THREE.DoubleSide });
     var ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02;
@@ -491,7 +546,7 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
         npcAge: npcAge !== undefined ? npcAge : null,
         target: new THREE.Vector3(x + (Math.random()-0.5)*10, 0, z + (Math.random()-0.5)*10),
         waiting: false, waitTimer: Math.random()*3,
-        speed: isPolice ? 5.6 : (isHiring || isCarSalesman || isRealEstate || isVendor ? 0 : (isInmate ? 0.6
+        speed: isPolice ? 5.6 : (isHiring || isCarSalesman || isRealEstate || isVendor || isShadyNPC ? 0 : (isInmate ? 0.6
             : npcAge !== undefined ? (npcAge < 3 ? 0.5 : npcAge < 6 ? 1.0 : npcAge < 13 ? 1.5 : npcAge >= 70 ? 0.7 : 1.0 + Math.random() * 0.5)
             : isChild ? 1.5 : 1.0 + Math.random() * 0.5)),
         walkTime: Math.random()*10, reacting: 0,
@@ -505,9 +560,10 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
         fleeing: false, fleeTimer: 0,
         isDealer: isDealer, isHiring: isHiring, isCarSalesman: isCarSalesman,
         isRealEstate: isRealEstate,
+        isOrganBuyer: isOrganBuyer, isFence: isFence, isArmsDealer: isArmsDealer, isShadyNPC: isShadyNPC,
         isVendor: isVendor, vendorType: isVendor ? type : null,
-        stayNear: (isHiring || isCarSalesman || isRealEstate || isVendor) ? new THREE.Vector3(x, 0, z) : null,
-        npcReputation: isPolice ? 80 : isDealer ? -60 : (Math.floor(Math.random() * 60) + 10), // 10-70 for normal NPCs
+        stayNear: (isHiring || isCarSalesman || isRealEstate || isVendor || isShadyNPC) ? new THREE.Vector3(x, 0, z) : null,
+        npcReputation: isPolice ? 80 : (isDealer || isShadyNPC) ? -60 : (Math.floor(Math.random() * 60) + 10), // 10-70 for normal NPCs
         _physBody: physBody, _physRadius: physRadius,
         lootItems: [] // generated below
     };

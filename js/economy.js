@@ -160,6 +160,25 @@ LIFE.DEALER_ITEMS = [
     { name: 'Shady Deal',     cost: 100,   stat: 'charisma',     amount: 2,  minAge: 16, rep: -8,  type: 'drug', moneyBonus: 500 }
 ];
 
+// Organ Buyer shop items (things they sell)
+LIFE.ORGAN_BUYER_ITEMS = [
+    { name: 'Adrenaline Shot', cost: 200,  stat: 'health', amount: 60, minAge: 16, physical: true },
+    { name: 'Morphine',        cost: 150,  stat: 'health', amount: 80, minAge: 16, physical: true, healthCost: 5 }
+];
+
+// Fence shop items
+LIFE.FENCE_ITEMS = [
+    { name: 'Fake ID',        cost: 500,   stat: 'charisma', amount: 0, minAge: 16, physical: true, reducesWanted: 2 },
+    { name: 'Lockpick Set',   cost: 100,   stat: 'intelligence', amount: 2, minAge: 16, physical: true }
+];
+
+// Arms Dealer shop items
+LIFE.ARMS_DEALER_ITEMS = [
+    { name: 'Shotgun',        cost: 5000,  stat: 'charisma', amount: 2, minAge: 16, physical: true, type: 'weapon' },
+    { name: 'Body Armor',     cost: 3000,  stat: 'health',   amount: 10, minAge: 16, physical: true, type: 'armor' },
+    { name: 'Ammo Crate',     cost: 500,   stat: 'charisma', amount: 1, minAge: 16, physical: true }
+];
+
 LIFE.economy.getCareer = function() {
     var c = LIFE.state.career || 'none';
     var career = LIFE.CAREERS[c];

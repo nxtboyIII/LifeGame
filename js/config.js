@@ -70,7 +70,7 @@ LIFE.NPC_NAMES = {
     school:     ['Teacher', 'Kid', 'Kid', 'Kid', 'Kid', 'Kid'],
     highschool: ['Teacher', 'Student', 'Student', 'Student', 'Student', 'Student', 'Student', 'Student', 'Dealer'],
     college:    ['Professor', 'Student', 'Student', 'Student', 'Student', 'Student', 'Student', 'Dealer', 'Bookstore', 'Gym Trainer'],
-    city:       ['Stranger', 'Stranger', 'Stranger', 'Stranger', 'Stranger', 'Neighbor', 'Neighbor', 'Dealer', 'Food Vendor', 'Clothes Shop', 'Electronics', 'Real Estate Agent'],
+    city:       ['Stranger', 'Stranger', 'Stranger', 'Stranger', 'Stranger', 'Neighbor', 'Neighbor', 'Dealer', 'Food Vendor', 'Clothes Shop', 'Electronics', 'Real Estate Agent', 'Organ Buyer', 'Fence', 'Arms Dealer'],
     retirement: ['Neighbor', 'Stranger', 'Stranger', 'Pharmacist'],
     classroom:  ['Teacher', 'Kid', 'Kid', 'Kid'],
     hsclassroom:['Teacher', 'Student', 'Student', 'Student', 'Student'],
@@ -150,7 +150,7 @@ LIFE.NPC_TITLE_VISIBLE = {
     Teacher: true, Professor: true, Doctor: true, Nurse: true, Police: true,
     Dealer: true, 'Car Salesman': true, 'Real Estate Agent': true, 'Food Vendor': true, 'Clothes Shop': true,
     'Pharmacist': true, 'Bookstore': true, 'Gym Trainer': true, 'Electronics': true,
-    'Ticket Seller': true, Boss: true
+    'Ticket Seller': true, Boss: true, 'Organ Buyer': true, 'Fence': true, 'Arms Dealer': true
 };
 // Types where nametag shows family relationship (always known)
 LIFE.NPC_FAMILY_TITLE = {

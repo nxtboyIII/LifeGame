@@ -308,7 +308,8 @@ LIFE.ui.updateNPCHint = function() {
 
     // crosshair changes in combat mode
     var cross = LIFE.ui.$.cross;
-    if (cross && LIFE.getEquipped && LIFE.getEquipped() === 'Pistol') {
+    var eqp = LIFE.getEquipped ? LIFE.getEquipped() : '';
+    if (cross && (eqp === 'Pistol' || eqp === 'AK-47' || eqp === 'Shotgun')) {
         cross.style.width = '8px';
         cross.style.height = '8px';
         cross.style.borderColor = 'rgba(255,50,50,0.8)';
@@ -335,13 +336,32 @@ LIFE.ui.updateWeapon = function() {
         el.innerHTML = 'Pistol <span style="opacity:0.6;font-size:11px">| Click to shoot</span>';
         el.style.color = '#ef5350';
         el.style.borderColor = 'rgba(239,83,80,0.4)';
+    } else if (equipped === 'AK-47') {
+        el.style.display = 'block';
+        el.innerHTML = 'AK-47 <span style="opacity:0.6;font-size:11px">| Click to shoot</span>';
+        el.style.color = '#ef5350';
+        el.style.borderColor = 'rgba(239,83,80,0.4)';
+    } else if (equipped === 'Shotgun') {
+        el.style.display = 'block';
+        el.innerHTML = 'Shotgun <span style="opacity:0.6;font-size:11px">| Click to shoot</span>';
+        el.style.color = '#ef5350';
+        el.style.borderColor = 'rgba(239,83,80,0.4)';
     } else if (equipped === 'Switchblade') {
         el.style.display = 'block';
         el.textContent = 'Switchblade';
         el.style.color = '#ff9800';
         el.style.borderColor = 'rgba(255,152,0,0.4)';
+    } else if (equipped === 'Baseball Bat' || equipped === 'Crowbar') {
+        el.style.display = 'block';
+        el.textContent = equipped;
+        el.style.color = '#ff9800';
+        el.style.borderColor = 'rgba(255,152,0,0.4)';
     } else {
-        el.style.display = 'none';
+        // Show any other held item
+        el.style.display = 'block';
+        el.textContent = equipped;
+        el.style.color = '#4fc3f7';
+        el.style.borderColor = 'rgba(79,195,247,0.4)';
     }
 
     // inventory bar
@@ -1154,6 +1174,336 @@ LIFE.ui.closeShop = function() {
     LIFE.state.shopOpen = false;
     LIFE.ui.$.shopBox.style.display = 'none';
     LIFE.lockCursor();
+};
+
+// ============================================================
+// ORGAN BUYER SHOP
+// ============================================================
+LIFE.ui.openOrganBuyerShop = function() {
+    if (LIFE.dialogue.active || LIFE.state.shopOpen) return;
+    LIFE.state.shopOpen = true;
+    LIFE.unlockCursor();
+
+    var items = LIFE.ui.$.shopItems;
+    items.innerHTML = '';
+
+    // title
+    var title = document.createElement('div');
+    title.className = 'shopItem';
+    title.style.textAlign = 'center';
+    title.style.color = '#cc1111';
+    title.style.borderColor = 'rgba(200,20,20,0.3)';
+    title.textContent = '--- ORGAN BUYER ---';
+    items.appendChild(title);
+
+    // Sell section: list player's organ items
+    var inv = LIFE.state.inventory;
+    var hasOrgans = false;
+    for (var i = 0; i < inv.length; i++) {
+        var invItem = inv[i];
+        var baseName = LIFE.getItemBaseName(invItem);
+        var itemData = LIFE.ITEM_DATA[baseName];
+        if (!itemData || itemData.type !== 'organ') continue;
+        hasOrgans = true;
+        var expired = LIFE.isItemExpired(invItem);
+        var displayName = LIFE.getItemName(invItem);
+        var sellValue = expired ? 0 : itemData.value;
+        var div = document.createElement('div');
+        div.className = 'shopItem' + (expired ? ' cantAfford' : '');
+        div.style.borderColor = 'rgba(200,20,20,0.3)';
+        div.innerHTML = '<span class="shopName" style="color:' + (expired ? '#666' : '#cc1111') + '">' + displayName + '</span>' +
+            '<span class="shopTags"><span class="shopTag ' + (expired ? 'bad' : 'good') + '">' + (expired ? 'Expired' : 'Fresh') + '</span></span>' +
+            '<span class="shopCost" style="color:#4caf50">' + (expired ? 'REJECTED' : 'Sell $' + sellValue) + '</span>';
+        (function(idx, isExpired, val) {
+            div.onclick = function() {
+                if (isExpired) {
+                    LIFE.ui.showPopup("These are no good anymore.", '#ef5350');
+                    return;
+                }
+                LIFE.state.money += val;
+                LIFE.state.inventory.splice(idx, 1);
+                if (LIFE.state.equippedIndex >= LIFE.state.inventory.length) LIFE.state.equippedIndex = Math.max(0, LIFE.state.inventory.length - 1);
+                LIFE.sounds.money();
+                LIFE.ui.showPopup('Sold organ for $' + val, '#4caf50');
+                LIFE.updateHeldWeapon();
+                LIFE.state.shopOpen = false;
+                LIFE.ui.openOrganBuyerShop(); // refresh
+            };
+        })(i, expired, sellValue);
+        items.appendChild(div);
+    }
+
+    if (!hasOrgans) {
+        var noItems = document.createElement('div');
+        noItems.className = 'shopItem';
+        noItems.style.color = '#666';
+        noItems.textContent = 'No organs to sell.';
+        items.appendChild(noItems);
+    }
+
+    // Buy section: medical items
+    var buyTitle = document.createElement('div');
+    buyTitle.className = 'shopItem';
+    buyTitle.style.textAlign = 'center';
+    buyTitle.style.color = '#4caf50';
+    buyTitle.style.borderColor = 'rgba(76,175,80,0.3)';
+    buyTitle.textContent = '--- MEDICAL SUPPLIES ---';
+    items.appendChild(buyTitle);
+
+    LIFE.ORGAN_BUYER_ITEMS.forEach(function(item) {
+        var cantAfford = LIFE.state.money < item.cost;
+        var div = document.createElement('div');
+        div.className = 'shopItem' + (cantAfford ? ' cantAfford' : '');
+        var tags = '';
+        if (item.healthCost) tags += '<span class="shopTag bad">-' + item.healthCost + ' HP</span>';
+        tags += '<span class="shopTag good">+' + item.amount + ' ' + item.stat + '</span>';
+        div.innerHTML = '<span class="shopName">' + item.name + '</span>' +
+            '<span class="shopTags">' + tags + '</span>' +
+            '<span class="shopCost">$' + item.cost + '</span>';
+        div.onclick = function() {
+            if (LIFE.state.money < item.cost) { LIFE.ui.showPopup("Can't afford!", '#ef5350'); return; }
+            LIFE.state.money -= item.cost;
+            if (item.physical) {
+                LIFE.state.inventory.push(item.name);
+            } else {
+                LIFE.state.stats[item.stat] = Math.min(100, (LIFE.state.stats[item.stat] || 0) + item.amount);
+            }
+            if (item.healthCost) LIFE.state.stats.health = Math.max(0, LIFE.state.stats.health - item.healthCost);
+            LIFE.sounds.money();
+            LIFE.ui.showPopup(item.name + ' acquired!', '#4caf50');
+            LIFE.state.shopOpen = false;
+            LIFE.ui.openOrganBuyerShop();
+        };
+        items.appendChild(div);
+    });
+
+    var closeDiv = document.createElement('div');
+    closeDiv.className = 'shopItem shopClose';
+    closeDiv.textContent = '[ESC] Close';
+    closeDiv.onclick = function() { LIFE.ui.closeShop(); };
+    items.appendChild(closeDiv);
+
+    LIFE.ui.$.shopBox.style.display = 'block';
+};
+
+// ============================================================
+// FENCE SHOP
+// ============================================================
+LIFE.ui.openFenceShop = function() {
+    if (LIFE.dialogue.active || LIFE.state.shopOpen) return;
+    LIFE.state.shopOpen = true;
+    LIFE.unlockCursor();
+
+    var items = LIFE.ui.$.shopItems;
+    items.innerHTML = '';
+
+    // title
+    var title = document.createElement('div');
+    title.className = 'shopItem';
+    title.style.textAlign = 'center';
+    title.style.color = '#78909c';
+    title.style.borderColor = 'rgba(120,144,156,0.3)';
+    title.textContent = '--- THE FENCE ---';
+    items.appendChild(title);
+
+    // Sell section: player's valuable items at 60% value
+    var inv = LIFE.state.inventory;
+    var hasValuables = false;
+    for (var i = 0; i < inv.length; i++) {
+        var invItem = inv[i];
+        var baseName = LIFE.getItemBaseName(invItem);
+        var itemData = LIFE.ITEM_DATA[baseName];
+        if (!itemData || itemData.type !== 'valuable') continue;
+        hasValuables = true;
+        var sellValue = Math.round(itemData.value * 0.6);
+        var div = document.createElement('div');
+        div.className = 'shopItem';
+        div.style.borderColor = 'rgba(120,144,156,0.3)';
+        div.innerHTML = '<span class="shopName">' + baseName + '</span>' +
+            '<span class="shopTags"><span class="shopTag">60% value</span></span>' +
+            '<span class="shopCost" style="color:#4caf50">Sell $' + sellValue + '</span>';
+        (function(idx, val) {
+            div.onclick = function() {
+                LIFE.state.money += val;
+                LIFE.state.inventory.splice(idx, 1);
+                if (LIFE.state.equippedIndex >= LIFE.state.inventory.length) LIFE.state.equippedIndex = Math.max(0, LIFE.state.inventory.length - 1);
+                LIFE.sounds.money();
+                LIFE.ui.showPopup('Sold for $' + val, '#4caf50');
+                LIFE.updateHeldWeapon();
+                LIFE.state.shopOpen = false;
+                LIFE.ui.openFenceShop();
+            };
+        })(i, sellValue);
+        items.appendChild(div);
+    }
+
+    if (!hasValuables) {
+        var noItems = document.createElement('div');
+        noItems.className = 'shopItem';
+        noItems.style.color = '#666';
+        noItems.textContent = 'No valuables to sell.';
+        items.appendChild(noItems);
+    }
+
+    // Buy section
+    var buyTitle = document.createElement('div');
+    buyTitle.className = 'shopItem';
+    buyTitle.style.textAlign = 'center';
+    buyTitle.style.color = '#78909c';
+    buyTitle.style.borderColor = 'rgba(120,144,156,0.3)';
+    buyTitle.textContent = '--- FOR SALE ---';
+    items.appendChild(buyTitle);
+
+    LIFE.FENCE_ITEMS.forEach(function(item) {
+        var cantAfford = LIFE.state.money < item.cost;
+        var div = document.createElement('div');
+        div.className = 'shopItem' + (cantAfford ? ' cantAfford' : '');
+        var tags = '';
+        if (item.reducesWanted) tags += '<span class="shopTag good">-' + item.reducesWanted + ' Wanted</span>';
+        if (item.amount > 0) tags += '<span class="shopTag good">+' + item.amount + ' ' + item.stat + '</span>';
+        div.innerHTML = '<span class="shopName">' + item.name + '</span>' +
+            '<span class="shopTags">' + tags + '</span>' +
+            '<span class="shopCost">$' + item.cost + '</span>';
+        div.onclick = function() {
+            if (LIFE.state.money < item.cost) { LIFE.ui.showPopup("Can't afford!", '#ef5350'); return; }
+            LIFE.state.money -= item.cost;
+            if (item.reducesWanted) {
+                LIFE.state.wantedLevel = Math.max(0, (LIFE.state.wantedLevel || 0) - item.reducesWanted);
+                LIFE.ui.showPopup('Wanted level reduced!', '#4caf50');
+            }
+            if (item.physical) {
+                LIFE.state.inventory.push(item.name);
+            }
+            if (item.amount > 0 && !item.reducesWanted) {
+                LIFE.state.stats[item.stat] = Math.min(100, (LIFE.state.stats[item.stat] || 0) + item.amount);
+            }
+            LIFE.sounds.money();
+            LIFE.ui.showPopup(item.name + ' acquired!', '#4caf50');
+            LIFE.state.shopOpen = false;
+            LIFE.ui.openFenceShop();
+        };
+        items.appendChild(div);
+    });
+
+    var closeDiv = document.createElement('div');
+    closeDiv.className = 'shopItem shopClose';
+    closeDiv.textContent = '[ESC] Close';
+    closeDiv.onclick = function() { LIFE.ui.closeShop(); };
+    items.appendChild(closeDiv);
+
+    LIFE.ui.$.shopBox.style.display = 'block';
+};
+
+// ============================================================
+// ARMS DEALER SHOP
+// ============================================================
+LIFE.ui.openArmsDealerShop = function() {
+    if (LIFE.dialogue.active || LIFE.state.shopOpen) return;
+    LIFE.state.shopOpen = true;
+    LIFE.unlockCursor();
+
+    var items = LIFE.ui.$.shopItems;
+    items.innerHTML = '';
+
+    // title
+    var title = document.createElement('div');
+    title.className = 'shopItem';
+    title.style.textAlign = 'center';
+    title.style.color = '#558b2f';
+    title.style.borderColor = 'rgba(85,139,47,0.3)';
+    title.textContent = '--- ARMS DEALER ---';
+    items.appendChild(title);
+
+    // Sell section: player weapons at 40% value
+    var inv = LIFE.state.inventory;
+    var hasWeapons = false;
+    for (var i = 0; i < inv.length; i++) {
+        var invItem = inv[i];
+        var baseName = LIFE.getItemBaseName(invItem);
+        if (baseName === 'Fists') continue;
+        var itemData = LIFE.ITEM_DATA[baseName];
+        if (!itemData || (itemData.type !== 'melee' && itemData.type !== 'ranged')) continue;
+        hasWeapons = true;
+        var sellValue = Math.round((itemData.value || 100) * 0.4);
+        var div = document.createElement('div');
+        div.className = 'shopItem';
+        div.style.borderColor = 'rgba(85,139,47,0.3)';
+        div.innerHTML = '<span class="shopName">' + baseName + '</span>' +
+            '<span class="shopTags"><span class="shopTag">40% value</span></span>' +
+            '<span class="shopCost" style="color:#4caf50">Sell $' + sellValue + '</span>';
+        (function(idx, val, name) {
+            div.onclick = function() {
+                LIFE.state.money += val;
+                LIFE.state.inventory.splice(idx, 1);
+                if (LIFE.state.equippedIndex >= LIFE.state.inventory.length) LIFE.state.equippedIndex = Math.max(0, LIFE.state.inventory.length - 1);
+                // Update weapon flags
+                LIFE.state.hasGun = LIFE.state.inventory.some(function(it) { return LIFE.getItemBaseName(it) === 'Pistol'; });
+                LIFE.state.hasRifle = LIFE.state.inventory.some(function(it) { return LIFE.getItemBaseName(it) === 'AK-47'; });
+                LIFE.state.hasSwitchblade = LIFE.state.inventory.some(function(it) { return LIFE.getItemBaseName(it) === 'Switchblade'; });
+                LIFE.sounds.money();
+                LIFE.ui.showPopup('Sold ' + name + ' for $' + val, '#4caf50');
+                LIFE.updateHeldWeapon();
+                LIFE.state.shopOpen = false;
+                LIFE.ui.openArmsDealerShop();
+            };
+        })(i, sellValue, baseName);
+        items.appendChild(div);
+    }
+
+    if (!hasWeapons) {
+        var noItems = document.createElement('div');
+        noItems.className = 'shopItem';
+        noItems.style.color = '#666';
+        noItems.textContent = 'No weapons to sell.';
+        items.appendChild(noItems);
+    }
+
+    // Buy section
+    var buyTitle = document.createElement('div');
+    buyTitle.className = 'shopItem';
+    buyTitle.style.textAlign = 'center';
+    buyTitle.style.color = '#558b2f';
+    buyTitle.style.borderColor = 'rgba(85,139,47,0.3)';
+    buyTitle.textContent = '--- WEAPONS FOR SALE ---';
+    items.appendChild(buyTitle);
+
+    LIFE.ARMS_DEALER_ITEMS.forEach(function(item) {
+        var cantAfford = LIFE.state.money < item.cost;
+        var div = document.createElement('div');
+        div.className = 'shopItem shopContra' + (cantAfford ? ' cantAfford' : '');
+        var tags = '<span class="shopTag bad">Contraband</span>';
+        if (item.type === 'weapon') {
+            var dmg = (LIFE.ITEM_DATA[item.name] || {}).damage || 0;
+            if (dmg) tags += '<span class="shopTag good">DMG ' + dmg + '</span>';
+        }
+        if (item.type === 'armor') tags += '<span class="shopTag good">Armor</span>';
+        div.innerHTML = '<span class="shopName">' + item.name + '</span>' +
+            '<span class="shopTags">' + tags + '</span>' +
+            '<span class="shopCost">$' + item.cost + '</span>';
+        div.onclick = function() {
+            if (LIFE.state.money < item.cost) { LIFE.ui.showPopup("Can't afford!", '#ef5350'); return; }
+            LIFE.state.money -= item.cost;
+            if (item.physical) {
+                LIFE.state.inventory.push(item.name);
+                if (item.name === 'Shotgun') LIFE.state.hasShotgun = true;
+                if (item.name === 'Body Armor') LIFE.state.hasArmor = true;
+            }
+            LIFE.state.reputation = Math.max(-100, (LIFE.state.reputation || 0) - 5);
+            LIFE.sounds.money();
+            LIFE.ui.showPopup(item.name + ' acquired!', '#ff9800');
+            LIFE.state.shopOpen = false;
+            LIFE.ui.openArmsDealerShop();
+        };
+        items.appendChild(div);
+    });
+
+    var closeDiv = document.createElement('div');
+    closeDiv.className = 'shopItem shopClose';
+    closeDiv.textContent = '[ESC] Close';
+    closeDiv.onclick = function() { LIFE.ui.closeShop(); };
+    items.appendChild(closeDiv);
+
+    LIFE.ui.$.shopBox.style.display = 'block';
 };
 
 // ============================================================

@@ -118,6 +118,15 @@ LIFE.NPC_PERSISTENT_OPTIONS = {
     'Dealer': [
         { text: "Show me what you got.", effects: {}, rep: -2, openDealer: true }
     ],
+    'Organ Buyer': [
+        { text: "I have organs to sell.", effects: {}, rep: -5, openOrganBuyer: true }
+    ],
+    'Fence': [
+        { text: "I've got some goods.", effects: {}, rep: -3, openFence: true }
+    ],
+    'Arms Dealer': [
+        { text: "Show me the hardware.", effects: {}, rep: -3, openArmsDealer: true }
+    ],
     'Food Vendor': [
         { text: "Let me see the menu.", effects: {}, openVendor: 'Food Vendor' }
     ],
@@ -610,6 +619,75 @@ LIFE.NPC_DIALOGUES['Dealer'] = [
     ]},
     { text: "Back again? I got fresh stock today.", options: [
         { text: "Let me see.", effects: {}, rep: -2, openDealer: true },
+        { text: "Not today.", effects: {}, rep: 0 }
+    ]}
+];
+
+// ORGAN BUYER DIALOGUES
+LIFE.NPC_DIALOGUES['Organ Buyer'] = [
+    { text: "You look like someone who doesn't mind getting their hands dirty. Got anything fresh for me?", options: [
+        { text: "I have organs to sell.", effects: {}, rep: -5, openOrganBuyer: true },
+        { text: "That's disgusting.", effects: { charisma: 1 }, rep: 3, response: {
+            text: "Disgusting? It's science, friend. Supply and demand. The waiting list is years long.", options: [
+                { text: "Still not interested.", effects: {}, rep: 1 },
+                { text: "...how much are we talking?", effects: {}, rep: -3, openOrganBuyer: true }
+            ]
+        }},
+        { text: "Where do these go?", effects: { intelligence: 1 }, rep: 0, response: {
+            text: "Private clinics. Rich clients who can't wait for a donor. Don't worry about the details.", options: [
+                { text: "I'll keep that in mind.", effects: {}, rep: -1 },
+                { text: "I want nothing to do with this.", effects: {}, rep: 2 }
+            ]
+        }}
+    ]},
+    { text: "The clinic is running low. You got anything organic?", options: [
+        { text: "Let me check.", effects: {}, rep: -3, openOrganBuyer: true },
+        { text: "Not today.", effects: {}, rep: 0 }
+    ]}
+];
+
+// FENCE DIALOGUES
+LIFE.NPC_DIALOGUES['Fence'] = [
+    { text: "I deal in... pre-owned goods. No questions asked. You got something for me?", options: [
+        { text: "I've got some goods.", effects: {}, rep: -3, openFence: true },
+        { text: "What kind of goods?", effects: { intelligence: 1 }, rep: 0, response: {
+            text: "Jewelry, electronics, valuables... anything that fell off a truck, if you catch my drift.", options: [
+                { text: "Show me what you've got.", effects: {}, rep: -2, openFence: true },
+                { text: "I'll pass.", effects: {}, rep: 1 }
+            ]
+        }},
+        { text: "I'm not a thief.", effects: { charisma: 1 }, rep: 3, response: {
+            text: "Nobody said you were. But if you ever find something valuable... you know where I am.", options: [
+                { text: "I'll remember that.", effects: {}, rep: 0 },
+                { text: "Don't count on it.", effects: {}, rep: 1 }
+            ]
+        }}
+    ]},
+    { text: "Got anything hot for me today?", options: [
+        { text: "Let me see your stock.", effects: {}, rep: -2, openFence: true },
+        { text: "Nothing right now.", effects: {}, rep: 0 }
+    ]}
+];
+
+// ARMS DEALER DIALOGUES
+LIFE.NPC_DIALOGUES['Arms Dealer'] = [
+    { text: "Military grade hardware. No serial numbers, no paper trail. Interested?", options: [
+        { text: "Show me the hardware.", effects: {}, rep: -3, openArmsDealer: true },
+        { text: "Where do you get this stuff?", effects: { intelligence: 1 }, rep: 0, response: {
+            text: "That's not a question you want an answer to. Let's just say I have connections overseas.", options: [
+                { text: "Fair enough. Show me.", effects: {}, rep: -2, openArmsDealer: true },
+                { text: "Too sketchy for me.", effects: {}, rep: 1 }
+            ]
+        }},
+        { text: "I should report you.", effects: { charisma: 2 }, rep: 5, response: {
+            text: "Go ahead. By the time the cops show up, I'll be three blocks away with a new face.", options: [
+                { text: "We'll see about that.", effects: {}, rep: 2 },
+                { text: "...fine. Forget I said anything.", effects: {}, rep: -1 }
+            ]
+        }}
+    ]},
+    { text: "Back for more firepower? I got new stock.", options: [
+        { text: "Let's see it.", effects: {}, rep: -2, openArmsDealer: true },
         { text: "Not today.", effects: {}, rep: 0 }
     ]}
 ];
@@ -1416,6 +1494,36 @@ LIFE.dialogue.selectOption = function(idx) {
             if (LIFE.state.gamePhase === 'playing') LIFE.ui.openDealerShop();
         }, 100);
         return; // skip the response phase
+    }
+    if (opt.openOrganBuyer) {
+        LIFE.dialogue.active = false;
+        LIFE.dialogue.blocking = false;
+        LIFE.dialogue.current = null;
+        LIFE.dialogue.elements.box.style.display = 'none';
+        setTimeout(function() {
+            if (LIFE.state.gamePhase === 'playing') LIFE.ui.openOrganBuyerShop();
+        }, 100);
+        return;
+    }
+    if (opt.openFence) {
+        LIFE.dialogue.active = false;
+        LIFE.dialogue.blocking = false;
+        LIFE.dialogue.current = null;
+        LIFE.dialogue.elements.box.style.display = 'none';
+        setTimeout(function() {
+            if (LIFE.state.gamePhase === 'playing') LIFE.ui.openFenceShop();
+        }, 100);
+        return;
+    }
+    if (opt.openArmsDealer) {
+        LIFE.dialogue.active = false;
+        LIFE.dialogue.blocking = false;
+        LIFE.dialogue.current = null;
+        LIFE.dialogue.elements.box.style.display = 'none';
+        setTimeout(function() {
+            if (LIFE.state.gamePhase === 'playing') LIFE.ui.openArmsDealerShop();
+        }, 100);
+        return;
     }
     if (opt.openVendor) {
         LIFE.dialogue.active = false;
@@ -2593,7 +2701,7 @@ LIFE.dialogue.talkToNPC = function(npc) {
             for (var pi = 0; pi < persistent.length; pi++) {
                 var alreadyExists = false;
                 for (var fi = 0; fi < finalOpts.length; fi++) {
-                    if (finalOpts[fi].openDealer || finalOpts[fi].openVendor) { alreadyExists = true; break; }
+                    if (finalOpts[fi].openDealer || finalOpts[fi].openVendor || finalOpts[fi].openOrganBuyer || finalOpts[fi].openFence || finalOpts[fi].openArmsDealer) { alreadyExists = true; break; }
                 }
                 if (!alreadyExists) finalOpts.push(persistent[pi]);
             }

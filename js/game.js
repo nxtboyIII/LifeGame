@@ -1695,16 +1695,46 @@ LIFE.cleanupBullets = function() {
 // ============================================================
 // INVENTORY
 // ============================================================
+// Item name helper: handles both string items and object items (organs with _createdAt)
+LIFE.getItemName = function(invItem) {
+    if (typeof invItem === 'string') return invItem;
+    if (invItem && invItem.name) {
+        if (LIFE.isItemExpired(invItem)) return invItem.name + ' (Expired)';
+        return invItem.name;
+    }
+    return 'Fists';
+};
+
+// Item expiration check: only object items with _createdAt can expire
+LIFE.isItemExpired = function(invItem) {
+    if (typeof invItem === 'string') return false;
+    if (invItem && invItem._createdAt !== undefined) {
+        var data = LIFE.ITEM_DATA[invItem.name];
+        if (data && data.expireAfter) {
+            return (LIFE.state.gameTime - invItem._createdAt) >= data.expireAfter;
+        }
+    }
+    return false;
+};
+
+// Get the raw item name (without expired suffix) from an inventory entry
+LIFE.getItemBaseName = function(invItem) {
+    if (typeof invItem === 'string') return invItem;
+    if (invItem && invItem.name) return invItem.name;
+    return 'Fists';
+};
+
 LIFE.cycleInventory = function() {
     var inv = LIFE.state.inventory;
     if (inv.length <= 1) return;
     LIFE.state.equippedIndex = (LIFE.state.equippedIndex + 1) % inv.length;
-    LIFE.ui.showPopup('Equipped: ' + inv[LIFE.state.equippedIndex], '#4fc3f7', 'equip');
+    LIFE.ui.showPopup('Equipped: ' + LIFE.getItemName(inv[LIFE.state.equippedIndex]), '#4fc3f7', 'equip');
     LIFE.updateHeldWeapon();
 };
 
 LIFE.getEquipped = function() {
-    return LIFE.state.inventory[LIFE.state.equippedIndex] || 'Fists';
+    var item = LIFE.state.inventory[LIFE.state.equippedIndex];
+    return LIFE.getItemBaseName(item) || 'Fists';
 };
 
 // ============================================================
@@ -1716,7 +1746,8 @@ LIFE.dropItem = function(index) {
     var inv = LIFE.state.inventory;
     if (index === undefined) index = LIFE.state.equippedIndex;
     if (index < 0 || index >= inv.length) return;
-    var itemName = inv[index];
+    var rawItem = inv[index];
+    var itemName = LIFE.getItemBaseName(rawItem);
     if (itemName === 'Fists') return; // can't drop fists
 
     // Remove from inventory
@@ -1724,9 +1755,9 @@ LIFE.dropItem = function(index) {
     if (LIFE.state.equippedIndex >= inv.length) LIFE.state.equippedIndex = Math.max(0, inv.length - 1);
 
     // Update weapon flags
-    LIFE.state.hasGun = inv.indexOf('Pistol') >= 0;
-    LIFE.state.hasRifle = inv.indexOf('AK-47') >= 0;
-    LIFE.state.hasSwitchblade = inv.indexOf('Switchblade') >= 0;
+    LIFE.state.hasGun = inv.some(function(it) { return LIFE.getItemBaseName(it) === 'Pistol'; });
+    LIFE.state.hasRifle = inv.some(function(it) { return LIFE.getItemBaseName(it) === 'AK-47'; });
+    LIFE.state.hasSwitchblade = inv.some(function(it) { return LIFE.getItemBaseName(it) === 'Switchblade'; });
     LIFE.updateHeldWeapon();
 
     // Create 3D mesh
@@ -2010,13 +2041,16 @@ LIFE._refreshContainerUI = function() {
         var valueStr = '';
         if (itemData && itemData.value) valueStr = '($' + itemData.value + ')';
         if (ci.isMoney) valueStr = '';
-        html += '<div class="containerItem">';
-        html += '<div><span class="containerItemName' + (isStealItem ? ' parentOwned' : '') + '">' + displayName + '</span>';
-        if (isParent) html += ' <span style="color:#ef5350;font-size:11px">[Parent\'s]</span>';
+        var isOrgan = ci._isOrgan;
+        var btnLabel = isOrgan ? 'Harvest' : (isStealItem ? 'Steal' : 'Take');
+        html += '<div class="containerItem"' + (isOrgan ? ' style="border-color:rgba(200,20,20,0.4)"' : '') + '>';
+        html += '<div><span class="containerItemName' + (isStealItem ? ' parentOwned' : '') + '"' + (isOrgan ? ' style="color:#cc1111"' : '') + '>' + displayName + '</span>';
+        if (isOrgan) html += ' <span style="color:#cc1111;font-size:11px">[Organ]</span>';
+        else if (isParent) html += ' <span style="color:#ef5350;font-size:11px">[Parent\'s]</span>';
         else if (isStealContainer) html += ' <span style="color:#ef5350;font-size:11px">[Steal]</span>';
         if (valueStr) html += ' <span class="containerItemValue">' + valueStr + '</span>';
         html += '</div>';
-        html += '<div class="containerTakeBtn" onclick="LIFE.takeContainerItem(' + i + ')">' + (isStealItem ? 'Steal' : 'Take') + '</div>';
+        html += '<div class="containerTakeBtn" onclick="LIFE.takeContainerItem(' + i + ')"' + (isOrgan ? ' style="background:rgba(200,20,20,0.3)"' : '') + '>' + btnLabel + '</div>';
         html += '</div>';
     }
     itemsEl.innerHTML = html;
@@ -2036,6 +2070,22 @@ LIFE.takeContainerItem = function(index) {
         } else {
             LIFE.ui.showPopup('Took $' + ci.amount, '#4caf50');
         }
+    } else if (ci._isOrgan) {
+        // Organ harvesting
+        var harvestNpc = ci._harvestNpc;
+        if (harvestNpc) {
+            if (ci.name === 'Human Heart') harvestNpc._heartTaken = true;
+            if (ci.name === 'Human Liver') harvestNpc._liverTaken = true;
+        }
+        LIFE.logCrime('Organ harvesting');
+        LIFE.state.reputation = Math.max(-100, (LIFE.state.reputation || 0) - 15);
+        var organWitness = LIFE.checkWitnesses(harvestNpc);
+        if (organWitness && organWitness.witnessed) {
+            LIFE.state.wantedLevel = Math.min(5, (LIFE.state.wantedLevel || 0) + 3);
+        }
+        LIFE.ui.showPopup('Harvested ' + ci.name, '#cc1111');
+        // Store as object with creation time for expiration
+        LIFE.state.inventory.push({ name: ci.name, _createdAt: LIFE.state.gameTime });
     } else {
         if (ci.parentOnly) {
             LIFE.ui.showPopup('Took ' + ci.name + ' (parent\'s item!)', '#ff9800');
@@ -2103,6 +2153,16 @@ LIFE.lootBodyAsContainer = function(npc) {
         ownItem: true,
         _isBodyLoot: true
     };
+
+    // Check if player has a cutting tool for organ harvesting
+    var hasBlade = LIFE.state.inventory.some(function(it) {
+        var n = LIFE.getItemBaseName(it);
+        return n === 'Switchblade' || n === 'Crowbar';
+    });
+    if (hasBlade) {
+        if (!npc._heartTaken) container.items.push({ name: 'Human Heart', isMoney: false, _isOrgan: true, _harvestNpc: npc });
+        if (!npc._liverTaken) container.items.push({ name: 'Human Liver', isMoney: false, _isOrgan: true, _harvestNpc: npc });
+    }
 
     LIFE._lootBodyNPC = npc;
     LIFE.logCrime('Looting a body');
@@ -2176,7 +2236,20 @@ LIFE.ITEM_DATA = {
     'Phone Case':       { desc: 'A protective phone case.', type: 'misc', value: 5 },
     'Tablet':           { desc: 'A touchscreen tablet.', type: 'misc', value: 100 },
     'Gaming Console':   { desc: 'A gaming console.', type: 'misc', value: 200 },
-    'Smartphone':       { desc: 'The latest smartphone model.', type: 'misc', value: 250 }
+    'Smartphone':       { desc: 'The latest smartphone model.', type: 'misc', value: 250 },
+    // Organs (harvested from bodies)
+    'Human Heart':      { desc: 'A fresh human heart. Extremely illegal.', type: 'organ', value: 2000, expireAfter: 2 },
+    'Human Liver':      { desc: 'A human liver. Worth a fortune on the black market.', type: 'organ', value: 1500, expireAfter: 2 },
+    // Organ Buyer items
+    'Adrenaline Shot':  { desc: 'A shot of adrenaline. Heals quickly.', type: 'food', heal: 60, value: 200 },
+    'Morphine':         { desc: 'Powerful painkiller. Heals a lot but has side effects.', type: 'food', heal: 80, value: 150, healthCost: 5 },
+    // Fence items
+    'Fake ID':          { desc: 'A convincing fake identity card. Reduces wanted level.', type: 'misc', value: 500 },
+    'Lockpick Set':     { desc: 'A set of lockpicks. Useful for breaking in.', type: 'misc', value: 100 },
+    // Arms Dealer items
+    'Shotgun':          { desc: 'A pump-action shotgun. Devastating at close range.', damage: 60, type: 'ranged', value: 5000 },
+    'Body Armor':       { desc: 'Kevlar body armor. Reduces incoming damage.', type: 'armor', value: 3000 },
+    'Ammo Crate':       { desc: 'A crate of ammunition.', type: 'misc', value: 500 }
 };
 
 // Items that can spawn in each zone (with weights)
@@ -2807,6 +2880,146 @@ LIFE.createItemMesh = function(itemName) {
             group.add(spCam);
             break;
 
+        case 'Human Heart':
+            // Red sphere with artery tubes
+            var heartBody = new THREE.Mesh(
+                new THREE.SphereGeometry(0.07, 8, 8),
+                LIFE.getMaterial({ color: 0xcc1111 })
+            );
+            group.add(heartBody);
+            var arteryMat = LIFE.getMaterial({ color: 0x991111 });
+            var a1 = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.05, 5), arteryMat);
+            a1.position.set(0.02, 0.08, 0); a1.rotation.z = 0.3;
+            group.add(a1);
+            var a2 = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.05, 5), arteryMat);
+            a2.position.set(-0.02, 0.08, 0); a2.rotation.z = -0.3;
+            group.add(a2);
+            var a3 = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.04, 5), arteryMat);
+            a3.position.set(0, 0.085, 0.02); a3.rotation.x = -0.3;
+            group.add(a3);
+            break;
+        case 'Human Liver':
+            // Dark red/brown stretched box
+            var liverBody = new THREE.Mesh(
+                new THREE.BoxGeometry(0.14, 0.06, 0.10),
+                LIFE.getMaterial({ color: 0x8b0000 })
+            );
+            group.add(liverBody);
+            // Rounded lobe
+            var lobe = new THREE.Mesh(
+                new THREE.SphereGeometry(0.045, 6, 6),
+                LIFE.getMaterial({ color: 0x7a0000 })
+            );
+            lobe.position.set(0.05, 0, 0.02);
+            lobe.scale.set(1, 0.7, 1);
+            group.add(lobe);
+            break;
+        case 'Adrenaline Shot':
+            // Syringe shape
+            var barrel = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.015, 0.015, 0.1, 6),
+                LIFE.getMaterial({ color: 0xdddddd })
+            );
+            group.add(barrel);
+            var needle = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.003, 0.003, 0.04, 4),
+                LIFE.getMaterial({ color: 0xcccccc })
+            );
+            needle.position.y = 0.07;
+            group.add(needle);
+            var plunger = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.012, 0.012, 0.03, 6),
+                LIFE.getMaterial({ color: 0x44cc44 })
+            );
+            plunger.position.y = -0.05;
+            group.add(plunger);
+            break;
+        case 'Morphine':
+            // Small bottle
+            var bottle = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.025, 0.025, 0.07, 6),
+                LIFE.getMaterial({ color: 0x4466aa })
+            );
+            group.add(bottle);
+            var cap = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.015, 0.015, 0.02, 6),
+                LIFE.getMaterial({ color: 0xcccccc })
+            );
+            cap.position.y = 0.045;
+            group.add(cap);
+            break;
+        case 'Fake ID':
+            // Card shape
+            var card = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 0.005, 0.065),
+                LIFE.getMaterial({ color: 0x2255aa })
+            );
+            group.add(card);
+            var stripe = new THREE.Mesh(
+                new THREE.BoxGeometry(0.08, 0.006, 0.01),
+                LIFE.getMaterial({ color: 0xdddddd })
+            );
+            stripe.position.z = -0.015;
+            group.add(stripe);
+            break;
+        case 'Lockpick Set':
+            // Small pouch with picks
+            var pouch = new THREE.Mesh(
+                new THREE.BoxGeometry(0.06, 0.04, 0.08),
+                LIFE.getMaterial({ color: 0x333333 })
+            );
+            group.add(pouch);
+            var pick = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.003, 0.003, 0.06, 4),
+                LIFE.getMaterial({ color: 0xcccccc })
+            );
+            pick.position.set(0.01, 0.03, 0);
+            pick.rotation.z = 0.2;
+            group.add(pick);
+            break;
+        case 'Shotgun':
+            // Long barrel with stock
+            var sgBarrel = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.02, 0.02, 0.25, 6),
+                LIFE.getMaterial({ color: 0x333333 })
+            );
+            sgBarrel.rotation.x = Math.PI / 2;
+            group.add(sgBarrel);
+            var sgStock = new THREE.Mesh(
+                new THREE.BoxGeometry(0.035, 0.05, 0.1),
+                LIFE.getMaterial({ color: 0x6b4226 })
+            );
+            sgStock.position.z = -0.15;
+            group.add(sgStock);
+            break;
+        case 'Body Armor':
+            // Vest shape
+            var vest = new THREE.Mesh(
+                new THREE.BoxGeometry(0.14, 0.16, 0.06),
+                LIFE.getMaterial({ color: 0x2d2d2d })
+            );
+            group.add(vest);
+            var plate = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 0.1, 0.02),
+                LIFE.getMaterial({ color: 0x444444 })
+            );
+            plate.position.z = 0.04;
+            group.add(plate);
+            break;
+        case 'Ammo Crate':
+            // Wooden crate
+            var crate = new THREE.Mesh(
+                new THREE.BoxGeometry(0.12, 0.08, 0.1),
+                LIFE.getMaterial({ color: 0x6b4226 })
+            );
+            group.add(crate);
+            var label = new THREE.Mesh(
+                new THREE.BoxGeometry(0.06, 0.04, 0.001),
+                LIFE.getMaterial({ color: 0xcc8833 })
+            );
+            label.position.z = 0.051;
+            group.add(label);
+            break;
         default:
             // Generic box for unknown items
             geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
@@ -3203,12 +3416,14 @@ LIFE.ui.refreshInventoryPanel = function() {
     var inv = LIFE.state.inventory;
     var html = '';
     for (var i = 0; i < inv.length; i++) {
-        var itemName = inv[i];
-        var data = LIFE.ITEM_DATA[itemName] || {};
+        var displayName = LIFE.getItemName(inv[i]);
+        var baseName = LIFE.getItemBaseName(inv[i]);
+        var data = LIFE.ITEM_DATA[baseName] || {};
+        var isExpired = LIFE.isItemExpired(inv[i]);
         var isEquipped = (i === LIFE.state.equippedIndex);
         var isSelected = (i === LIFE._invSelectedIndex);
         html += '<div class="invListItem' + (isSelected ? ' invSelected' : '') + (isEquipped ? ' invEquipped' : '') + '" onclick="LIFE._invSelectItem(' + i + ')">';
-        html += '<span class="invItemName">' + itemName + '</span>';
+        html += '<span class="invItemName"' + (isExpired ? ' style="color:#ef5350"' : '') + '>' + displayName + '</span>';
         if (isEquipped) html += '<span class="invEquipBadge">E</span>';
         html += '</div>';
     }
@@ -3216,11 +3431,12 @@ LIFE.ui.refreshInventoryPanel = function() {
 
     // Update info pane
     var selItem = inv[LIFE._invSelectedIndex];
-    var data = LIFE.ITEM_DATA[selItem] || {};
+    var selBaseName = LIFE.getItemBaseName(selItem);
+    var data = LIFE.ITEM_DATA[selBaseName] || {};
     var nameEl = document.getElementById('invInfoName');
     var descEl = document.getElementById('invInfoDesc');
     var statsEl = document.getElementById('invInfoStats');
-    if (nameEl) nameEl.textContent = selItem || '';
+    if (nameEl) nameEl.textContent = LIFE.getItemName(selItem) || '';
     if (descEl) descEl.textContent = data.desc || '';
     if (statsEl) {
         var statsHtml = '';
@@ -3241,13 +3457,13 @@ LIFE.ui.refreshInventoryPanel = function() {
         var isEq = LIFE._invSelectedIndex === LIFE.state.equippedIndex;
         equipBtn.textContent = isEq ? 'Equipped' : 'Equip';
         equipBtn.style.opacity = isEq ? '0.4' : '1';
-        equipBtn.style.display = (isWeapon || selItem === 'Fists') ? 'inline-block' : 'none';
+        equipBtn.style.display = (isWeapon || selBaseName === 'Fists') ? 'inline-block' : 'none';
     }
     if (useBtn) {
         useBtn.style.display = isConsumable ? 'inline-block' : 'none';
     }
     if (dropBtn) {
-        dropBtn.style.display = (selItem === 'Fists') ? 'none' : 'inline-block';
+        dropBtn.style.display = (selBaseName === 'Fists') ? 'none' : 'inline-block';
     }
 };
 
@@ -3265,7 +3481,8 @@ LIFE._invEquipSelected = function() {
 };
 
 LIFE._invDropSelected = function() {
-    var itemName = LIFE.state.inventory[LIFE._invSelectedIndex];
+    var rawItem = LIFE.state.inventory[LIFE._invSelectedIndex];
+    var itemName = LIFE.getItemBaseName(rawItem);
     if (!itemName || itemName === 'Fists') return;
     LIFE.dropItem(LIFE._invSelectedIndex);
     if (LIFE._invSelectedIndex >= LIFE.state.inventory.length) {
@@ -3280,7 +3497,8 @@ LIFE._invDropSelected = function() {
 
 LIFE._invUseSelected = function() {
     var inv = LIFE.state.inventory;
-    var itemName = inv[LIFE._invSelectedIndex];
+    var rawItem = inv[LIFE._invSelectedIndex];
+    var itemName = LIFE.getItemBaseName(rawItem);
     if (!itemName) return;
     var data = LIFE.ITEM_DATA[itemName] || {};
     if (!data.heal && !data.stat) return; // not consumable
@@ -3320,7 +3538,10 @@ LIFE._invSetPreviewItem = function(itemName) {
     LIFE._invRotY = 0;
     LIFE._invAutoRot = 0;
 
-    if (!itemName || itemName === 'Fists') {
+    // Handle object items (organs)
+    var baseName = LIFE.getItemBaseName(itemName);
+
+    if (!baseName || baseName === 'Fists') {
         // Show a fist (simple sphere)
         var fistGeo = new THREE.SphereGeometry(0.15, 12, 12);
         var fistMat = LIFE.getMaterial({ color: 0xd4a574 });
@@ -3330,13 +3551,13 @@ LIFE._invSetPreviewItem = function(itemName) {
         return;
     }
 
-    var data = LIFE.ITEM_DATA[itemName] || {};
+    var data = LIFE.ITEM_DATA[baseName] || {};
     var mesh;
     if (data.type === 'melee' || data.type === 'ranged') {
-        mesh = LIFE.createWeaponMesh(itemName, 1.7);
+        mesh = LIFE.createWeaponMesh(baseName, 1.7);
         mesh.scale.set(4, 4, 4);
     } else {
-        mesh = LIFE.createItemMesh(itemName);
+        mesh = LIFE.createItemMesh(baseName);
         mesh.scale.set(6, 6, 6);
     }
     LIFE._invPreviewMesh = mesh;
@@ -3510,6 +3731,14 @@ LIFE.createWeaponMesh = function(type, playerHeight) {
         // Position at end of arm, rotate so barrel points forward when arm extended
         group.position.set(0, -armH * 0.9, 0.02);
         group.rotation.x = Math.PI / 2;
+    } else {
+        // Generic item held in hand - use createItemMesh
+        var itemMesh = LIFE.createItemMesh(type);
+        if (itemMesh) {
+            itemMesh.scale.set(0.5, 0.5, 0.5);
+            itemMesh.position.set(0, -armH, 0);
+        }
+        group.add(itemMesh);
     }
     return group;
 };
@@ -3553,10 +3782,18 @@ LIFE.updateHeldWeapon = function() {
         // Hold arm forward, two-handed feel
         player.parts.rightArm.rotation.x = -1.3;
         player.parts.rightArm.rotation.z = -0.05;
+    } else if (equipped === 'Shotgun') {
+        // Hold arm forward, similar to AK-47
+        player.parts.rightArm.rotation.x = -1.3;
+        player.parts.rightArm.rotation.z = -0.05;
     } else if (equipped === 'Baseball Bat' || equipped === 'Crowbar') {
         // Hold arm to the side, ready to swing
         player.parts.rightArm.rotation.x = -0.6;
         player.parts.rightArm.rotation.z = -0.2;
+    } else {
+        // Generic item hold pose
+        player.parts.rightArm.rotation.x = -0.3;
+        player.parts.rightArm.rotation.z = -0.1;
     }
 };
 
@@ -4388,7 +4625,7 @@ document.addEventListener('mousedown', function(e) {
     if (LIFE.state.gamePhase !== 'playing') return;
     LIFE._mouseHeld = true;
     var eq = LIFE.getEquipped();
-    if (eq !== 'Pistol' && eq !== 'AK-47') return;
+    if (eq !== 'Pistol' && eq !== 'AK-47' && eq !== 'Shotgun') return;
     if (LIFE.state.shootCooldown > 0) return;
     LIFE.shootGun();
 });

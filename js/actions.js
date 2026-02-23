@@ -482,6 +482,21 @@ LIFE.updateBullets = function(dt) {
         b.mesh.position.y += b.direction.y * move - 0.4 * dt; // slight gravity drop
         b.mesh.position.z += b.direction.z * move;
 
+        // Check bullet collision with buildings (AABB colliders)
+        var colliders = (LIFE.world.built && !LIFE.world.insideInterior)
+            ? LIFE.world.getActiveColliders()
+            : LIFE.colliders;
+        var bx = b.mesh.position.x, bz = b.mesh.position.z;
+        for (var ci = 0; ci < colliders.length; ci++) {
+            var col = colliders[ci];
+            if (bx >= col.minX && bx <= col.maxX && bz >= col.minZ && bz <= col.maxZ) {
+                b.hit = true;
+                LIFE.createImpactEffect(b.mesh.position);
+                break;
+            }
+        }
+        if (b.hit) continue;
+
         // trail follows
         b.trail.position.copy(b.mesh.position);
 
@@ -611,11 +626,12 @@ LIFE.shootGun = function() {
     var state = LIFE.state;
     var equipped = LIFE.getEquipped();
     var isRifle = equipped === 'AK-47';
-    if (equipped !== 'Pistol' && !isRifle) return;
+    var isShotgun = equipped === 'Shotgun';
+    if (equipped !== 'Pistol' && !isRifle && !isShotgun) return;
     if (state.shootCooldown > 0) return;
-    // AK-47: faster fire rate (0.1s), Pistol: 0.4s
-    state.shootCooldown = isRifle ? 0.1 : 0.4;
-    state.actionCooldown = isRifle ? 0.1 : 0.4;
+    // AK-47: faster fire rate (0.1s), Shotgun: slow (0.8s), Pistol: 0.4s
+    state.shootCooldown = isRifle ? 0.1 : isShotgun ? 0.8 : 0.4;
+    state.actionCooldown = isRifle ? 0.1 : isShotgun ? 0.8 : 0.4;
     state.actionAnim = { type: 'punch', timer: 0.15 };
     LIFE.sounds.gunshot();
 
@@ -637,15 +653,27 @@ LIFE.shootGun = function() {
 
     var direction = new THREE.Vector3(fwdX, 0, fwdZ).normalize();
 
-    // spread: AK-47 has more spread than pistol
-    var spread = isRifle ? 0.07 : 0.04;
-    direction.x += (Math.random() - 0.5) * spread;
-    direction.z += (Math.random() - 0.5) * spread;
-    direction.normalize();
+    if (isShotgun) {
+        // Shotgun fires 5 pellets with wide spread
+        for (var p = 0; p < 5; p++) {
+            var pelletDir = direction.clone();
+            pelletDir.x += (Math.random() - 0.5) * 0.2;
+            pelletDir.z += (Math.random() - 0.5) * 0.2;
+            pelletDir.normalize();
+            LIFE.createBullet(origin.clone(), pelletDir, false, 15);
+        }
+        LIFE.createMuzzleFlash(origin);
+    } else {
+        // spread: AK-47 has more spread than pistol
+        var spread = isRifle ? 0.07 : 0.04;
+        direction.x += (Math.random() - 0.5) * spread;
+        direction.z += (Math.random() - 0.5) * spread;
+        direction.normalize();
 
-    var bulletDmg = isRifle ? 40 : 50;
-    LIFE.createBullet(origin, direction, false, bulletDmg);
-    LIFE.createMuzzleFlash(origin);
+        var bulletDmg = isRifle ? 40 : 50;
+        LIFE.createBullet(origin, direction, false, bulletDmg);
+        LIFE.createMuzzleFlash(origin);
+    }
 
     // firing gun — check if anyone nearby can hear/see
     if (state.wantedLevel < 1) {

@@ -1315,7 +1315,7 @@ LIFE.world.spawnZoneNPCs = function(zoneName) {
         npc._zoneRadius = def.radius;
 
         // Sleep schedule: unique bedtime/wake time per NPC
-        if (npcType === 'Police' || npcType === 'Dealer') {
+        if (npcType === 'Police' || npcType === 'Dealer' || npcType === 'Organ Buyer' || npcType === 'Fence' || npcType === 'Arms Dealer') {
             npc._bedtime = -1; // never sleeps (always active)
         } else if (npc.isVendor || npc.isCarSalesman || npc.isRealEstate || npc.isHiring) {
             // Business hours: sleep 9pm-7am
