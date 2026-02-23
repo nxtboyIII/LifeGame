@@ -220,7 +220,7 @@ LIFE.QUEST_DEFS = [
             { type: 'go_to', zone: 'city', desc: 'Go to the store in the city', radius: 20 },
             { type: 'return', desc: 'Bring the goods back' }
         ],
-        reward: { money: 200, rep: -8, charisma: 1, onComplete: function() { LIFE.state.totalThefts++; LIFE.logCrime('Shoplifting'); if (Math.random() < 0.25) LIFE.addWanted(1); } },
+        reward: { money: 200, rep: -8, charisma: 1, onComplete: function() { LIFE.state.totalThefts++; LIFE.logCrime('Shoplifting'); if (Math.random() < 0.25) LIFE.addWanted(1, 'Shoplifting'); } },
         timeLimitDays: 1
     },
     {
@@ -232,7 +232,7 @@ LIFE.QUEST_DEFS = [
             { type: 'go_to', zone: 'highschool', desc: 'Deliver the package near the high school', radius: 25 },
             { type: 'return', desc: 'Return to the dealer' }
         ],
-        reward: { money: 500, rep: -12, onComplete: function() { LIFE.logCrime('Drug trafficking'); if (Math.random() < 0.3) LIFE.addWanted(2); } },
+        reward: { money: 500, rep: -12, onComplete: function() { LIFE.logCrime('Drug trafficking'); if (Math.random() < 0.3) LIFE.addWanted(2, 'Drug trafficking'); } },
         timeLimitDays: 2
     },
     {
@@ -257,7 +257,7 @@ LIFE.QUEST_DEFS = [
             { type: 'wait', duration: 15, desc: 'Tag the wall' },
             { type: 'return', desc: 'Report back' }
         ],
-        reward: { money: 100, rep: -6, onComplete: function() { LIFE.logCrime('Vandalism'); if (Math.random() < 0.2) LIFE.addWanted(1); } },
+        reward: { money: 100, rep: -6, onComplete: function() { LIFE.logCrime('Vandalism'); if (Math.random() < 0.2) LIFE.addWanted(1, 'Vandalism'); } },
         timeLimitDays: 1
     },
     {
@@ -283,7 +283,7 @@ LIFE.QUEST_DEFS = [
             { type: 'wait', duration: 40, desc: 'Keep watch' },
             { type: 'return', desc: 'Report back' }
         ],
-        reward: { money: 250, rep: -5, onComplete: function() { LIFE.logCrime('Accessory to robbery'); if (Math.random() < 0.2) LIFE.addWanted(1); } },
+        reward: { money: 250, rep: -5, onComplete: function() { LIFE.logCrime('Accessory to robbery'); if (Math.random() < 0.2) LIFE.addWanted(1, 'Robbery'); } },
         timeLimitDays: 1
     },
 
@@ -347,7 +347,7 @@ LIFE.QUEST_DEFS = [
             { type: 'kill', npcType: 'Dealer', count: 1, desc: 'Eliminate the dealer' },
             { type: 'return', desc: 'Report back' }
         ],
-        reward: { money: 500, rep: -5, onComplete: function() { LIFE.logCrime('Contract killing'); if (Math.random() < 0.3) LIFE.addWanted(2); } },
+        reward: { money: 500, rep: -5, onComplete: function() { LIFE.logCrime('Contract killing'); if (Math.random() < 0.3) LIFE.addWanted(2, 'Contract killing'); } },
         timeLimitDays: 2
     },
     {
@@ -416,7 +416,7 @@ LIFE.QUEST_DEFS = [
             { type: 'go_to', zone: 'highschool', desc: 'Deliver the package', radius: 25 },
             { type: 'return', desc: 'Report back' }
         ],
-        reward: { money: 400, rep: -8, onComplete: function() { LIFE.logCrime('Drug trafficking'); LIFE.state.gangRep = Math.min(100, LIFE.state.gangRep + 8); if (Math.random() < 0.2) LIFE.addWanted(2); } },
+        reward: { money: 400, rep: -8, onComplete: function() { LIFE.logCrime('Drug trafficking'); LIFE.state.gangRep = Math.min(100, LIFE.state.gangRep + 8); if (Math.random() < 0.2) LIFE.addWanted(2, 'Drug trafficking'); } },
         timeLimitDays: 1
     },
     {
@@ -429,7 +429,7 @@ LIFE.QUEST_DEFS = [
             { type: 'kill', npcType: 'Stranger', count: 1, desc: 'Handle the rival' },
             { type: 'return', desc: 'Report back' }
         ],
-        reward: { money: 500, rep: -12, onComplete: function() { LIFE.logCrime('Assault'); LIFE.state.gangRep = Math.min(100, LIFE.state.gangRep + 12); if (Math.random() < 0.3) LIFE.addWanted(3); } },
+        reward: { money: 500, rep: -12, onComplete: function() { LIFE.logCrime('Assault'); LIFE.state.gangRep = Math.min(100, LIFE.state.gangRep + 12); if (Math.random() < 0.3) LIFE.addWanted(3, 'Gang assault'); } },
         timeLimitDays: 2
     },
     {

@@ -480,7 +480,7 @@ LIFE.economy.buyItem = function(index) {
         LIFE.state.hasGun = true;
         if (LIFE.state.inventory.indexOf('Pistol') < 0) LIFE.state.inventory.push('Pistol');
         LIFE.logCrime('Illegal firearm purchase');
-        LIFE.addWanted(1);
+        LIFE.addWanted(1, 'Illegal firearm purchase');
     }
     if (item.type === 'switchblade') {
         LIFE.state.hasSwitchblade = true;

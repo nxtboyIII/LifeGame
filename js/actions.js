@@ -194,18 +194,19 @@ LIFE.performAction = function(idx) {
                 if (npc.isPolice) {
                     // Police ALWAYS know — they are the witness
                     LIFE.logCrime('Assaulting a police officer');
-                    LIFE.addWanted(2);
+                    LIFE.addWanted(2, 'Attacked police', npc.name);
                 } else if (witnessed) {
                     // Someone saw it — police get called
+                    var witnessName = witnessResult.callerName;
                     if (isFamily) {
                         LIFE.logCrime('Domestic violence');
-                        LIFE.addWanted(isChild && !hasWeapon ? 1 : 2);
+                        LIFE.addWanted(isChild && !hasWeapon ? 1 : 2, 'Assault (domestic)', witnessName);
                     } else if (isVulnerable) {
                         LIFE.logCrime('Assault on a minor');
-                        LIFE.addWanted(isChild && !hasWeapon ? 0 : 2);
+                        LIFE.addWanted(isChild && !hasWeapon ? 0 : 2, 'Assault on minor', witnessName);
                     } else {
                         LIFE.logCrime('Assault');
-                        LIFE.addWanted(isChild && !hasWeapon ? 0 : 1);
+                        LIFE.addWanted(isChild && !hasWeapon ? 0 : 1, 'Assault', witnessName);
                     }
                 }
                 // Always log the crime type even if unwitnessed
@@ -338,9 +339,14 @@ LIFE.checkWitnesses = function(victim) {
         if (dist < 18 && LIFE.hasLineOfSight(px, pz, nx, nz)) {
             witnessCount++;
             var npcRep = npc.npcReputation !== undefined ? npc.npcReputation : 30;
+            var npcWAge = npc.npcAge !== null ? npc.npcAge : (npc.type === 'Kid' ? 8 : 25);
             if (!npc.isPolice && npcRep > -30 && !npc._callingPolice) {
-                if (!phoneCaller) {
-                    // First witness starts a phone call animation
+                if (npcWAge < 12) {
+                    // Kids under 12 don't have phones — they just run away scared
+                    npc.fleeing = true;
+                    npc.fleeTimer = 6 + Math.random() * 4;
+                } else if (!phoneCaller) {
+                    // First adult witness starts a phone call animation
                     phoneCaller = npc;
                 } else {
                     // Other witnesses just flee
@@ -349,7 +355,7 @@ LIFE.checkWitnesses = function(victim) {
                 }
             } else if (npc.isPolice) {
                 // Police witness — instant wanted
-                LIFE.addWanted(2);
+                LIFE.addWanted(2, 'Crime seen by police', npc.name);
             }
             LIFE.updateRelationship(npc.name, -10);
         }
@@ -358,10 +364,10 @@ LIFE.checkWitnesses = function(victim) {
     if (phoneCaller && !victim.isPolice) {
         var wantedAmount = Math.min(3, Math.max(1, Math.floor(witnessCount / 2)));
         LIFE.npcStartPhoneCall(phoneCaller, function() {
-            LIFE.addWanted(wantedAmount);
+            LIFE.addWanted(wantedAmount, 'Witnesses called police', phoneCaller.name);
         });
     }
-    return { count: witnessCount, witnessed: witnessCount > 0 };
+    return { count: witnessCount, witnessed: witnessCount > 0, callerName: phoneCaller ? phoneCaller.name : null };
 };
 
 // Make a victim NPC seek help from another NPC (flee toward nearest NPC)
@@ -548,22 +554,22 @@ LIFE.updateBullets = function(dt) {
                     var repLoss = -15;
                     if (npc.isPolice) {
                         LIFE.logCrime('Shooting at a police officer');
-                        LIFE.addWanted(3); repLoss = -8;
+                        LIFE.addWanted(3, 'Shot police officer', npc.name); repLoss = -8;
                     } else if (shotSeen) {
                         // Witnessed — police get called
                         if (shotFamily) {
                             LIFE.logCrime('Shooting a family member');
-                            LIFE.addWanted(4);
+                            LIFE.addWanted(4, 'Shot family (witnessed)');
                             repLoss = -30;
                             LIFE.state.stats.happiness = Math.max(0, LIFE.state.stats.happiness - 15);
                             LIFE.state.familyAbuser = true;
                         } else if (npc.type === 'Kid' || npc.type === 'Grandchild') {
                             LIFE.logCrime('Shooting a minor');
-                            LIFE.addWanted(4);
+                            LIFE.addWanted(4, 'Shot child (witnessed)');
                             repLoss = -25;
                         } else {
                             LIFE.logCrime('Shooting a civilian');
-                            LIFE.addWanted(2);
+                            LIFE.addWanted(2, 'Shot civilian (witnessed)');
                         }
                     } else {
                         // Unwitnessed shooting — log crime but no police yet
@@ -581,7 +587,7 @@ LIFE.updateBullets = function(dt) {
                         repLoss = Math.ceil(repLoss * 0.3); // reduced rep loss if unseen
                         // Gunshot SOUND can attract attention — 40% chance someone hears
                         if (Math.random() < 0.4) {
-                            LIFE.addWanted(1);
+                            LIFE.addWanted(1, 'Gunshot heard');
                             LIFE.ui.showPopup('Someone heard the gunshot!', '#ff9800');
                         }
                         // Victim flees for help if alive
@@ -669,7 +675,7 @@ LIFE.shootGun = function() {
             var gdz = gnpc.char.group.position.z - player.group.position.z;
             if (Math.sqrt(gdx * gdx + gdz * gdz) < 25) { heardGunshot = true; break; }
         }
-        if (heardGunshot) LIFE.addWanted(isRifle ? 2 : 1);
+        if (heardGunshot) LIFE.addWanted(isRifle ? 2 : 1, 'Gunshot heard', gnpc.name);
     }
     if (state.wantedLevel > 0) state.reputation = Math.max(-100, state.reputation - 3);
 };
@@ -714,7 +720,7 @@ LIFE.performSteal = function() {
         LIFE.updateRelationship(npc.name, -30);
         // Vendor notices eventually
         if (npc.isVendor && Math.random() < 0.3) {
-            LIFE.addWanted(1);
+            LIFE.addWanted(1, 'Theft noticed by vendor', npc.name);
             LIFE.ui.showPopup(npc.type + ' noticed!', '#ff9800');
         }
     } else {
@@ -723,7 +729,7 @@ LIFE.performSteal = function() {
         state.reputation = Math.max(-100, state.reputation - 8);
         LIFE.ui.showRepChange(-8);
         LIFE.logCrime('Attempted theft');
-        LIFE.addWanted(1);
+        LIFE.addWanted(1, 'Caught stealing', npc.name);
         LIFE.updateRelationship(npc.name, -50);
         npc.reacting = 2;
         // NPC fights back
@@ -769,7 +775,7 @@ LIFE.performPickpocket = function() {
         state.reputation = Math.max(-100, state.reputation - 10);
         LIFE.ui.showRepChange(-10);
         LIFE.logCrime('Attempted pickpocketing');
-        LIFE.addWanted(1);
+        LIFE.addWanted(1, 'Caught pickpocketing', npc.name);
         LIFE.updateRelationship(npc.name, -60);
         npc.reacting = 2;
         if (npc.alive) LIFE.damagePlayer(10, npc.name + ' caught you');
@@ -806,7 +812,7 @@ LIFE.performIntimidate = function() {
         LIFE.updateRelationship(npc.name, -40);
         npc.fleeing = true; npc.fleeTimer = 5;
         state.totalExtortions = (state.totalExtortions || 0) + 1;
-        if (Math.random() < 0.3) LIFE.addWanted(1);
+        if (Math.random() < 0.3) LIFE.addWanted(1, 'Extortion reported', npc.name);
     } else {
         var responses = [
             npc.name + " doesn't flinch: 'You don't scare me.'",

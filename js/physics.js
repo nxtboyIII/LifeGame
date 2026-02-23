@@ -332,6 +332,23 @@ LIFE.physics.step = function(dt) {
         LIFE.physics._currPlayerPos.z = pb.position.z;
     }
 
+    // Contact-based ground detection: check if player is resting on any surface
+    LIFE.physics._playerOnSurface = false;
+    if (pb) {
+        var contacts = LIFE.physics.world.contacts;
+        for (var ci = 0; ci < contacts.length; ci++) {
+            var c = contacts[ci];
+            if (c.bi === pb || c.bj === pb) {
+                // Normal points from bi to bj; if player is bi, upward = -ni.y; if bj, upward = ni.y
+                var upNormal = (c.bi === pb) ? -c.ni.y : c.ni.y;
+                if (upNormal > 0.5) { // surface is roughly below player (normal points up)
+                    LIFE.physics._playerOnSurface = true;
+                    break;
+                }
+            }
+        }
+    }
+
     // Interpolation factor: how far into the next unstepped tick
     LIFE.physics._interpFactor = LIFE.physics._accumulator / fixedStep;
 
@@ -370,7 +387,7 @@ LIFE.physics.step = function(dt) {
         var active = s && (s.gamePhase === 'playing' || s.gamePhase === 'jail') &&
                      !s.inCar && !s.heldByParent && !s.deathTriggered &&
                      !(LIFE.dialogue && LIFE.dialogue.active && LIFE.dialogue.blocking) &&
-                     !s.shopOpen && !s.friendsOpen && !LIFE._containerOpen;
+                     !s.shopOpen && !s.friendsOpen;
         if (!active) {
             // Kinematic mode: body follows mesh
             pb.position.set(

@@ -7,7 +7,7 @@ LIFE.state = {
     walkTime: 0, actionCooldown: 0, popupTimer: 0, stageTextTimer: 0,
     wombTimer: 0, birthTimer: 0, bounds: 20, locked: false,
     deathTriggered: false, deathCause: '',
-    actionAnim: { type: null, timer: 0 }, nearestNPC: null, shopOpen: false,
+    actionAnim: { type: null, timer: 0 }, nearestNPC: null, nearestDeadNPC: null, shopOpen: false,
     // economy
     money: 0, career: null, careerLevel: 0, careerXP: 0,
     married: false, hasKids: false,
@@ -384,7 +384,9 @@ LIFE.logMilestone = function(text, type) {
     LIFE.state.milestones.push({ age: LIFE.state.age, text: text, type: type || 'neutral' });
 };
 
-LIFE.addWanted = function(amount) {
+LIFE._debugPoliceLog = []; // { time, reason, wanted, caller }
+
+LIFE.addWanted = function(amount, reason, witness) {
     if (LIFE.state.age < 10) return;
     var state = LIFE.state;
     var old = state.wantedLevel;
@@ -404,11 +406,8 @@ LIFE.addWanted = function(amount) {
         var copsNeeded = Math.min(LIFE.POLICE_MAX, Math.ceil(state.wantedLevel / 2));
         if (alreadyPursuing < copsNeeded) {
             state.policeDispatching = true;
-            // First offense: 5-8 seconds (someone has to witness, call, dispatcher sends cops)
-            // Escalation while cops already out: 2-4 seconds (cops radio for backup)
-            state.policeDispatchTimer = old === 0 ? (5 + Math.random() * 3) : (2 + Math.random() * 2);
             if (old === 0) {
-                // Find nearest civilian NPC to be the witness who calls police
+                // First offense: find a civilian to call police, dispatch AFTER the call finishes
                 var callerNpc = null;
                 var callerName = 'A bystander';
                 if (LIFE.player && LIFE.npcs) {
@@ -417,6 +416,9 @@ LIFE.addWanted = function(amount) {
                     for (var wi = 0; wi < LIFE.npcs.length; wi++) {
                         var wn = LIFE.npcs[wi];
                         if (!wn.alive || wn.isPolice || wn._callingPolice) continue;
+                        // Kids under 12 don't have phones — they flee instead
+                        var wnAge = wn.npcAge !== null ? wn.npcAge : (wn.type === 'Kid' ? 8 : 25);
+                        if (wnAge < 12) continue;
                         // Low reputation NPCs won't snitch (dealers, shady characters)
                         var wnRep = wn.npcReputation !== undefined ? wn.npcReputation : 30;
                         if (wnRep <= -30) continue;
@@ -428,11 +430,20 @@ LIFE.addWanted = function(amount) {
                         if (d2 < bestDist) { bestDist = d2; callerNpc = wn; callerName = wn.name; }
                     }
                 }
-                // Make that NPC actually pull out their phone and call
+                // Phone call takes 4-6 seconds, then dispatch timer starts (3-5 more seconds)
+                // Total: 7-11 seconds from crime to cops arriving
                 if (callerNpc && LIFE.npcStartPhoneCall) {
                     LIFE.npcStartPhoneCall(callerNpc);
+                    // Dispatch timer = phone call time + response time
+                    state.policeDispatchTimer = 7 + Math.random() * 4;
+                } else {
+                    // No visible caller — shorter delay (e.g. police spotted it directly)
+                    state.policeDispatchTimer = 5 + Math.random() * 3;
                 }
                 LIFE.ui.showPopup(callerName + ' is calling the police!', '#f44336');
+            } else {
+                // Escalation while cops already out: backup arrives faster (radio)
+                state.policeDispatchTimer = 2 + Math.random() * 2;
             }
         }
     }
@@ -442,6 +453,20 @@ LIFE.addWanted = function(amount) {
         state.swatDispatchTimer = 15 + Math.random() * 10;
         LIFE.ui.showPopup('SWAT team has been called in!', '#f44336');
     }
+
+    // Debug log entry
+    var now = Date.now();
+    LIFE._debugPoliceLog.push({
+        time: now,
+        reason: reason || 'unknown',
+        witness: witness || null,
+        wanted: old + ' -> ' + state.wantedLevel,
+        amount: amount,
+        dispatching: state.policeDispatching,
+        timer: state.policeDispatchTimer ? state.policeDispatchTimer.toFixed(1) : '0'
+    });
+    // Keep last 10 entries
+    if (LIFE._debugPoliceLog.length > 10) LIFE._debugPoliceLog.shift();
 };
 
 // Create a police car model (dark blue with red/blue lights)
@@ -551,7 +576,7 @@ LIFE.dispatchPolice = function() {
         if (c._distToPlayer < 30) {
             // Close enough to chase on foot
             c.aiState = 'pursuing';
-            c.npc.speed = LIFE.getSpeedForAge(state.age) * 1.5;
+            c.npc.speed = LIFE.getSpeedForAge(state.age) * 1.2;
             if (LIFE.police.indexOf(c.npc) < 0) LIFE.police.push(c.npc);
         } else {
             // Far away - get in police car and drive
@@ -635,6 +660,8 @@ LIFE.despawnPolice = function() {
                 cop.returnTimer = 0;
                 cop.npc.char.group.visible = true;
                 cop.npc.speed = 0;
+                cop.npc._frozen = false;
+                cop.npc._hostile = false;
             }
         }
     }
@@ -648,6 +675,7 @@ LIFE.despawnPolice = function() {
     }
     LIFE.swat = [];
     LIFE.police = [];
+    LIFE.state.policeConfronting = false;
     LIFE.state.swatDispatching = false;
     LIFE.state.swatDispatched = false;
     LIFE.sounds.stopSiren();
@@ -822,8 +850,20 @@ LIFE.updatePolice = function(dt) {
         return;
     }
 
-    // 3D siren - start if not playing, update position from nearest police car
-    LIFE.sounds.startSiren();
+    // 3D siren - only play once police are actually dispatched and have cars/cops en route
+    var hasActiveCops = LIFE.police.length > 0 || LIFE.swat.length > 0;
+    if (!hasActiveCops && LIFE.world.policeCops) {
+        for (var pci = 0; pci < LIFE.world.policeCops.length; pci++) {
+            if (LIFE.world.policeCops[pci].aiState === 'driving' || LIFE.world.policeCops[pci].aiState === 'pursuing') {
+                hasActiveCops = true; break;
+            }
+        }
+    }
+    if (hasActiveCops) {
+        LIFE.sounds.startSiren();
+    } else {
+        LIFE.sounds.stopSiren();
+    }
     var nearestCarPos = null;
     var nearestCarDist = Infinity;
     var px = player.group.position.x, pz = player.group.position.z;
@@ -924,7 +964,7 @@ LIFE.updatePolice = function(dt) {
                 dcop.npc.char.group.position.copy(dcop.car.position);
                 dcop.npc.char.group.position.y = 0;
                 dcop.npc.char.group.visible = true;
-                dcop.npc.speed = LIFE.getSpeedForAge(state.age) * 1.5;
+                dcop.npc.speed = LIFE.getSpeedForAge(state.age) * 1.2;
                 // Leave car parked (stays in scene as static prop)
                 dcop.car._redLight.visible = true;
                 dcop.car._blueLight.visible = true;
@@ -1024,6 +1064,7 @@ LIFE.updatePolice = function(dt) {
     // Chase logic for all active pursuing cops
     LIFE.police.forEach(function(cop) {
         if (!cop.alive) return;
+        if (cop._frozen) return; // frozen during confrontation dialogue
         var copPos = cop.char.group.position;
         var dx = player.group.position.x - copPos.x;
         var dz = player.group.position.z - copPos.z;
@@ -1072,10 +1113,16 @@ LIFE.updatePolice = function(dt) {
             // Can't arrest player in a moving vehicle - must be stalled 5+ seconds
             if (state.inCar && state.carStallTimer < 5) {
                 // cop stays near but can't grab player from moving car
-            } else {
+            } else if (state.wantedLevel >= 5 || cop.isSWAT || cop._hostile) {
+                // High wanted / SWAT / resisted arrest — immediate arrest, no negotiation
                 LIFE.arrestPlayer();
                 return;
+            } else if (!state.policeConfronting) {
+                // Skyrim-style confrontation — cop orders player to stop
+                LIFE.policeConfront(cop);
+                return;
             }
+            // If already confronting (dialogue open), cop waits
         }
 
         // police shoot at high wanted (5+) / SWAT always shoot
@@ -1110,6 +1157,47 @@ LIFE.updatePolice = function(dt) {
             }
         }
     });
+};
+
+// ============================================================
+// POLICE CONFRONTATION — Skyrim-style "Stop right there!"
+// ============================================================
+LIFE.policeConfront = function(cop) {
+    var state = LIFE.state;
+    if (state.policeConfronting) return;
+    state.policeConfronting = true;
+
+    // Freeze the cop in place (stop chasing during dialogue)
+    cop._frozen = true;
+
+    var speakerName = cop.name || 'Officer';
+    LIFE.dialogue.npc = cop;
+
+    // Bribe cost scales with wanted level and bounty
+    var bribeCost = Math.max(100, state.bounty * 0.5 + state.wantedLevel * 200);
+    bribeCost = Math.round(bribeCost / 10) * 10; // round to nearest 10
+
+    // Bribe success chance based on charisma (0-100 scale)
+    // charisma 0 = 5% chance, charisma 50 = 40%, charisma 100 = 85%
+    var charisma = state.stats.charisma || 0;
+    var bribeChance = 0.05 + charisma * 0.008;
+
+    var confrontLines = [
+        "Stop right there, criminal scum! You've violated the law!",
+        "Hold it! You're under arrest!",
+        "Freeze! Don't move a muscle!",
+        "Stop! You have the right to remain silent!"
+    ];
+    var line = confrontLines[Math.floor(Math.random() * confrontLines.length)];
+
+    var options = [
+        { text: "I surrender... take me in.", effects: {}, surrender: true },
+        { text: "Look officer, maybe we can work something out... ($" + bribeCost + ")", effects: {},
+          policeBribe: true, bribeCost: bribeCost, bribeChance: bribeChance },
+        { text: "You'll never take me alive!", effects: {}, policeResist: true, rep: -5 }
+    ];
+
+    LIFE.dialogue.open(speakerName, line, options, true);
 };
 
 LIFE.arrestPlayer = function() {
@@ -1622,9 +1710,25 @@ LIFE.updatePickupHint = function() {
         }
     }
 
+    // Check dead NPC bodies (lootable)
+    var allNPCsForLoot = LIFE.getAllNPCs ? LIFE.getAllNPCs() : [];
+    for (var li = 0; li < allNPCsForLoot.length; li++) {
+        var deadNpc = allNPCsForLoot[li];
+        if (deadNpc.alive || deadNpc._looted) continue;
+        var bdx = px - deadNpc.char.group.position.x;
+        var bdz = pz - deadNpc.char.group.position.z;
+        var bd = Math.sqrt(bdx * bdx + bdz * bdz);
+        if (bd < bestDist) {
+            bestDist = bd;
+            best = deadNpc;
+            bestType = 'body';
+        }
+    }
+
     LIFE._nearestDroppedItem = bestType === 'dropped' ? best : null;
     LIFE._nearestWorldItem = bestType === 'world' ? best : null;
     LIFE._nearestContainer = bestType === 'container' ? best : null;
+    LIFE._nearestLootBody = bestType === 'body' ? best : null;
 
     if (best) {
         if (bestType === 'container') {
@@ -1633,6 +1737,11 @@ LIFE.updatePickupHint = function() {
             hint.style.display = 'block';
             hint.style.color = contSteal ? '#f44336' : '#ffab40';
             hint.style.borderColor = contSteal ? 'rgba(244,67,54,0.4)' : 'rgba(255,171,64,0.4)';
+        } else if (bestType === 'body') {
+            hint.textContent = 'Press X to loot ' + (best.name || best.type || 'Body');
+            hint.style.display = 'block';
+            hint.style.color = '#ff9800';
+            hint.style.borderColor = 'rgba(255,152,0,0.4)';
         } else {
             var isSteal = (bestType === 'world');
             hint.textContent = isSteal ? ('Press X to steal ' + best.name) : ('Press X to pick up ' + best.name);
@@ -1769,6 +1878,10 @@ LIFE.takeContainerItem = function(index) {
             LIFE.ui.showPopup('Took ' + ci.name, '#4caf50');
         }
         LIFE.state.inventory.push(ci.name);
+        // Set weapon flags for special items
+        if (ci.name === 'Pistol') LIFE.state.hasGun = true;
+        if (ci.name === 'AK-47') LIFE.state.hasRifle = true;
+        if (ci.name === 'Switchblade') LIFE.state.hasSwitchblade = true;
     }
 
     container.items.splice(index, 1);
@@ -1781,6 +1894,13 @@ LIFE.takeContainerItem = function(index) {
 
 LIFE.closeContainer = function() {
     if (!LIFE._containerOpen) return;
+    // If closing a body loot container, only mark as fully looted if empty
+    if (LIFE._lootBodyNPC) {
+        if (!LIFE._lootBodyNPC.lootItems || LIFE._lootBodyNPC.lootItems.length === 0) {
+            LIFE._lootBodyNPC._looted = true;
+        }
+        LIFE._lootBodyNPC = null;
+    }
     LIFE._containerOpen = false;
     LIFE._openContainerRef = null;
     var panel = document.getElementById('containerPanel');
@@ -1789,6 +1909,34 @@ LIFE.closeContainer = function() {
     if (LIFE.state.gamePhase === 'playing') {
         LIFE.lockCursor();
     }
+};
+
+// Loot a dead NPC body using the container UI
+LIFE._nearestLootBody = null;
+LIFE._lootBodyNPC = null;
+
+LIFE.lootBodyAsContainer = function(npc) {
+    if (!npc || npc.alive || LIFE._containerOpen) return;
+    if (!npc.lootItems || npc.lootItems.length === 0) { npc._looted = true; return; }
+
+    var bodyName = (npc.name || npc.type || 'Stranger') + ' (Dead)';
+    var container = {
+        name: bodyName,
+        x: npc.char.group.position.x,
+        y: 0.2,
+        z: npc.char.group.position.z,
+        items: npc.lootItems,
+        ownItem: true,
+        _isBodyLoot: true
+    };
+
+    LIFE._lootBodyNPC = npc;
+    LIFE.logCrime('Looting a body');
+    var lootWitness = LIFE.checkWitnesses(npc);
+    if (lootWitness && lootWitness.witnessed) {
+        LIFE.state.reputation = Math.max(-100, LIFE.state.reputation - 5);
+    }
+    LIFE.openContainer(container);
 };
 
 // ============================================================
@@ -2714,41 +2862,64 @@ LIFE.tryPickupWorldItem = function(worldItem) {
 
             // React: police always confront directly; civilians only call police for items worth >$40
             if (reactor.isPolice) {
-                LIFE.addWanted(2);
+                LIFE.addWanted(2, 'Caught stealing (police)', reactor.name);
                 LIFE.drawChatBubble(reactor, 'Stop right there, criminal!');
                 reactor.chatSprite.visible = true;
                 reactor.chatTimer = 4;
                 reactor.chatCooldown = 10;
                 LIFE.ui.showPopup('CAUGHT STEALING by police!', '#f44336');
-            } else if (itemValue > 40 && Math.random() < 0.5) {
-                // Call police (only for valuable items)
-                LIFE.updateRelationship(reactor.name, -20);
-                if (!reactor._callingPolice) {
-                    LIFE.npcStartPhoneCall(reactor, function() {
-                        LIFE.addWanted(2);
-                    });
-                }
-                LIFE.ui.showPopup('CAUGHT STEALING! ' + reactor.name + ' is calling the police!', '#f44336');
             } else {
-                // Confront (for cheap items or 50% chance on expensive)
-                reactor.fleeing = false;
-                var faceDx = px - reactor.char.group.position.x;
-                var faceDz = pz - reactor.char.group.position.z;
-                reactor.char.group.rotation.y = Math.atan2(faceDx, faceDz);
-
-                var confrontMsg = (reactor === owner)
-                    ? 'Hey! That\'s mine, thief!'
-                    : 'I saw that! Put it back!';
-                LIFE.drawChatBubble(reactor, confrontMsg);
-                reactor.chatSprite.visible = true;
-                reactor.chatTimer = 4;
-                reactor.chatCooldown = 10;
-                LIFE.updateRelationship(reactor.name, -15);
-                if (itemValue > 40) {
-                    LIFE.addWanted(1);
-                    LIFE.ui.showPopup('CAUGHT STEALING! ' + reactor.name + ' saw you!', '#f44336');
-                } else {
+                var reactorAge = reactor.npcAge !== null ? reactor.npcAge : (reactor.type === 'Kid' ? 8 : 25);
+                if (reactorAge >= 12 && itemValue > 40 && Math.random() < 0.5) {
+                    // Adult calls police (only for valuable items)
+                    LIFE.updateRelationship(reactor.name, -20);
+                    if (!reactor._callingPolice) {
+                        LIFE.npcStartPhoneCall(reactor, function() {
+                            LIFE.addWanted(2, 'Theft reported', reactor.name);
+                        });
+                    }
+                    LIFE.ui.showPopup('CAUGHT STEALING! ' + reactor.name + ' is calling the police!', '#f44336');
+                } else if (reactorAge < 12) {
+                    // Kid — confront or run away scared
+                    LIFE.updateRelationship(reactor.name, -15);
+                    if (Math.random() < 0.5) {
+                        // Kid confronts
+                        reactor.fleeing = false;
+                        var kidDx = px - reactor.char.group.position.x;
+                        var kidDz = pz - reactor.char.group.position.z;
+                        reactor.char.group.rotation.y = Math.atan2(kidDx, kidDz);
+                        var kidMsg = (reactor === owner) ? 'Hey! Give that back!' : 'I\'m telling on you!';
+                        LIFE.drawChatBubble(reactor, kidMsg);
+                        reactor.chatSprite.visible = true;
+                        reactor.chatTimer = 4;
+                        reactor.chatCooldown = 10;
+                    } else {
+                        // Kid runs away
+                        reactor.fleeing = true;
+                        reactor.fleeTimer = 5 + Math.random() * 3;
+                    }
                     LIFE.ui.showPopup(reactor.name + ' caught you stealing!', '#ff9800');
+                } else {
+                    // Adult confront (for cheap items or 50% chance on expensive)
+                    reactor.fleeing = false;
+                    var faceDx = px - reactor.char.group.position.x;
+                    var faceDz = pz - reactor.char.group.position.z;
+                    reactor.char.group.rotation.y = Math.atan2(faceDx, faceDz);
+
+                    var confrontMsg = (reactor === owner)
+                        ? 'Hey! That\'s mine, thief!'
+                        : 'I saw that! Put it back!';
+                    LIFE.drawChatBubble(reactor, confrontMsg);
+                    reactor.chatSprite.visible = true;
+                    reactor.chatTimer = 4;
+                    reactor.chatCooldown = 10;
+                    LIFE.updateRelationship(reactor.name, -15);
+                    if (itemValue > 40) {
+                        LIFE.addWanted(1, 'Theft witnessed', reactor.name);
+                        LIFE.ui.showPopup('CAUGHT STEALING! ' + reactor.name + ' saw you!', '#f44336');
+                    } else {
+                        LIFE.ui.showPopup(reactor.name + ' caught you stealing!', '#ff9800');
+                    }
                 }
             }
 
@@ -3999,6 +4170,7 @@ document.addEventListener('keydown', function(e) {
             if (LIFE._containerOpen) { LIFE.closeContainer(); }
             else if (LIFE._nearestDroppedItem) LIFE.pickupItem(LIFE._nearestDroppedItem);
             else if (LIFE._nearestWorldItem) LIFE.tryPickupWorldItem(LIFE._nearestWorldItem);
+            else if (LIFE._nearestLootBody) LIFE.lootBodyAsContainer(LIFE._nearestLootBody);
             else if (LIFE._nearestContainer) LIFE.openContainer(LIFE._nearestContainer);
         }
         if ((e.code === 'KeyI' || e.code === 'Tab') && !LIFE.dialogue.active && !state.shopOpen && !state.friendsOpen) {
@@ -4066,7 +4238,7 @@ document.addEventListener('pointerlockchange', function() {
     if (!LIFE.state.locked && wasLocked &&
         LIFE.state.gamePhase !== 'start' && LIFE.state.gamePhase !== 'death' &&
         LIFE.state.gamePhase !== 'execution' && !LIFE._suppressPause &&
-        !LIFE.dialogue.active && !LIFE.state.shopOpen && !LIFE.state.friendsOpen && !LIFE.state.timeSkipOpen && !LIFE._invOpen && !LIFE.quests.logOpen) {
+        !LIFE.dialogue.active && !LIFE.state.shopOpen && !LIFE.state.friendsOpen && !LIFE.state.timeSkipOpen && !LIFE._invOpen && !LIFE.quests.logOpen && !LIFE._containerOpen) {
         LIFE.ui.$.start.style.display = 'flex';
         LIFE.ui.$.start.querySelector('h1').textContent = 'PAUSED';
         LIFE.ui.$.start.querySelector('p').textContent = 'Click to Resume';
@@ -4333,7 +4505,7 @@ LIFE.advanceYear = function() {
         setTimeout(function() {
             if (state.gamePhase === 'playing' && state.wantedLevel === 0) {
                 LIFE.ui.showPopup('Police recognized you! Bounty: $' + state.bounty, '#ff1744');
-                LIFE.addWanted(Math.min(3, Math.ceil(state.bounty / 2000)));
+                LIFE.addWanted(Math.min(3, Math.ceil(state.bounty / 2000)), 'Recognized by police (bounty)');
             }
         }, 2000);
     }
@@ -5151,6 +5323,7 @@ LIFE.debugGiveAllItems = function() {
 // ============================================================
 LIFE.animate = function() {
     requestAnimationFrame(LIFE.animate);
+    if (LIFE._debugView) LIFE._perfFrameStart = performance.now();
     var dt = Math.min(LIFE.clock.getDelta(), 0.05);
     var state = LIFE.state;
     LIFE.sounds.updateCooldowns(dt);
@@ -5176,12 +5349,22 @@ LIFE.animate = function() {
             // update date/time display
             LIFE.ui.updateDateTime();
             LIFE.economy.passiveIncome(dt);
-            LIFE.physics.step(dt);  // physics before player so camera sees final position
+            LIFE._perfBegin('physics');
+            LIFE.physics.step(dt);
+            LIFE._perfEnd('physics');
+            LIFE._perfBegin('player');
             LIFE.updatePlayer(dt);
+            LIFE._perfEnd('player');
+            LIFE._perfBegin('npcs');
             LIFE.updateNPCs(dt);
+            LIFE._perfEnd('npcs');
             LIFE.updateNPCPhoneCalls(dt);
+            LIFE._perfBegin('pathfind');
             LIFE.pathfinding.updateCache(dt);
+            LIFE._perfEnd('pathfind');
+            LIFE._perfBegin('police');
             LIFE.updatePolice(dt);
+            LIFE._perfEnd('police');
             LIFE.updateBullets(dt);
             LIFE.updateActionAnim(dt);
             // Auto-fire for automatic weapons (hold mouse to shoot)
@@ -5193,10 +5376,12 @@ LIFE.animate = function() {
             LIFE.updateCamera(dt);
 
             // Event, news, and quest systems
+            LIFE._perfBegin('events');
             LIFE.events.update(dt);
             LIFE.news.update(dt);
             LIFE.quests.update(dt);
             LIFE.quests.updateHUD();
+            LIFE._perfEnd('events');
 
             // Dropped items & world items
             LIFE.updateDroppedItems(dt);
@@ -5204,6 +5389,7 @@ LIFE.animate = function() {
             LIFE.updatePickupHint();
 
             // Open world culling and shadow following
+            LIFE._perfBegin('culling');
             if (LIFE.world.built && !LIFE.world.insideInterior) {
                 LIFE.world.updateCulling(dt);
                 if (LIFE.player) {
@@ -5212,6 +5398,7 @@ LIFE.animate = function() {
                     LIFE.dirLight.target.position.set(px, 0, pz);
                 }
             }
+            LIFE._perfEnd('culling');
 
             // stat cascades - interconnected systems
             // Depression: deep unhappiness damages health
@@ -5275,9 +5462,11 @@ LIFE.animate = function() {
                 LIFE.triggerDeath();
             }
 
+            LIFE._perfBegin('ui');
             LIFE.ui.updateAgeColor(); LIFE.ui.updateMoney(); LIFE.ui.updateStats();
             LIFE.ui.updateNPCHint(); LIFE.ui.updateWeapon(); LIFE.ui.updatePlayerHealth();
             LIFE.ui.updateWanted();
+            LIFE._perfEnd('ui');
             break;
         case 'jail':
             state.jailTimer -= dt;
@@ -5498,7 +5687,27 @@ LIFE.animate = function() {
     if (state.shootCooldown > 0) state.shootCooldown -= dt;
     LIFE.ui.updateTimers(dt);
     LIFE.updateDebugView(dt);
+    LIFE._perfBegin('render');
     LIFE.renderer.render(LIFE.scene, LIFE.camera);
+    LIFE._perfEnd('render');
+    // Total frame time
+    if (LIFE._debugView && LIFE._perfFrameStart) {
+        var frameTotal = performance.now() - LIFE._perfFrameStart;
+        LIFE._perfFrameTotal = frameTotal;
+        LIFE._perfSmoothedTotal = LIFE._perfSmoothedTotal * 0.9 + frameTotal * 0.1;
+        // Log spikes (frames > 33ms = below 30fps)
+        if (frameTotal > 33) {
+            var spike = { time: Date.now(), ms: frameTotal.toFixed(1), culprit: '' };
+            var worst = 0;
+            var categories = ['physics', 'player', 'npcs', 'pathfind', 'police', 'events', 'culling', 'ui', 'render'];
+            for (var si = 0; si < categories.length; si++) {
+                var t = LIFE._perfTimings[categories[si]] || 0;
+                if (t > worst) { worst = t; spike.culprit = categories[si] + ' (' + t.toFixed(1) + 'ms)'; }
+            }
+            LIFE._perfSpikeLog.push(spike);
+            if (LIFE._perfSpikeLog.length > 8) LIFE._perfSpikeLog.shift();
+        }
+    }
 };
 
 // ============================================================
@@ -5510,6 +5719,36 @@ LIFE._debugPlayerSphere = null;
 LIFE._debugFPS = 0;
 LIFE._debugFrames = 0;
 LIFE._debugFPSTimer = 0;
+
+// Performance profiler
+LIFE._perfTimings = {};      // current frame timings
+LIFE._perfSmoothed = {};     // smoothed (rolling avg) for display
+LIFE._perfFrameStart = 0;
+LIFE._perfFrameTotal = 0;
+LIFE._perfSmoothedTotal = 0;
+LIFE._perfSpikeLog = [];     // recent frame spikes
+LIFE._perfWorst = {};        // worst timing per category in last 2 seconds
+LIFE._perfWorstTimer = 0;
+LIFE._perfWorstSnap = {};    // snapshot shown in overlay
+
+LIFE._perfBegin = function(label) {
+    if (!LIFE._debugView) return;
+    LIFE._perfTimings['_start_' + label] = performance.now();
+};
+LIFE._perfEnd = function(label) {
+    if (!LIFE._debugView) return;
+    var start = LIFE._perfTimings['_start_' + label];
+    if (start === undefined) return;
+    var elapsed = performance.now() - start;
+    LIFE._perfTimings[label] = elapsed;
+    // Rolling average (90% old, 10% new)
+    var prev = LIFE._perfSmoothed[label] || 0;
+    LIFE._perfSmoothed[label] = prev * 0.9 + elapsed * 0.1;
+    // Track worst
+    if (!LIFE._perfWorst[label] || elapsed > LIFE._perfWorst[label]) {
+        LIFE._perfWorst[label] = elapsed;
+    }
+};
 
 LIFE.toggleDebugView = function() {
     LIFE._debugView = !LIFE._debugView;
@@ -5623,9 +5862,80 @@ LIFE.updateDebugView = function(dt) {
     var el = document.getElementById('debugOverlay');
     if (!el) return;
 
+    // Update worst-case snapshot every 2 seconds
+    LIFE._perfWorstTimer += dt;
+    if (LIFE._perfWorstTimer >= 2) {
+        LIFE._perfWorstSnap = {};
+        for (var wk in LIFE._perfWorst) {
+            if (wk.charAt(0) !== '_') LIFE._perfWorstSnap[wk] = LIFE._perfWorst[wk];
+        }
+        LIFE._perfWorst = {};
+        LIFE._perfWorstTimer = 0;
+    }
+
     var lines = [];
-    lines.push('=== PHYSICS DEBUG [RShift] ===');
-    lines.push('FPS: ' + LIFE._debugFPS);
+    lines.push('=== DEBUG VIEW [RShift] ===');
+    lines.push('FPS: ' + LIFE._debugFPS + '  frame: ' + (LIFE._perfSmoothedTotal || 0).toFixed(1) + 'ms');
+
+    // --- PERFORMANCE ---
+    lines.push('');
+    lines.push('--- PERFORMANCE (avg / worst 2s) ---');
+    var perfCats = ['physics', 'npcs', 'police', 'pathfind', 'culling', 'render', 'ui', 'player', 'events'];
+    for (var pi = 0; pi < perfCats.length; pi++) {
+        var cat = perfCats[pi];
+        var avg = (LIFE._perfSmoothed[cat] || 0);
+        var peak = (LIFE._perfWorstSnap[cat] || 0);
+        var bar = '';
+        // Visual bar: each block = 1ms
+        var blocks = Math.min(30, Math.round(avg));
+        for (var bi = 0; bi < blocks; bi++) bar += '|';
+        var warn = peak > 16 ? ' !!!' : (peak > 8 ? ' !' : '');
+        var padCat = (cat + '         ').substring(0, 9);
+        lines.push(padCat + ' ' + avg.toFixed(1).padStart(5) + 'ms  pk ' + peak.toFixed(1).padStart(5) + 'ms ' + bar + warn);
+    }
+
+    // Scene stats
+    var ri = LIFE.renderer.info;
+    lines.push('');
+    lines.push('--- SCENE ---');
+    lines.push('Draw calls: ' + ri.render.calls + '  triangles: ' + ri.render.triangles);
+    lines.push('Geometries: ' + ri.memory.geometries + '  textures: ' + ri.memory.textures);
+    lines.push('Programs:   ' + ri.programs.length);
+    // Count shadow casters, total meshes, and unique materials (every 1s to avoid overhead)
+    if (!LIFE._debugSceneStats || LIFE._debugSceneStatsTimer <= 0) {
+        var _sc = 0, _tm = 0, _ms = {};
+        LIFE.scene.traverse(function(obj) {
+            if (obj.isMesh) {
+                _tm++;
+                if (obj.castShadow) _sc++;
+                if (obj.material && obj.material.uuid) _ms[obj.material.uuid] = 1;
+            }
+        });
+        LIFE._debugSceneStats = { meshes: _tm, shadowCasters: _sc, materials: Object.keys(_ms).length };
+        LIFE._debugSceneStatsTimer = 1;
+    }
+    LIFE._debugSceneStatsTimer -= dt;
+    var dss = LIFE._debugSceneStats;
+    lines.push('Meshes:     ' + dss.meshes + '  shadow casters: ' + dss.shadowCasters);
+    lines.push('Materials:  ' + dss.materials + ' unique');
+    lines.push('NPCs: ' + (LIFE.npcs ? LIFE.npcs.length : 0) + '  scene children: ' + (LIFE.scene ? LIFE.scene.children.length : 0));
+    var dpr = LIFE.renderer.getPixelRatio();
+    var sz = LIFE.renderer.getSize(new THREE.Vector2());
+    lines.push('Resolution: ' + Math.round(sz.x * dpr) + 'x' + Math.round(sz.y * dpr) + '  pixelRatio: ' + dpr);
+    lines.push('Shadows:    ' + (LIFE.renderer.shadowMap.enabled ? LIFE.renderer.shadowMap.type + ' (0=Basic 1=PCF 2=PCFSoft)' : 'OFF'));
+    lines.push('Antialias:  yes');
+
+    // Spike log
+    if (LIFE._perfSpikeLog.length > 0) {
+        lines.push('');
+        lines.push('--- FRAME SPIKES (>33ms) ---');
+        var now = Date.now();
+        for (var sli = LIFE._perfSpikeLog.length - 1; sli >= 0; sli--) {
+            var sp = LIFE._perfSpikeLog[sli];
+            var ago = ((now - sp.time) / 1000).toFixed(0);
+            lines.push(ago + 's ago  ' + sp.ms + 'ms  cause: ' + sp.culprit);
+        }
+    }
 
     if (body) {
         var bv = body.velocity;
@@ -5689,6 +5999,41 @@ LIFE.updateDebugView = function(dt) {
     lines.push('Zone:      ' + LIFE.physics.zoneBodies.length);
     lines.push('Dynamic:   ' + LIFE.physics.dynamicBodies.length);
     lines.push('Kinematic: ' + LIFE.physics.kinematicBodies.length);
+
+    // Police dispatch info
+    lines.push('');
+    lines.push('--- POLICE ---');
+    lines.push('Wanted:    ' + (s.wantedLevel || 0) + '  bounty: $' + (s.bounty || 0));
+    lines.push('Dispatch:  ' + (s.policeDispatching ? 'YES (' + (s.policeDispatchTimer || 0).toFixed(1) + 's)' : 'no'));
+    lines.push('Confront:  ' + (s.policeConfronting ? 'YES' : 'no'));
+    var activeCops = 0;
+    if (LIFE.police) LIFE.police.forEach(function(c) { if (c.alive) activeCops++; });
+    lines.push('Cops:      ' + activeCops + ' pursuing');
+    var swatCount = 0;
+    if (LIFE.swat) {
+        for (var si = 0; si < LIFE.swat.length; si++) {
+            if (LIFE.swat[si].state === 'deployed') {
+                swatCount += LIFE.swat[si].members.length;
+            }
+        }
+    }
+    if (s.swatDispatching || swatCount > 0) {
+        lines.push('SWAT:      ' + (s.swatDispatching ? 'DISPATCHING (' + (s.swatDispatchTimer || 0).toFixed(1) + 's)' : swatCount + ' deployed'));
+    }
+
+    // Recent dispatch log
+    if (LIFE._debugPoliceLog && LIFE._debugPoliceLog.length > 0) {
+        lines.push('');
+        lines.push('--- DISPATCH LOG ---');
+        var now = Date.now();
+        for (var dli = LIFE._debugPoliceLog.length - 1; dli >= 0; dli--) {
+            var entry = LIFE._debugPoliceLog[dli];
+            var ago = ((now - entry.time) / 1000).toFixed(0);
+            var witnessStr = entry.witness ? ' | caught by: ' + entry.witness : '';
+            lines.push(ago + 's ago | +' + entry.amount + ' wanted | ' + entry.reason + witnessStr);
+            lines.push('        ' + entry.wanted + ' | dispatch: ' + (entry.dispatching ? 'yes (' + entry.timer + 's)' : 'no'));
+        }
+    }
 
     el.textContent = lines.join('\n');
 };

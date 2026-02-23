@@ -248,6 +248,55 @@ LIFE.drawChatBubble = function(npc, text) {
     npc.chatTexture.needsUpdate = true;
 };
 
+// Generate loot items for an NPC (called at creation, persists on the NPC)
+LIFE._generateNPCLoot = function(npc) {
+    var items = [];
+    var type = npc.type || 'Stranger';
+    var money = 0;
+
+    if (npc.isPolice) {
+        money = 10 + Math.floor(Math.random() * 40);
+        items.push({ name: 'Medkit', isMoney: false });
+        if (Math.random() < 0.6) items.push({ name: 'Pistol', isMoney: false });
+    } else if (npc.isSWAT) {
+        money = 20 + Math.floor(Math.random() * 30);
+        items.push({ name: 'Medkit', isMoney: false });
+        if (Math.random() < 0.8) items.push({ name: 'AK-47', isMoney: false });
+    } else if (npc.isDealer) {
+        money = 50 + Math.floor(Math.random() * 200);
+        if (Math.random() < 0.4) items.push({ name: 'Switchblade', isMoney: false });
+        if (Math.random() < 0.3) items.push({ name: 'Pistol', isMoney: false });
+        if (Math.random() < 0.2) items.push({ name: 'Gold Ring', isMoney: false });
+    } else if (type === 'Mom' || type === 'Dad') {
+        money = 20 + Math.floor(Math.random() * 80);
+        if (Math.random() < 0.3) items.push({ name: 'Phone', isMoney: false });
+        if (Math.random() < 0.2) items.push({ name: 'Keys', isMoney: false });
+    } else if (type === 'Spouse') {
+        money = 30 + Math.floor(Math.random() * 100);
+        if (Math.random() < 0.4) items.push({ name: 'Phone', isMoney: false });
+        if (Math.random() < 0.3) items.push({ name: 'Gold Ring', isMoney: false });
+    } else if (type === 'Kid' || type === 'Your Child') {
+        money = Math.floor(Math.random() * 10);
+        if (Math.random() < 0.2) items.push({ name: 'Comic Book', isMoney: false });
+        if (Math.random() < 0.2) items.push({ name: 'Apple', isMoney: false });
+    } else if (type === 'Rich Person' || type === 'Celebrity') {
+        money = 100 + Math.floor(Math.random() * 500);
+        if (Math.random() < 0.5) items.push({ name: 'Gold Ring', isMoney: false });
+        if (Math.random() < 0.4) items.push({ name: 'Luxury Watch', isMoney: false });
+        if (Math.random() < 0.3) items.push({ name: 'Smartphone', isMoney: false });
+    } else {
+        money = 2 + Math.floor(Math.random() * 30);
+        if (Math.random() < 0.15) items.push({ name: 'Phone', isMoney: false });
+        if (Math.random() < 0.1) items.push({ name: 'Keys', isMoney: false });
+        if (Math.random() < 0.1) items.push({ name: 'Headphones', isMoney: false });
+    }
+
+    if (money > 0) {
+        items.unshift({ name: '$' + money, isMoney: true, amount: money });
+    }
+    npc.lootItems = items;
+};
+
 LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
     opts = opts || {};
     var isChild = type.includes('Kid') || type.includes('Grandchild') || type === 'Sibling';
@@ -459,8 +508,12 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
         isVendor: isVendor, vendorType: isVendor ? type : null,
         stayNear: (isHiring || isCarSalesman || isRealEstate || isVendor) ? new THREE.Vector3(x, 0, z) : null,
         npcReputation: isPolice ? 80 : isDealer ? -60 : (Math.floor(Math.random() * 60) + 10), // 10-70 for normal NPCs
-        _physBody: physBody, _physRadius: physRadius
+        _physBody: physBody, _physRadius: physRadius,
+        lootItems: [] // generated below
     };
+
+    // Generate NPC inventory (determines loot when they die)
+    LIFE._generateNPCLoot(npc);
 
     // Register kinematic body with physics system
     if (physBody) {
@@ -923,7 +976,7 @@ LIFE.killNPC = function(npc) {
         // Police kills are always known (radio dispatch)
         repLoss = npc.isSWAT ? -15 : -10;
         LIFE.logCrime('Murder of a ' + (npc.isSWAT ? 'SWAT officer' : 'police officer'));
-        LIFE.addWanted(3);
+        LIFE.addWanted(3, 'Killed police officer', npc.name);
         var idx = LIFE.police.indexOf(npc);
         if (idx >= 0) LIFE.police.splice(idx, 1);
         if (LIFE.world.policeCops) {
@@ -939,7 +992,7 @@ LIFE.killNPC = function(npc) {
         state.stats.happiness = Math.max(0, state.stats.happiness - 35);
         state.stats.charisma = Math.max(0, state.stats.charisma - 10);
         LIFE.logCrime('Murder of ' + npc.type);
-        if (killSeen) LIFE.addWanted(5);
+        if (killSeen) LIFE.addWanted(5, 'Family murder (witnessed)');
         state.familyKiller = true;
         state.familyAbuser = true;
         if (!state.killedFamily) state.killedFamily = [];
@@ -957,7 +1010,7 @@ LIFE.killNPC = function(npc) {
             setTimeout(function() {
                 if (state.gamePhase === 'playing') {
                     LIFE.ui.showPopup(npc.type + '\'s body has been discovered!', '#ff1744');
-                    LIFE.addWanted(3);
+                    LIFE.addWanted(3, 'Family murder (discovered)');
                     if (LIFE.news) LIFE.news.add('Missing ' + npc.type.toLowerCase() + ' found dead. Police launch investigation.', 'crime');
                 }
             }, 15000 + Math.random() * 20000); // discovered 15-35 seconds later
@@ -966,13 +1019,13 @@ LIFE.killNPC = function(npc) {
         repLoss = -50;
         state.stats.happiness = Math.max(0, state.stats.happiness - 20);
         LIFE.logCrime('Murder of a child');
-        if (killSeen) LIFE.addWanted(5);
+        if (killSeen) LIFE.addWanted(5, 'Child murder (witnessed)');
         if (!killSeen) {
             repLoss = Math.ceil(repLoss * 0.4);
             setTimeout(function() {
                 if (state.gamePhase === 'playing') {
                     LIFE.ui.showPopup('A child\'s body has been discovered!', '#ff1744');
-                    LIFE.addWanted(4);
+                    LIFE.addWanted(4, 'Child murder (discovered)');
                     if (LIFE.news) LIFE.news.add('Child found dead. Community in shock. Police investigating.', 'crime');
                 }
             }, 10000 + Math.random() * 15000);
@@ -980,14 +1033,14 @@ LIFE.killNPC = function(npc) {
     } else {
         LIFE.logCrime('Murder');
         if (killSeen) {
-            LIFE.addWanted(3);
+            LIFE.addWanted(3, 'Murder (witnessed)');
         } else {
             // Unwitnessed murder — body found later
             repLoss = Math.ceil(repLoss * 0.3);
             setTimeout(function() {
                 if (state.gamePhase === 'playing') {
                     LIFE.ui.showPopup('A body has been discovered nearby...', '#ff9800');
-                    LIFE.addWanted(2);
+                    LIFE.addWanted(2, 'Murder (discovered)');
                     if (LIFE.news) LIFE.news.add('Body found in ' + (LIFE.world._currentZone || 'local area') + '. Police investigating.', 'crime');
                 }
             }, 20000 + Math.random() * 30000); // discovered 20-50 seconds later
@@ -1331,15 +1384,22 @@ LIFE.updateNPCs = function(dt) {
                     var htDist = Math.sqrt(htdx * htdx + htdz * htdz);
 
                     if (htDist < 3) {
-                        // Reached the helper NPC — they start a phone call to police
+                        // Reached the helper NPC — they call police (if old enough to have a phone)
                         npc._seekingHelp = false;
                         var helperNPC = npc._helpTarget;
-                        LIFE.npcStartPhoneCall(helperNPC, function() {
-                            LIFE.addWanted(2);
-                            if (LIFE.news) LIFE.news.add('Assault reported after victim seeks help from bystander.', 'crime');
+                        var helperAge = helperNPC.npcAge !== null ? helperNPC.npcAge : (helperNPC.type === 'Kid' ? 8 : 25);
+                        if (helperAge >= 12) {
+                            LIFE.npcStartPhoneCall(helperNPC, function() {
+                                LIFE.addWanted(2, 'Assault reported', helperNPC.name);
+                                if (LIFE.news) LIFE.news.add('Assault reported after victim seeks help from bystander.', 'crime');
+                                helperNPC.fleeing = true;
+                                helperNPC.fleeTimer = 5 + Math.random() * 3;
+                            });
+                        } else {
+                            // Kid helper — just both flee, no phone call
                             helperNPC.fleeing = true;
                             helperNPC.fleeTimer = 5 + Math.random() * 3;
-                        });
+                        }
                         npc._helpTarget = null;
                         npc._fleeToward = null;
                         // Now flee randomly away from player

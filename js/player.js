@@ -128,8 +128,8 @@ LIFE.updatePlayer = function(dt) {
     var player = LIFE.player;
     if (!player || state.gamePhase === 'death' || state.gamePhase === 'womb') return;
 
-    // Freeze physics body during UI interactions (dialogue, shop, friends list, containers)
-    if ((LIFE.dialogue.active && LIFE.dialogue.blocking) || state.shopOpen || state.friendsOpen || LIFE._containerOpen) {
+    // Freeze physics body during UI interactions (dialogue, shop, friends list)
+    if ((LIFE.dialogue.active && LIFE.dialogue.blocking) || state.shopOpen || state.friendsOpen) {
         if (LIFE.physics._playerBody) {
             LIFE.physics._playerBody.velocity.set(0, 0, 0);
         }
@@ -152,10 +152,9 @@ LIFE.updatePlayer = function(dt) {
         if (body.velocity.y < 0) body.velocity.y = 0;
     }
 
-    // Ground detection via raycast (start just below capsule bottom to avoid self-hit)
+    // Ground detection: use physics contacts to detect standing on any surface
     var feetY = body.position.y - halfH;
-    var groundY = LIFE.physics.raycastGround(body.position.x, feetY - 0.05, body.position.z);
-    state.isGrounded = (feetY - groundY) < 0.15;
+    state.isGrounded = LIFE.physics._playerOnSurface || (feetY < 0.05);
 
     var speed = LIFE.getSpeedForAge(state.age, state.yearTimer);
 

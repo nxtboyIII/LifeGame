@@ -24,7 +24,7 @@ LIFE.enhance.init = function() {
     LIFE.enhance.minimap.init();
     LIFE.enhance.shake.init();
     LIFE.enhance.vignette.init();
-    LIFE.enhance.particles.init();
+    // particles removed
     LIFE.enhance.hitFlash.init();
     LIFE.enhance.emotions.init();
 
@@ -416,102 +416,7 @@ LIFE.enhance.hitFlash.update = function(dt) {
     }
 };
 
-// ============================================================
-// AMBIENT PARTICLES
-// ============================================================
-LIFE.enhance.particles = {
-    system: null,
-    _active: false,
-    _count: 60,          // reduced from 120
-    _positions: null,
-    _velocities: null,
-    _updateTimer: 0,
-    _updateInterval: 0.05  // only update geometry 20x/sec max
-};
-
-LIFE.enhance.particles.init = function() {
-    var p = LIFE.enhance.particles;
-    p._positions  = new Float32Array(p._count * 3);
-    p._velocities = new Float32Array(p._count * 3);
-    p._resetAll();
-
-    var geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(p._positions, 3));
-
-    var mat = new THREE.PointsMaterial({
-        color: 0xffffff,
-        size: 0.06,
-        transparent: true,
-        opacity: 0.35,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending
-    });
-
-    p.system = new THREE.Points(geo, mat);
-    p.system.frustumCulled = false;
-    // Don't add to scene yet - add when playing
-};
-
-LIFE.enhance.particles._resetAll = function() {
-    var p = LIFE.enhance.particles;
-    for (var i = 0; i < p._count; i++) {
-        p._resetParticle(i);
-    }
-};
-
-LIFE.enhance.particles._resetParticle = function(i) {
-    var p = LIFE.enhance.particles;
-    var px = LIFE.player ? LIFE.player.group.position.x : 0;
-    var pz = LIFE.player ? LIFE.player.group.position.z : 0;
-    var spread = 20;
-    p._positions[i*3]   = px + (Math.random()-0.5) * spread * 2;
-    p._positions[i*3+1] = Math.random() * 6;
-    p._positions[i*3+2] = pz + (Math.random()-0.5) * spread * 2;
-    p._velocities[i*3]   = (Math.random()-0.5) * 0.3;
-    p._velocities[i*3+1] = 0.04 + Math.random() * 0.06;
-    p._velocities[i*3+2] = (Math.random()-0.5) * 0.3;
-};
-
-LIFE.enhance.particles.update = function(dt) {
-    var p = LIFE.enhance.particles;
-    var state = LIFE.state;
-    if (!p.system) return;
-
-    var shouldShow = state.gamePhase === 'playing' &&
-                     LIFE.world && LIFE.world.built &&
-                     !LIFE.world.insideInterior;
-
-    if (shouldShow && !p._active) {
-        LIFE.scene.add(p.system);
-        p._active = true;
-    } else if (!shouldShow && p._active) {
-        LIFE.scene.remove(p.system);
-        p._active = false;
-    }
-    if (!p._active) return;
-
-    // Throttle: only update positions at fixed interval
-    p._updateTimer -= dt;
-    if (p._updateTimer > 0) return;
-    p._updateTimer = p._updateInterval;
-
-    var px = LIFE.player ? LIFE.player.group.position.x : 0;
-    var pz = LIFE.player ? LIFE.player.group.position.z : 0;
-    var stepDt = p._updateInterval; // use fixed step, not variable dt
-
-    for (var i = 0; i < p._count; i++) {
-        p._positions[i*3]   += p._velocities[i*3]   * stepDt * 30;
-        p._positions[i*3+1] += p._velocities[i*3+1] * stepDt * 30;
-        p._positions[i*3+2] += p._velocities[i*3+2] * stepDt * 30;
-        var dx = p._positions[i*3]   - px;
-        var dz = p._positions[i*3+2] - pz;
-        if (p._positions[i*3+1] > 7 || dx*dx + dz*dz > 1000) {
-            p._resetParticle(i);
-        }
-    }
-    // Only upload to GPU when we actually changed data
-    p.system.geometry.attributes.position.needsUpdate = true;
-};
+// (Ambient particles removed)
 
 // ============================================================
 // NPC EMOTION BUBBLES
@@ -837,7 +742,7 @@ LIFE.enhance._patchKillFeed = function() {
 LIFE.enhance.proximityIcon = {
     _el: null,
     _timer: 0,
-    _interval: 0.1   // only project to screen 10x/sec
+    _interval: 0.0  // only project to screen 10x/sec
 };
 
 LIFE.enhance.proximityIcon.init = function() {
@@ -897,7 +802,7 @@ LIFE.enhance.update = function(dt) {
     LIFE.enhance.shake.update(dt);
     LIFE.enhance.vignette.update(dt);
     LIFE.enhance.hitFlash.update(dt);
-    LIFE.enhance.particles.update(dt);
+    // particles removed
     LIFE.enhance.minimap.update(dt);
     LIFE.enhance.emotions.update(dt);
     LIFE.enhance.stars.update(dt);

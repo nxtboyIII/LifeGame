@@ -788,7 +788,7 @@ LIFE.NPC_DIALOGUES['Stranger'].push(
         { text: "What kind of business?", effects: {}, rep: 0, response: {
             text: "Let's just say it's not exactly legal. But the money is very, very good. $5,000 for one night's work.", options: [
                 { text: "I'm in. What do I need to do?", effects: {}, rep: -15, money: 5000,
-                    onSelect: function() { LIFE.state.totalThefts++; LIFE.logCrime('Accessory to organized crime'); LIFE.logMilestone('Participated in organized crime', 'bad'); LIFE.addWanted(1); }},
+                    onSelect: function() { LIFE.state.totalThefts++; LIFE.logCrime('Accessory to organized crime'); LIFE.logMilestone('Participated in organized crime', 'bad'); LIFE.addWanted(1, 'Organized crime'); }},
                 { text: "No amount of money is worth my soul.", effects: { happiness: 2, intelligence: 1 }, rep: 8,
                     onSelect: function() { LIFE.logMilestone('Rejected a lucrative criminal offer', 'good'); }},
                 { text: "I should report you to the police.", effects: { intelligence: 1 }, rep: 12,
@@ -926,7 +926,7 @@ LIFE.NPC_DIALOGUES['Coworker'].push(
         { text: "How much are we talking?", effects: {}, rep: -10, response: {
             text: "About $10,000. Split fifty-fifty. We just alter a few invoices. Easy money.", options: [
                 { text: "I'm in. Let's do it.", effects: {}, rep: -15, money: 5000,
-                    onSelect: function() { LIFE.state.totalThefts++; LIFE.logCrime('Embezzlement'); LIFE.logMilestone('Embezzled thousands from employer', 'bad'); if (Math.random() < 0.3) { LIFE.addWanted(2); LIFE.ui.showPopup('An audit reveals the missing funds!', '#f44336'); } }},
+                    onSelect: function() { LIFE.state.totalThefts++; LIFE.logCrime('Embezzlement'); LIFE.logMilestone('Embezzled thousands from employer', 'bad'); if (Math.random() < 0.3) { LIFE.addWanted(2, 'Embezzlement discovered'); LIFE.ui.showPopup('An audit reveals the missing funds!', '#f44336'); } }},
                 { text: "On second thought, this is too risky.", effects: { intelligence: 1 }, rep: 3 }
             ]
         }},
@@ -1070,7 +1070,7 @@ LIFE.NPC_DIALOGUES['Dealer'].push(
         { text: "I'm in. Easy money.", effects: {}, rep: -8, money: 500, response: {
             text: "Smart. Now listen — if anyone asks, you don't know me. And DON'T open the package.", options: [
                 { text: "My lips are sealed.", effects: {}, rep: -5,
-                    onSelect: function() { LIFE.logCrime('Drug trafficking'); LIFE.logMilestone('Held drugs for a dealer', 'bad'); if (Math.random() < 0.25) { LIFE.addWanted(2); LIFE.ui.showPopup('Police found the drugs on you!', '#f44336'); }}},
+                    onSelect: function() { LIFE.logCrime('Drug trafficking'); LIFE.logMilestone('Held drugs for a dealer', 'bad'); if (Math.random() < 0.25) { LIFE.addWanted(2, 'Drug possession'); LIFE.ui.showPopup('Police found the drugs on you!', '#f44336'); }}},
                 { text: "Wait... what's actually in it?", effects: {}, rep: -3,
                     onSelect: function() { LIFE.logCrime('Drug possession'); }}
             ]
@@ -1265,6 +1265,11 @@ LIFE.dialogue.close = function() {
     LIFE.dialogue.blocking = false;
     LIFE.dialogue.current = null;
     LIFE.dialogue.elements.box.style.display = 'none';
+    // Clear police confrontation state
+    if (LIFE.state.policeConfronting) {
+        LIFE.state.policeConfronting = false;
+        if (LIFE.police) LIFE.police.forEach(function(c) { c._frozen = false; });
+    }
     // only re-lock cursor if we unlocked it
     if (wasBlocking) {
         LIFE.lockCursor();
@@ -1496,13 +1501,76 @@ LIFE.dialogue.selectOption = function(idx) {
     }
     if (opt.surrender) {
         // Player surrenders to police
+        LIFE.state.policeConfronting = false;
         LIFE.dialogue.active = false;
         LIFE.dialogue.blocking = false;
         LIFE.dialogue.current = null;
         LIFE.dialogue.elements.box.style.display = 'none';
+        // Unfreeze cops
+        LIFE.police.forEach(function(c) { c._frozen = false; });
         setTimeout(function() {
             if (LIFE.state.wantedLevel > 0) LIFE.arrestPlayer();
         }, 500);
+        return;
+    }
+    if (opt.policeBribe) {
+        // Bribe attempt — charisma-based success
+        LIFE.state.policeConfronting = false;
+        var canAfford = LIFE.state.money >= opt.bribeCost;
+        if (!canAfford) {
+            // Can't afford — cop gets angry, arrest
+            LIFE.dialogue.active = false;
+            LIFE.dialogue.blocking = false;
+            LIFE.dialogue.current = null;
+            LIFE.dialogue.elements.box.style.display = 'none';
+            LIFE.ui.showPopup("Can't afford the bribe! ($" + opt.bribeCost + ")", '#ef5350');
+            LIFE.police.forEach(function(c) { c._frozen = false; });
+            setTimeout(function() { LIFE.arrestPlayer(); }, 500);
+            return;
+        }
+        LIFE.state.money -= opt.bribeCost;
+        var success = Math.random() < opt.bribeChance;
+        if (success) {
+            // Bribe worked — cops look the other way
+            LIFE.dialogue.active = false;
+            LIFE.dialogue.blocking = false;
+            LIFE.dialogue.current = null;
+            LIFE.dialogue.elements.box.style.display = 'none';
+            LIFE.ui.showPopup('Bribe accepted! Cops look the other way. (-$' + opt.bribeCost + ')', '#4caf50');
+            LIFE.state.wantedLevel = 0;
+            LIFE.state.bounty = 0;
+            LIFE.state.policeDispatching = false;
+            LIFE.police.forEach(function(c) { c._frozen = false; });
+            LIFE.despawnPolice();
+            LIFE.logCrime('Bribery');
+        } else {
+            // Bribe failed — cop is offended
+            LIFE.dialogue.active = false;
+            LIFE.dialogue.blocking = false;
+            LIFE.dialogue.current = null;
+            LIFE.dialogue.elements.box.style.display = 'none';
+            LIFE.ui.showPopup('Bribe failed! "You think you can buy me?!" (-$' + opt.bribeCost + ')', '#f44336');
+            LIFE.state.wantedLevel = Math.min(10, LIFE.state.wantedLevel + 1);
+            LIFE.state.bounty += 500;
+            LIFE.logCrime('Attempted bribery');
+            LIFE.police.forEach(function(c) { c._frozen = false; });
+            setTimeout(function() { LIFE.arrestPlayer(); }, 500);
+        }
+        return;
+    }
+    if (opt.policeResist) {
+        // Resist arrest — cops become hostile, no more talking
+        LIFE.state.policeConfronting = false;
+        LIFE.state.wantedLevel = Math.min(10, LIFE.state.wantedLevel + 2);
+        LIFE.state.bounty += 1000;
+        LIFE.logCrime('Resisting arrest');
+        LIFE.dialogue.active = false;
+        LIFE.dialogue.blocking = false;
+        LIFE.dialogue.current = null;
+        LIFE.dialogue.elements.box.style.display = 'none';
+        LIFE.ui.showPopup('Resisting arrest! +2 Wanted!', '#f44336');
+        // Unfreeze cops and mark them as hostile (won't try to talk again)
+        LIFE.police.forEach(function(c) { c._frozen = false; c._hostile = true; });
         return;
     }
     if (opt.married) LIFE.state.married = true;
@@ -2108,9 +2176,14 @@ LIFE.dialogue.talkToNPC = function(npc) {
 
         // If wanted, cop reacts to criminal
         if (wanted > 0) {
+            var bCost = Math.max(100, (state.bounty || 0) * 0.5 + (state.wantedLevel || 1) * 200);
+            bCost = Math.round(bCost / 10) * 10;
+            var bChance = 0.05 + (state.stats.charisma || 0) * 0.008;
             LIFE.dialogue.open(speakerName, "Stop right there! You're under arrest!", [
-                { text: "You'll never take me alive!", effects: {}, rep: -2 },
-                { text: "I surrender...", effects: {}, surrender: true }
+                { text: "I surrender...", effects: {}, surrender: true },
+                { text: "Maybe we can work something out... ($" + bCost + ")", effects: {},
+                  policeBribe: true, bribeCost: bCost, bribeChance: bChance },
+                { text: "You'll never take me alive!", effects: {}, policeResist: true, rep: -5 }
             ], true);
             return;
         }

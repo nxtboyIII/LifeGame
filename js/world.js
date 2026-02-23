@@ -1827,7 +1827,7 @@ LIFE.updateCarDriving = function(dt) {
                         var hitLabel = npc.isPolice ? 'You hit a police officer!' : 'You hit ' + npc.name + '!';
                         LIFE.ui.showPopup(hitLabel, '#ff9800');
                         LIFE.logCrime(npc.isPolice ? 'Vehicular assault on police' : 'Hit and run');
-                        LIFE.addWanted(npc.isPolice ? 3 : 1);
+                        LIFE.addWanted(npc.isPolice ? 3 : 1, 'Vehicular assault');
                         state.reputation = Math.max(-100, state.reputation - (npc.isPolice ? 8 : 3));
                         LIFE.ui.showRepChange(npc.isPolice ? -8 : -3);
                     } else {
@@ -1835,7 +1835,7 @@ LIFE.updateCarDriving = function(dt) {
                         // Log vehicular crime for non-police kills
                         if (!npc.isPolice) {
                             LIFE.logCrime('Vehicular manslaughter');
-                            LIFE.addWanted(2);
+                            LIFE.addWanted(2, 'Vehicular manslaughter');
                         }
                         var killLabel = npc.isPolice ? 'You killed a police officer!' : 'You ran over ' + npc.name + '!';
                         LIFE.ui.showPopup(killLabel, '#ff1744');

@@ -754,7 +754,7 @@ LIFE.RANDOM_EVENTS = [
             onSelect: function() { LIFE.logMilestone('Reported a drug stash to police', 'good'); }},
         { text: "Leave it alone. Not worth the risk.", effects: { intelligence: 1 } },
         { text: "Take it and sell it ($3000)", effects: {}, money: 3000, rep: -20,
-            onSelect: function() { LIFE.state.totalThefts++; LIFE.logCrime('Drug dealing'); LIFE.logMilestone('Sold a found drug stash for $3000', 'bad'); if (Math.random() < 0.3) { LIFE.addWanted(3); }}},
+            onSelect: function() { LIFE.state.totalThefts++; LIFE.logCrime('Drug dealing'); LIFE.logMilestone('Sold a found drug stash for $3000', 'bad'); if (Math.random() < 0.3) { LIFE.addWanted(3, 'Drug dealing'); }}},
         { text: "Destroy it so nobody gets hurt", effects: { happiness: 3 }, rep: 8,
             onSelect: function() { LIFE.logMilestone('Destroyed a drug stash to protect the community', 'good'); }}
       ]},
