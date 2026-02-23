@@ -99,19 +99,6 @@ LIFE.getNPCChatMessage = function(npc) {
         return concernMsgs[Math.floor(Math.random() * concernMsgs.length)];
     }
 
-    // Weather-aware comments
-    if (LIFE.weather && LIFE.weather.current !== 'clear' && Math.random() < 0.2 && !npc.isPolice) {
-        var weatherChat = {
-            rain: ["Wish I brought an umbrella...", "This rain won't stop!", "Getting soaked out here..."],
-            storm: ["We should get inside!", "This storm is scary!", "Thunder!"],
-            cloudy: ["Looks like rain.", "Gray day today.", "Hope the sun comes out."],
-            fog: ["Can barely see anything...", "Creepy fog today.", "Where'd the sun go?"],
-            windy: ["Hold onto your hat!", "So windy today!", "Brrr, that wind!"]
-        };
-        var wMsgs = weatherChat[LIFE.weather.current];
-        if (wMsgs) return wMsgs[Math.floor(Math.random() * wMsgs.length)];
-    }
-
     // Time-of-day comments
     var simDate = LIFE.getSimDate ? LIFE.getSimDate() : null;
     if (simDate && Math.random() < 0.1 && !npc.isPolice && npc.type !== 'Dealer') {
@@ -1239,14 +1226,6 @@ LIFE.updateNPCs = function(dt) {
             return;
         }
 
-        // Weather speed modifier applied during movement below
-        var _weatherSpeedMul = 1;
-        if (LIFE.weather && (LIFE.weather.current === 'rain' || LIFE.weather.current === 'storm')) {
-            if (!npc.stayNear && npc.speed > 0) {
-                _weatherSpeedMul = LIFE.weather.current === 'storm' ? 1.6 : 1.3;
-            }
-        }
-
         // friendly NPCs occasionally approach
         if (relLevel >= 40 && player && Math.random() < 0.005) {
             var adx = player.group.position.x - npc.char.group.position.x;
@@ -1402,12 +1381,12 @@ LIFE.updateNPCs = function(dt) {
             }
             npc.waiting = true; npc.waitTimer = 2+Math.random()*4; return;
         }
-        var s = npc.speed * _weatherSpeedMul * dt;
+        var s = npc.speed * dt;
         var prevX = npc.char.group.position.x;
         var prevZ = npc.char.group.position.z;
         npc.char.group.position.x += (dx/dist)*s; npc.char.group.position.z += (dz/dist)*s;
         npc.char.group.rotation.y = Math.atan2(dx, dz);
-        npc.walkTime += dt * npc.speed * _weatherSpeedMul * 3;
+        npc.walkTime += dt * npc.speed * 3;
         var swing = Math.sin(npc.walkTime) * 0.4;
         npc.char.parts.leftLeg.rotation.x = swing; npc.char.parts.rightLeg.rotation.x = -swing;
         npc.char.parts.leftArm.rotation.x = -swing*0.6; npc.char.parts.rightArm.rotation.x = swing*0.6;

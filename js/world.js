@@ -18,7 +18,7 @@ LIFE.ZONE_DEFS = {
 LIFE.INTERIOR_STAGES = {
     classroom: true, hsclassroom: true, playerhome: true,
     hospital: true, jail: true, execution: true,
-    womb: true, death: true, nursery: true
+    womb: true, death: true, nursery: true, workplace: true
 };
 
 // World state
@@ -344,6 +344,22 @@ LIFE.world.buildPoliceStation = function() {
     sign.scale.set(3, 0.75, 1);
     group.add(sign);
 
+    // "Press G to Enter" prompt
+    var enterCanvas = document.createElement('canvas');
+    enterCanvas.width = 256; enterCanvas.height = 48;
+    var ectx = enterCanvas.getContext('2d');
+    ectx.fillStyle = 'rgba(25,118,210,0.9)';
+    ectx.fillRect(0, 0, 256, 48);
+    ectx.fillStyle = '#fff';
+    ectx.font = 'bold 20px Arial';
+    ectx.textAlign = 'center';
+    ectx.fillText('Press G to Enter', 128, 32);
+    var etex = new THREE.CanvasTexture(enterCanvas);
+    var enterSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: etex, transparent: true, depthTest: false }));
+    enterSprite.position.set(0, 4, 4.5);
+    enterSprite.scale.set(2.5, 0.5, 1);
+    group.add(enterSprite);
+
     LIFE.scene.add(group);
 
     // Store as zone
@@ -633,6 +649,33 @@ LIFE.world.registerDoors = function() {
         // Hospital door (local 0, 5.1 -> world -150, 5.1)
         { x: -150, z: 5, interior: 'hospital', label: 'Hospital', exitX: -150, exitZ: 7 }
     ];
+
+    // Register doors for all career buildings in city zone
+    var cityDef = LIFE.ZONE_DEFS.city;
+    if (LIFE.JOB_BUILDINGS) {
+        LIFE.JOB_BUILDINGS.forEach(function(jb) {
+            var worldX = jb.x + cityDef.cx;
+            var worldZ = jb.z + cityDef.cz + 4.1; // door is at front face (z + 4.1 in local)
+            LIFE.world.doors.push({
+                x: worldX,
+                z: worldZ,
+                interior: 'workplace',
+                careerType: jb.career,
+                label: jb.label,
+                exitX: worldX,
+                exitZ: worldZ + 2
+            });
+        });
+    }
+
+    // Police station door
+    var psx = -60, psz = -80;
+    LIFE.world.doors.push({
+        x: psx, z: psz + 4.1,
+        interior: 'police_interior',
+        label: 'Police Station',
+        exitX: psx, exitZ: psz + 6
+    });
 };
 
 LIFE.world.tryEnterDoor = function() {
@@ -655,6 +698,9 @@ LIFE.world.tryEnterDoor = function() {
             return true;
         }
     }
+
+    // Check proximity to "Press G" enter prompts on city buildings
+    // (Job buildings with doors but no explicit door in registry — handled above now)
 
     // Check home door in city zone (dynamic based on property ownership)
     if (LIFE.state.homeDoor) {
@@ -683,7 +729,9 @@ LIFE.world.INTERIOR_POSITIONS = {
     hsclassroom: { x: 120,  z: -150 },   // inside highschool
     hospital:    { x: -150, z: 0 },      // inside hospital
     playerhome:  { x: 0,    z: 0 },      // inside home zone
-    jail:        { x: -60,  z: -80 }     // inside police station
+    jail:        { x: -60,  z: -80 },    // inside police station
+    workplace:   { x: 0,    z: 150 },    // dynamically set per building
+    police_interior: { x: -60, z: -80 }  // inside police station (visitor)
 };
 
 LIFE.world.enterInterior = function(name, door) {
@@ -709,15 +757,25 @@ LIFE.world.enterInterior = function(name, door) {
     // Determine world position for this interior
     var pos = LIFE.world.INTERIOR_POSITIONS[name] || { x: 0, z: 0 };
 
+    // For workplace interiors, position at the actual building location
+    if (name === 'workplace' && door) {
+        pos = { x: door.exitX, z: door.exitZ - 2 };
+        LIFE.world._workplaceCareer = door.careerType || 'worker';
+    }
+    if (name === 'police_interior' && door) {
+        pos = { x: door.exitX, z: door.exitZ - 2 };
+    }
+
     // Build interior using existing builder, inside a group at the world position
-    var cfg = LIFE.STAGES[name];
+    var stageName = (name === 'workplace' || name === 'police_interior') ? 'workplace' : name;
+    var cfg = LIFE.STAGES[stageName];
     if (cfg) {
         LIFE.scene.background.set(cfg.bg);
         LIFE.scene.fog.color.set(cfg.fog[0]);
         LIFE.scene.fog.near = cfg.fog[1];
         LIFE.scene.fog.far = cfg.fog[2];
     }
-    LIFE.state.bounds = LIFE.getBoundsForStage(name);
+    LIFE.state.bounds = 10; // interiors are small
 
     // Create interior group at correct world position
     var interiorGroup = new THREE.Group();
@@ -747,13 +805,23 @@ LIFE.world.enterInterior = function(name, door) {
         playerhome: LIFE.buildPlayerHome,
         hospital: LIFE.buildHospital
     };
-    if (builders[name]) builders[name]();
+    if (name === 'workplace') {
+        LIFE.buildWorkplace(LIFE.world._workplaceCareer);
+    } else if (name === 'police_interior') {
+        LIFE.buildWorkplace('business'); // police station uses office-like interior
+    } else if (builders[name]) {
+        builders[name]();
+    }
 
     // Restore original functions
     LIFE.addEnv = origAddEnv;
     LIFE.addCollider = origAddCollider;
 
     LIFE.world.insideInterior = name;
+    LIFE.world._currentBuildingCareer = (name === 'workplace') ? LIFE.world._workplaceCareer : null;
+
+    // Update interior position so bounds clamping works correctly
+    LIFE.world.INTERIOR_POSITIONS[name] = { x: pos.x, z: pos.z };
 
     // Spawn NPCs for interior at world position
     LIFE.world._interiorNPCOffset = pos;
@@ -799,6 +867,7 @@ LIFE.world.exitInterior = function() {
     LIFE.scene.fog.far = 200;
 
     LIFE.world.insideInterior = null;
+    LIFE.world._currentBuildingCareer = null;
 
     // Restore bounds (no clamping in open world)
     LIFE.state.bounds = 400;

@@ -61,7 +61,20 @@
     <!-- Actions -->
     <div id="actions"></div>
     <div id="weaponIndicator"></div>
-    <div id="controls">WASD: Move | Mouse: Look | Space: Jump | 1-4: Actions | E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info | G: Enter/Exit Building | V: Drive Car</div>
+    <div id="controls">WASD: Move | Mouse: Look | Space: Jump | 1-4: Actions | E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info | G: Enter/Exit Building | V: Drive Car | J: Quests</div>
+
+    <!-- Quest HUD (small tracker) -->
+    <div id="questHUD"></div>
+
+    <!-- Quest compass arrow -->
+    <div id="questArrow"><span class="arrowIcon">&#9650;</span><span class="arrowDist"></span></div>
+
+    <!-- Quest objective banners (Skyrim-style) -->
+    <div id="questBanner"><div class="qbTitle"></div><div class="qbSub"></div></div>
+    <div id="questObjBanner"></div>
+
+    <!-- Quest Log Panel -->
+    <div id="questLog"></div>
 
     <!-- Dialogue box -->
     <div id="dialogueBox">
@@ -150,6 +163,7 @@
 <script src="js/environments.js"></script>
 <script src="js/world.js"></script>
 <script src="js/actions.js"></script>
+<script src="js/quests.js"></script>
 <script src="js/game.js"></script>
 
 </body>

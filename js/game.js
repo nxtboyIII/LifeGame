@@ -1057,6 +1057,14 @@ LIFE.arrestPlayer = function() {
     if (LIFE.state.gamePhase === 'jail' || LIFE.state.gamePhase === 'execution') return;
     var state = LIFE.state;
 
+    // Fail any active quests on arrest
+    if (LIFE.quests && LIFE.quests.active && LIFE.quests.active.length > 0) {
+        var questsToFail = LIFE.quests.active.slice();
+        for (var qi = 0; qi < questsToFail.length; qi++) {
+            LIFE.quests.fail(questsToFail[qi]);
+        }
+    }
+
     // Force exit car if driving
     if (state.inCar) {
         state.inCar = false;
@@ -1700,7 +1708,7 @@ LIFE.tryEnterExitHome = function() {
         // EXIT any interior
         if (LIFE.world.insideInterior) {
             var interiorName = LIFE.world.insideInterior;
-            var friendlyNames = { classroom: 'the classroom', hsclassroom: 'the classroom', playerhome: 'your home', hospital: 'the hospital' };
+            var friendlyNames = { classroom: 'the classroom', hsclassroom: 'the classroom', playerhome: 'your home', hospital: 'the hospital', workplace: 'the workplace', police_interior: 'the police station' };
             LIFE.world.exitInterior();
             LIFE.ui.showPopup('Left ' + (friendlyNames[interiorName] || interiorName), '#ff9800');
             return;
@@ -1945,90 +1953,7 @@ LIFE.getSimDate = function() {
     };
 };
 
-// ============================================================
-// WEATHER SYSTEM
-// ============================================================
-LIFE.weather = {
-    current: 'clear',   // clear, cloudy, rain, storm, fog, windy
-    timer: 0,           // time until next weather change
-    intensity: 0,       // 0-1 for visual effects
-    _transitionTimer: 0,
-    _targetIntensity: 0
-};
-
-LIFE.WEATHER_TYPES = [
-    { name: 'clear',  weight: 40, fogMod: 0,    lightMod: 0,    happinessMod: 0.005 },
-    { name: 'cloudy', weight: 25, fogMod: -30,  lightMod: -0.1, happinessMod: -0.002 },
-    { name: 'rain',   weight: 15, fogMod: -50,  lightMod: -0.2, happinessMod: -0.005 },
-    { name: 'storm',  weight: 5,  fogMod: -80,  lightMod: -0.3, happinessMod: -0.01 },
-    { name: 'fog',    weight: 10, fogMod: -100, lightMod: -0.15, happinessMod: -0.003 },
-    { name: 'windy',  weight: 5,  fogMod: -20,  lightMod: -0.05, happinessMod: 0 }
-];
-
-LIFE.weather.changeWeather = function() {
-    var totalWeight = 0;
-    for (var i = 0; i < LIFE.WEATHER_TYPES.length; i++) totalWeight += LIFE.WEATHER_TYPES[i].weight;
-    var roll = Math.random() * totalWeight;
-    var cumulative = 0;
-    for (var j = 0; j < LIFE.WEATHER_TYPES.length; j++) {
-        cumulative += LIFE.WEATHER_TYPES[j].weight;
-        if (roll <= cumulative) {
-            LIFE.weather.current = LIFE.WEATHER_TYPES[j].name;
-            LIFE.weather._targetIntensity = 0.3 + Math.random() * 0.7;
-            break;
-        }
-    }
-    LIFE.weather.timer = 120 + Math.random() * 300; // 2-7 minutes
-    LIFE.weather._transitionTimer = 5; // 5 second transition
-};
-
-LIFE.weather.getWeatherData = function() {
-    for (var i = 0; i < LIFE.WEATHER_TYPES.length; i++) {
-        if (LIFE.WEATHER_TYPES[i].name === LIFE.weather.current) return LIFE.WEATHER_TYPES[i];
-    }
-    return LIFE.WEATHER_TYPES[0];
-};
-
-LIFE.weather.update = function(dt) {
-    if (LIFE.state.gamePhase !== 'playing') return;
-    var skip = { hospital: true, jail: true, execution: true, death: true, womb: true };
-    if (skip[LIFE.state.currentStage]) return;
-    // Don't weather indoors
-    if (LIFE.world.built && LIFE.world.insideInterior) return;
-
-    LIFE.weather.timer -= dt;
-    if (LIFE.weather.timer <= 0) LIFE.weather.changeWeather();
-
-    // Smooth intensity transition
-    if (LIFE.weather._transitionTimer > 0) {
-        LIFE.weather._transitionTimer -= dt;
-        var t = 1 - Math.max(0, LIFE.weather._transitionTimer / 5);
-        LIFE.weather.intensity += (LIFE.weather._targetIntensity - LIFE.weather.intensity) * t * dt;
-    }
-
-    // Apply weather effects to scene
-    var wd = LIFE.weather.getWeatherData();
-    if (LIFE.scene.fog) {
-        LIFE.scene.fog.far = Math.max(30, (LIFE.scene.fog.far || 200) + wd.fogMod * LIFE.weather.intensity * dt * 0.5);
-        // Slowly normalize fog when clear
-        if (wd.name === 'clear') {
-            LIFE.scene.fog.far = Math.min(200, LIFE.scene.fog.far + 2 * dt);
-        }
-    }
-
-    // Mood effects from weather
-    if (wd.happinessMod !== 0) {
-        LIFE.state.stats.happiness = Math.max(0, Math.min(100,
-            LIFE.state.stats.happiness + wd.happinessMod * LIFE.weather.intensity * dt));
-    }
-
-    // Rain/storm darkens ambient slightly
-    if (wd.name === 'rain' || wd.name === 'storm') {
-        if (LIFE.ambientLight) {
-            LIFE.ambientLight.intensity = Math.max(0.1, LIFE.ambientLight.intensity + wd.lightMod * 0.01);
-        }
-    }
-};
+// Weather system removed
 
 // ============================================================
 // DAY / NIGHT CYCLE
@@ -2301,9 +2226,16 @@ document.addEventListener('keydown', function(e) {
         if (e.code === 'KeyR' && !LIFE.dialogue.active && !state.shopOpen && !state.friendsOpen) {
             LIFE.ui.openTimeSkip();
         }
+        if (e.code === 'KeyJ' && !LIFE.dialogue.active && !state.shopOpen) {
+            LIFE.quests.toggleLog();
+        }
         if (!LIFE.dialogue.active && e.code >= 'Digit1' && e.code <= 'Digit4') {
             LIFE.performAction(parseInt(e.code[5]) - 1);
         }
+    }
+    // Close quest log with ESC
+    if (e.code === 'Escape' && LIFE.quests.logOpen) {
+        LIFE.quests.toggleLog();
     }
 });
 
@@ -2371,6 +2303,7 @@ LIFE.startGame = function() {
     LIFE.canvas.requestPointerLock();
     LIFE.sounds.init(); LIFE.sounds.resume();
     if (LIFE.state.gamePhase === 'start') {
+        if (LIFE.quests) LIFE.quests.reset();
         LIFE.state.gamePhase = 'womb'; LIFE.state.wombTimer = 0; LIFE.state.age = -1;
         LIFE.buildEnvironment('womb'); LIFE.createPlayer();
         LIFE.player.group.position.set(0, 1.5, 0); LIFE.ui.hideGameUI();
@@ -2634,6 +2567,9 @@ LIFE.advanceYear = function() {
             }, 2000);
         }
     }
+
+    // Quest system year advance
+    if (LIFE.quests) LIFE.quests.onYearAdvance();
 
     // health death check
     if (state.stats.health <= 0 && !state.deathTriggered) {
@@ -2996,7 +2932,7 @@ LIFE.animate = function() {
             // day/night lighting cycle
             LIFE.updateDayNight(dt);
             // weather system
-            LIFE.weather.update(dt);
+            // weather removed
             // update date/time display
             LIFE.ui.updateDateTime();
             LIFE.economy.passiveIncome(dt);
@@ -3008,9 +2944,11 @@ LIFE.animate = function() {
             LIFE.updateActionAnim(dt);
             LIFE.updateCamera();
 
-            // Event and news systems
+            // Event, news, and quest systems
             LIFE.events.update(dt);
             LIFE.news.update(dt);
+            LIFE.quests.update(dt);
+            LIFE.quests.updateHUD();
 
             // Open world culling and shadow following
             if (LIFE.world.built && !LIFE.world.insideInterior) {

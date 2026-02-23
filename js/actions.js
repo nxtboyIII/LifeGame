@@ -54,12 +54,77 @@ LIFE.performAction = function(idx) {
         if (state.nearestNPC) { LIFE.dialogue.talkToNPC(state.nearestNPC); state.actionCooldown = 0.5; return; }
         LIFE.sounds.talk();
     } else if (actName === 'work') {
-        var earned = LIFE.economy.doWork();
-        if (earned > 0) {
-            var career = LIFE.economy.getCareer();
-            LIFE.ui.showPopup('+$' + earned + ' ' + (career ? career.workText : ''), '#4caf50');
-            LIFE.sounds.work(); LIFE.sounds.money();
+        // Block working while in classroom
+        if (LIFE.world.built && LIFE.world.insideInterior && (LIFE.world.insideInterior === 'classroom' || LIFE.world.insideInterior === 'hsclassroom')) {
+            LIFE.ui.showPopup("You're in class! Pay attention!", '#ff9800');
+            state.actionCooldown = 1.0; return;
+        }
+        if (!LIFE.world.built && state.dayPhase === 'classroom') {
+            LIFE.ui.showPopup("You're in class! Pay attention!", '#ff9800');
+            state.actionCooldown = 1.0; return;
+        }
+        // Check if player has a career
+        var career = LIFE.economy.getCareer();
+        var hasCareer = career && career.income > 0 && state.age >= 14 && state.age <= 64;
+
+        if (hasCareer && LIFE.world.built) {
+            // Must be at or near their workplace
+            var atWorkplace = false;
+            var insideWorkplace = false;
+
+            // Check if inside workplace interior matching their career
+            if (LIFE.world.insideInterior === 'workplace' && LIFE.world._currentBuildingCareer === state.career) {
+                atWorkplace = true;
+                insideWorkplace = true;
+            }
+
+            // Check if near their career building in the open world
+            if (!atWorkplace && LIFE.player && LIFE.JOB_BUILDINGS) {
+                var cityDef = LIFE.ZONE_DEFS.city;
+                var px = LIFE.player.group.position.x;
+                var pz = LIFE.player.group.position.z;
+                for (var ji = 0; ji < LIFE.JOB_BUILDINGS.length; ji++) {
+                    var jb = LIFE.JOB_BUILDINGS[ji];
+                    if (jb.career === state.career) {
+                        var jx = jb.x + cityDef.cx;
+                        var jz = jb.z + cityDef.cz;
+                        var jdist = Math.sqrt((px - jx) * (px - jx) + (pz - jz) * (pz - jz));
+                        if (jdist < 12) { atWorkplace = true; break; }
+                    }
+                }
+            }
+
+            if (!atWorkplace) {
+                var buildingLabel = '';
+                for (var jk = 0; jk < LIFE.JOB_BUILDINGS.length; jk++) {
+                    if (LIFE.JOB_BUILDINGS[jk].career === state.career) { buildingLabel = LIFE.JOB_BUILDINGS[jk].label; break; }
+                }
+                LIFE.ui.showPopup('Go to the ' + buildingLabel + ' to work!', '#ff9800');
+                state.actionCooldown = 1.0; return;
+            }
+
+            var earned = LIFE.economy.doWork();
+            if (earned > 0) {
+                // Bonus for being inside the workplace building
+                if (insideWorkplace) {
+                    var bonus = Math.floor(earned * 0.5);
+                    earned += bonus;
+                    state.money += bonus;
+                    LIFE.ui.showPopup('+$' + earned + ' ' + career.workText + ' (on-site bonus!)', '#4caf50');
+                } else {
+                    LIFE.ui.showPopup('+$' + earned + ' ' + career.workText, '#4caf50');
+                }
+                LIFE.sounds.work(); LIFE.sounds.money();
+            }
+        } else if (hasCareer) {
+            // Non-world mode (legacy) - work anywhere
+            var earned2 = LIFE.economy.doWork();
+            if (earned2 > 0) {
+                LIFE.ui.showPopup('+$' + earned2 + ' ' + (career ? career.workText : ''), '#4caf50');
+                LIFE.sounds.work(); LIFE.sounds.money();
+            }
         } else {
+            // Kid jobs work anywhere
             var kidResult = LIFE.economy.doKidJob();
             if (kidResult && kidResult.earned > 0) {
                 LIFE.ui.showPopup('+$' + kidResult.earned + ' ' + kidResult.job.text, '#4caf50');

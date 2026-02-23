@@ -30,7 +30,9 @@ LIFE.STAGES = {
     // hospital (teleported to, not age-mapped)
     hospital:     { ages: [-7, -7], bg: 0xf5f5f5, fog: [0xf5f5f5, 12, 30], ground: 0xe0e0e0 },
     // event center (in open world, not age-mapped)
-    eventcenter:  { ages: [-8, -8], bg: 0x87ceeb, fog: [0x87ceeb, 30, 80], ground: 0x555555 }
+    eventcenter:  { ages: [-8, -8], bg: 0x87ceeb, fog: [0x87ceeb, 30, 80], ground: 0x555555 },
+    // workplace interiors (entered via doors on career buildings)
+    workplace:    { ages: [-9, -9], bg: 0xf0f0f0, fog: [0xf0f0f0, 10, 25], ground: 0xbdbdbd }
 };
 
 // ============================================================
@@ -74,7 +76,9 @@ LIFE.NPC_NAMES = {
     hsclassroom:['Teacher', 'Student', 'Student', 'Student', 'Student'],
     hospital:   ['Doctor', 'Nurse', 'Nurse'],
     dealership: ['Car Salesman'],
-    eventcenter: ['Ticket Seller', 'Food Vendor', 'Stranger', 'Stranger']
+    eventcenter: ['Ticket Seller', 'Food Vendor', 'Stranger', 'Stranger'],
+    workplace: ['Coworker', 'Coworker', 'Boss'],
+    police_interior: ['Police', 'Police']
 };
 
 // Job buildings placed in city (x, z, career, label)

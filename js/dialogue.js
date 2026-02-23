@@ -2377,6 +2377,9 @@ LIFE.dialogue.talkToNPC = function(npc) {
         return;
     }
 
+    // Try to offer a quest before regular dialogue
+    if (LIFE.quests && LIFE.quests.tryOfferQuest(npc)) return;
+
     // default dialogues by type (filter by age if minAge specified)
     var dialogues = LIFE.NPC_DIALOGUES[type];
     if (!dialogues || dialogues.length === 0) {

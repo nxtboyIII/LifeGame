@@ -649,13 +649,7 @@ LIFE.ui.updateDateTime = function() {
     if (LIFE.state.dayPhase === 'classroom') phaseLabel = ' | In Class';
     else if (LIFE.state.dayPhase === 'schoolyard') phaseLabel = ' | Recess';
     else if (LIFE.state.dayPhase === 'home') phaseLabel = ' | At Home';
-    // Weather indicator
-    var weatherLabel = '';
-    if (LIFE.weather && LIFE.weather.current !== 'clear' && LIFE.state.gamePhase === 'playing') {
-        var weatherIcons = { cloudy: 'Cloudy', rain: 'Rain', storm: 'Storm', fog: 'Foggy', windy: 'Windy' };
-        weatherLabel = ' | ' + (weatherIcons[LIFE.weather.current] || '');
-    }
-    el.textContent = sim.text + phaseLabel + weatherLabel;
+    el.textContent = sim.text + phaseLabel;
 
     // update speed display
     var speedEl = document.getElementById('speedDisplay');

@@ -260,7 +260,7 @@ LIFE.buildCity = function() {
         LIFE.makeBuilding(xOff, -15, 8, h, 6, bColors[j % bColors.length]);
     }
 
-    // JOB BUILDINGS with signs
+    // JOB BUILDINGS with signs and enterable doors
     LIFE.JOB_BUILDINGS.forEach(function(jb) {
         LIFE.makeBuilding(jb.x, jb.z, 10, 8, 8, jb.color);
         // sign above door
@@ -281,6 +281,21 @@ LIFE.buildCity = function() {
         LIFE.addEnv(sign);
         // door marker
         LIFE.addEnv(LIFE.makeBox(2, 3, 0.2, 0x5d4037, jb.x, 1.5, jb.z + 4.1));
+        // "Press G to Enter" prompt
+        var enterCanvas = document.createElement('canvas');
+        enterCanvas.width = 256; enterCanvas.height = 48;
+        var ectx = enterCanvas.getContext('2d');
+        ectx.fillStyle = 'rgba(33,150,243,0.85)';
+        ectx.fillRect(0, 0, 256, 48);
+        ectx.fillStyle = '#fff';
+        ectx.font = 'bold 18px Arial';
+        ectx.textAlign = 'center';
+        ectx.fillText('Press G to Enter', 128, 32);
+        var etex = new THREE.CanvasTexture(enterCanvas);
+        var enterSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: etex, transparent: true, depthTest: false }));
+        enterSprite.position.set(jb.x, 3.8, jb.z + 4.5);
+        enterSprite.scale.set(2, 0.4, 1);
+        LIFE.addEnv(enterSprite);
     });
 
     // PROPERTY BUILDINGS with signs & price tags
@@ -1297,4 +1312,206 @@ LIFE.buildEventCenter = function() {
     LIFE.makeTree(20, 10, 0.8);
     LIFE.makeTree(-20, -15, 0.9);
     LIFE.makeTree(20, -15, 0.9);
+};
+
+// ============================================================
+// WORKPLACE INTERIORS (entered via doors on career buildings)
+// ============================================================
+LIFE.WORKPLACE_CONFIGS = {
+    business: { title: 'Office', floorColor: 0xbdbdbd, wallColor: 0xeceff1, accent: 0x37474f },
+    doctor:   { title: 'Hospital', floorColor: 0xeeeeee, wallColor: 0xfafafa, accent: 0x1565c0 },
+    teacher:  { title: 'School', floorColor: 0xf5deb3, wallColor: 0xfff9c4, accent: 0xc62828 },
+    artist:   { title: 'Art Studio', floorColor: 0xf5f5f5, wallColor: 0xfafafa, accent: 0x7b1fa2 },
+    scientist:{ title: 'Research Lab', floorColor: 0xe0e0e0, wallColor: 0xeceff1, accent: 0x1565c0 },
+    worker:   { title: 'Store', floorColor: 0xbcaaa4, wallColor: 0xefebe9, accent: 0x4caf50 },
+    musician: { title: 'Music Studio', floorColor: 0x424242, wallColor: 0x616161, accent: 0x9c27b0 },
+    athlete:  { title: 'Sports Arena', floorColor: 0x795548, wallColor: 0xefebe9, accent: 0xff5722 },
+    streamer: { title: 'Media House', floorColor: 0x37474f, wallColor: 0x455a64, accent: 0x00bcd4 },
+    actor:    { title: 'Theater', floorColor: 0x4e342e, wallColor: 0x5d4037, accent: 0xffc107 }
+};
+
+LIFE.buildWorkplace = function(careerType) {
+    var cfg = LIFE.WORKPLACE_CONFIGS[careerType];
+    if (!cfg) cfg = { title: 'Workplace', floorColor: 0xbdbdbd, wallColor: 0xeceff1, accent: 0x37474f };
+
+    var roomW = 14, roomD = 12;
+    LIFE.makeGround(25, cfg.floorColor);
+
+    // Floor
+    LIFE.addEnv(LIFE.makeBox(roomW, 0.1, roomD, cfg.floorColor, 0, 0.05, 0));
+    // Walls
+    LIFE.addSolid(roomW, 3.5, 0.3, cfg.wallColor, 0, 1.75, -roomD / 2);
+    LIFE.addSolid(0.3, 3.5, roomD, cfg.wallColor, -roomW / 2, 1.75, 0);
+    LIFE.addSolid(0.3, 3.5, roomD, cfg.wallColor, roomW / 2, 1.75, 0);
+    // Front wall with door gap
+    LIFE.addSolid((roomW / 2 - 1.5), 3.5, 0.3, cfg.wallColor, -(roomW / 4 + 0.75), 1.75, roomD / 2);
+    LIFE.addSolid((roomW / 2 - 1.5), 3.5, 0.3, cfg.wallColor, (roomW / 4 + 0.75), 1.75, roomD / 2);
+    LIFE.addEnv(LIFE.makeBox(3, 0.5, 0.3, cfg.wallColor, 0, 3.25, roomD / 2));
+    // Ceiling
+    LIFE.addEnv(LIFE.makeBox(roomW + 0.6, 0.15, roomD + 0.6, cfg.wallColor, 0, 3.5, 0));
+
+    // Lights
+    LIFE.addEnv(LIFE.makeBox(4, 0.05, 0.3, 0xffffff, -2, 3.4, 0));
+    LIFE.addEnv(LIFE.makeBox(4, 0.05, 0.3, 0xffffff, 3, 3.4, 0));
+    var l1 = new THREE.PointLight(0xf5f5f5, 0.6, 12); l1.position.set(-2, 3.3, 0); LIFE.addEnv(l1);
+    var l2 = new THREE.PointLight(0xf5f5f5, 0.6, 12); l2.position.set(3, 3.3, 0); LIFE.addEnv(l2);
+
+    // Exit sign
+    var exitCanvas = document.createElement('canvas');
+    exitCanvas.width = 256; exitCanvas.height = 48;
+    var ectx = exitCanvas.getContext('2d');
+    ectx.fillStyle = 'rgba(76,175,80,0.9)';
+    ectx.fillRect(0, 0, 256, 48);
+    ectx.fillStyle = '#fff';
+    ectx.font = 'bold 20px Arial';
+    ectx.textAlign = 'center';
+    ectx.fillText('Press G to Leave', 128, 32);
+    var etex = new THREE.CanvasTexture(exitCanvas);
+    var exitSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: etex, transparent: true, depthTest: false }));
+    exitSprite.position.set(0, 3.8, roomD / 2 + 0.5);
+    exitSprite.scale.set(2.5, 0.5, 1);
+    LIFE.addEnv(exitSprite);
+
+    // Title sign on back wall
+    var titleCanvas = document.createElement('canvas');
+    titleCanvas.width = 256; titleCanvas.height = 64;
+    var tctx = titleCanvas.getContext('2d');
+    tctx.fillStyle = 'rgba(0,0,0,0.6)';
+    tctx.fillRect(0, 0, 256, 64);
+    tctx.fillStyle = '#ffffff';
+    tctx.font = 'bold 28px Arial';
+    tctx.textAlign = 'center';
+    tctx.fillText(cfg.title, 128, 42);
+    var ttex = new THREE.CanvasTexture(titleCanvas);
+    var titleSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: ttex, transparent: true, depthTest: false }));
+    titleSprite.position.set(0, 2.5, -roomD / 2 + 0.2);
+    titleSprite.scale.set(3, 0.75, 1);
+    LIFE.addEnv(titleSprite);
+
+    // Career-specific furniture
+    if (careerType === 'business' || careerType === 'streamer') {
+        // Desks in rows
+        for (var dx = -4; dx <= 4; dx += 4) {
+            LIFE.addSolid(2.5, 0.8, 1, 0x8d6e63, dx, 0.4, -2);
+            LIFE.addEnv(LIFE.makeBox(0.5, 0.5, 0.5, 0x424242, dx, 0.25, -3.2));
+            LIFE.addEnv(LIFE.makeBox(0.5, 0.6, 0.08, 0x424242, dx, 0.8, -3.42));
+            // Monitor
+            LIFE.addEnv(LIFE.makeBox(0.6, 0.5, 0.05, 0x263238, dx, 1.1, -1.7));
+            LIFE.addEnv(LIFE.makeBox(0.15, 0.2, 0.15, 0x424242, dx, 0.82, -1.7));
+        }
+        // Water cooler
+        LIFE.addEnv(LIFE.makeBox(0.4, 1.2, 0.4, 0xbbdefb, 6, 0.6, -4));
+        // File cabinet
+        LIFE.addSolid(1, 1.2, 0.6, 0x78909c, -6, 0.6, -4);
+    } else if (careerType === 'doctor') {
+        // Exam table
+        LIFE.addSolid(3, 0.6, 1.5, 0xe0e0e0, -3, 0.3, -2);
+        LIFE.addEnv(LIFE.makeBox(2.8, 0.15, 1.4, 0xfafafa, -3, 0.68, -2));
+        // Medical cabinet
+        LIFE.addSolid(2, 2, 0.5, 0xeceff1, 4, 1, -5.5);
+        // Red cross
+        LIFE.addEnv(LIFE.makeBox(0.6, 0.15, 0.05, 0xf44336, 0, 2.5, -5.8));
+        LIFE.addEnv(LIFE.makeBox(0.15, 0.6, 0.05, 0xf44336, 0, 2.5, -5.8));
+        // Desk
+        LIFE.addSolid(2.5, 0.8, 1, 0x8d6e63, 4, 0.4, 3);
+    } else if (careerType === 'teacher') {
+        // Teacher's desk at front
+        LIFE.addSolid(3, 0.8, 1.2, 0x8d6e63, 0, 0.4, -4);
+        // Student desks
+        for (var r = 0; r < 2; r++) {
+            for (var c = -4; c <= 4; c += 4) {
+                LIFE.addSolid(1.5, 0.6, 1, 0xbcaaa4, c, 0.3, r * 3);
+            }
+        }
+        // Blackboard
+        LIFE.addEnv(LIFE.makeBox(6, 2.5, 0.1, 0x2e7d32, 0, 2, -5.8));
+    } else if (careerType === 'artist') {
+        // Easels
+        for (var ei = -4; ei <= 4; ei += 4) {
+            LIFE.addEnv(LIFE.makeBox(0.08, 2, 0.08, 0x8d6e63, ei, 1, -3));
+            LIFE.addEnv(LIFE.makeBox(0.08, 2, 0.08, 0x8d6e63, ei - 0.3, 1, -2.5));
+            LIFE.addEnv(LIFE.makeBox(1.2, 1.5, 0.05, 0xfafafa, ei, 1.5, -3.1));
+        }
+        // Paint supplies on table
+        LIFE.addSolid(3, 0.7, 1, 0x8d6e63, 5, 0.35, 2);
+    } else if (careerType === 'scientist') {
+        // Lab benches
+        LIFE.addSolid(5, 0.9, 1.2, 0xeceff1, -3, 0.45, -3);
+        LIFE.addSolid(5, 0.9, 1.2, 0xeceff1, 3, 0.45, -3);
+        // Beakers (colored cylinders)
+        var beakerColors = [0x4fc3f7, 0x81c784, 0xffb74d, 0xce93d8];
+        for (var bi = 0; bi < 4; bi++) {
+            var bk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.4, 8),
+                new THREE.MeshPhongMaterial({ color: beakerColors[bi], transparent: true, opacity: 0.7 }));
+            bk.position.set(-4 + bi * 0.6, 1.1, -3);
+            LIFE.addEnv(bk);
+        }
+        // Computer station
+        LIFE.addSolid(2, 0.8, 1, 0x455a64, 4, 0.4, 3);
+        LIFE.addEnv(LIFE.makeBox(0.8, 0.6, 0.05, 0x263238, 4, 1.1, 2.7));
+    } else if (careerType === 'musician') {
+        // Stage area
+        LIFE.addEnv(LIFE.makeBox(8, 0.3, 5, 0x5d4037, 0, 0.15, -2));
+        // Piano
+        LIFE.addSolid(2, 1, 1.5, 0x212121, -3, 0.5, -2);
+        // Drum set
+        LIFE.addEnv(LIFE.makeBox(1, 0.8, 1, 0x8d6e63, 3, 0.4, -3));
+        var cymbal = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.03, 12),
+            new THREE.MeshPhongMaterial({ color: 0xffd54f }));
+        cymbal.position.set(3.8, 1.2, -3);
+        LIFE.addEnv(cymbal);
+        // Mic stand
+        LIFE.addEnv(LIFE.makeBox(0.05, 1.5, 0.05, 0x757575, 0, 0.75, -1));
+        LIFE.addEnv(LIFE.makeBox(0.15, 0.15, 0.1, 0x424242, 0, 1.55, -1));
+        // Speakers
+        LIFE.addSolid(1, 1.5, 1, 0x212121, -5, 0.75, -3);
+        LIFE.addSolid(1, 1.5, 1, 0x212121, 5, 0.75, -3);
+    } else if (careerType === 'athlete') {
+        // Gym equipment
+        // Bench press
+        LIFE.addSolid(2, 0.5, 0.8, 0x424242, -4, 0.25, -2);
+        LIFE.addEnv(LIFE.makeBox(0.08, 1.5, 0.08, 0x757575, -5, 0.75, -2));
+        LIFE.addEnv(LIFE.makeBox(0.08, 1.5, 0.08, 0x757575, -3, 0.75, -2));
+        LIFE.addEnv(LIFE.makeBox(2.5, 0.08, 0.08, 0x757575, -4, 1.5, -2));
+        // Treadmill
+        LIFE.addSolid(1, 1.2, 2.5, 0x37474f, 3, 0.6, -2);
+        // Punching bag
+        var bag = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 1.2, 8),
+            new THREE.MeshPhongMaterial({ color: 0xc62828 }));
+        bag.position.set(0, 2, -4);
+        LIFE.addEnv(bag);
+        LIFE.addEnv(LIFE.makeBox(0.04, 0.8, 0.04, 0x757575, 0, 2.8, -4));
+        // Mats
+        LIFE.addEnv(LIFE.makeBox(6, 0.05, 4, 0x1565c0, 0, 0.08, 2));
+    } else if (careerType === 'actor') {
+        // Stage with curtains
+        LIFE.addEnv(LIFE.makeBox(10, 0.3, 6, 0x5d4037, 0, 0.15, -2));
+        // Curtains
+        LIFE.addEnv(LIFE.makeBox(0.3, 3, 6, 0xc62828, -5.2, 1.65, -2));
+        LIFE.addEnv(LIFE.makeBox(0.3, 3, 6, 0xc62828, 5.2, 1.65, -2));
+        // Spotlight
+        var spot = new THREE.SpotLight(0xfff9c4, 0.8, 15, Math.PI / 6);
+        spot.position.set(0, 3.4, 2);
+        spot.target.position.set(0, 0, -2);
+        LIFE.addEnv(spot);
+        LIFE.addEnv(spot.target);
+        // Props box
+        LIFE.addSolid(2, 1, 1.5, 0x795548, 5, 0.5, 4);
+        // Seating
+        for (var sr = 0; sr < 2; sr++) {
+            LIFE.addEnv(LIFE.makeBox(8, 0.4, 0.8, 0x616161, 0, 0.2, 3 + sr * 1.5));
+        }
+    } else {
+        // Generic: worker/store — shelves
+        for (var si = -4; si <= 4; si += 4) {
+            LIFE.addSolid(1.5, 2, 0.5, 0x8d6e63, si, 1, -4);
+            LIFE.addEnv(LIFE.makeBox(1.4, 0.08, 0.4, 0x795548, si, 0.6, -4));
+            LIFE.addEnv(LIFE.makeBox(1.4, 0.08, 0.4, 0x795548, si, 1.2, -4));
+            LIFE.addEnv(LIFE.makeBox(1.4, 0.08, 0.4, 0x795548, si, 1.8, -4));
+        }
+        // Counter
+        LIFE.addSolid(6, 1, 0.8, 0xbcaaa4, 0, 0.5, 3);
+        // Cash register
+        LIFE.addEnv(LIFE.makeBox(0.4, 0.3, 0.3, 0x37474f, 2, 1.15, 3));
+    }
 };

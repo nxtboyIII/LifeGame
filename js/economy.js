@@ -578,7 +578,8 @@ LIFE.economy.markPurchased = function(itemName) {
 LIFE.economy.getLifeSummary = function() {
     var s = LIFE.state;
     var career = LIFE.economy.getCareer();
-    var lines = [];
+    var name = s.playerName || 'Unknown';
+    var paras = [];
 
     // Compute moral alignment score
     var goodDeeds = (s.livesHelped || 0) * 3 + (s.volunteerHours || 0) * 2 + (s.peopleMentored || 0) * 3 +
@@ -586,167 +587,185 @@ LIFE.economy.getLifeSummary = function() {
     var badDeeds = (s.kills || 0) * 5 + (s.totalThefts || 0) * 2 + (s.totalExtortions || 0) * 3 +
                    (s.innocentsHarmed || 0) * 2 + (s.betrayals || 0) * 3 + (s.arsonCount || 0) * 4;
     var alignment = goodDeeds - badDeeds + s.reputation;
-
-    // Life title based on how you lived
-    var lifeTitle = '';
-    if (alignment > 100 && s.reputation >= 70) lifeTitle = 'A Saint Among Us';
-    else if (alignment < -100 && s.reputation <= -70) lifeTitle = 'A Monster in Human Form';
-    else if (alignment > 60 && s.reputation >= 50) lifeTitle = 'A Pillar of the Community';
-    else if (alignment < -60 && s.reputation <= -50) lifeTitle = 'A Menace to Society';
-    else if (alignment > 30 && s.reputation >= 25) lifeTitle = 'A Good Person';
-    else if (alignment < -30 && s.reputation <= -25) lifeTitle = 'A Troubled Soul';
-    else if (s.fame >= 75 && s.reputation >= 30) lifeTitle = 'A Beloved Legend';
-    else if (s.fame >= 75 && s.reputation <= -30) lifeTitle = 'An Infamous Figure';
-    else if (s.fame >= 75) lifeTitle = 'A Legend Remembered';
-    else if (s.money > 500000) lifeTitle = 'A Life of Wealth';
-    else if (s.married && s.hasKids) lifeTitle = 'A Family Life';
-    else if (s.kills === 0 && s.timesJailed === 0 && s.friends <= 3 && s.reputation > -10 && s.reputation < 10) lifeTitle = 'A Life Unremarkable';
-    else lifeTitle = 'A Life Lived';
-
-    lines.push('═══════════════════════════════');
-    lines.push(lifeTitle.toUpperCase());
-    lines.push('═══════════════════════════════');
-    lines.push('');
-    lines.push('Died at age ' + s.age + (s.deathCause ? ' — ' + s.deathCause : ''));
-    lines.push('');
-
-    // The Life Story section
-    lines.push('── THE LIFE OF ' + (s.playerName || 'Unknown').toUpperCase() + ' ──');
-    lines.push('');
-    lines.push('Career: ' + (career ? career.title : 'Unemployed') + (s.careerLevel > 0 ? ' (Lvl ' + s.careerLevel + ')' : ''));
-    if (s.fame > 0) {
-        var fameInfo = LIFE.economy.getFameLevel();
-        lines.push('Fame: ' + fameInfo.title + ' (' + Math.floor(s.fame) + ')');
-    }
-    lines.push('Married: ' + (s.married ? (s.spouseName || 'Yes') : 'No'));
-    if (s.childCount > 0) {
-        var kidNames = s.childNames && s.childNames.length > 0 ? s.childNames.join(', ') : '';
-        lines.push('Children: ' + s.childCount + (kidNames ? ' (' + kidNames + ')' : ''));
-    }
-    lines.push('Net Worth: $' + Math.floor(Math.max(0, s.money)).toLocaleString());
-    if (s.ownedCar) lines.push('Car: ' + s.ownedCar.name);
-    if (s.properties && s.properties.length > 0) {
-        var totalRent = 0;
-        s.properties.forEach(function(p) { totalRent += p.rent; });
-        lines.push('Properties: ' + s.properties.length + ' ($' + totalRent.toLocaleString() + '/yr rental income)');
-    }
-    if (s.investments && s.investments.length > 0) {
-        var totalInv = 0;
-        s.investments.forEach(function(inv) { totalInv += inv.value; });
-        lines.push('Investments: $' + totalInv.toLocaleString());
-    }
-
-    lines.push('');
-    lines.push('── CHARACTER ──');
-    lines.push('Intelligence: ' + Math.floor(s.stats.intelligence) + '  |  Charisma: ' + Math.floor(s.stats.charisma));
-    lines.push('Health: ' + Math.floor(Math.max(0, s.stats.health)) + '  |  Happiness: ' + Math.floor(s.stats.happiness));
     var repInfo = LIFE.getRepTitle(s.reputation);
-    lines.push('Reputation: ' + (repInfo.title || 'Neutral') + ' (' + (s.reputation > 0 ? '+' : '') + Math.floor(s.reputation) + ')');
-    lines.push('Friends: ' + s.friends + '  |  Enemies: ' + s.enemies);
 
-    // Virtue achievements
-    var hasGoodDeeds = (s.livesHelped || 0) > 0 || (s.volunteerHours || 0) > 0 || (s.peopleMentored || 0) > 0 || (s.charitableDonations || 0) > 0;
-    if (hasGoodDeeds) {
-        lines.push('');
-        lines.push('── GOOD DEEDS ──');
-        if ((s.livesHelped || 0) > 0) lines.push('Lives directly helped or saved: ' + s.livesHelped);
-        if ((s.peopleMentored || 0) > 0) lines.push('People mentored: ' + s.peopleMentored);
-        if ((s.volunteerHours || 0) > 0) lines.push('Times volunteered: ' + s.volunteerHours);
-        if ((s.charitableDonations || 0) > 0) lines.push('Charitable donations: $' + s.charitableDonations.toLocaleString());
-        if ((s.totalSpeeches || 0) > 0) lines.push('Inspirational speeches: ' + s.totalSpeeches);
-        if ((s.addictionRecoveries || 0) > 0) lines.push('Addiction recoveries aided: ' + s.addictionRecoveries);
-        if ((s.scholarshipsGiven || 0) > 0) lines.push('Academic achievements: ' + s.scholarshipsGiven);
-    }
+    // === OPENING PARAGRAPH: Death notice ===
+    var opening = name + ' passed away at the age of ' + s.age;
+    if (s.deathCause === 'health' || s.deathCause === 'poor health') opening += ' after a long struggle with failing health.';
+    else if (s.deathCause === 'substance abuse') opening += ', succumbing to the effects of substance abuse.';
+    else if (s.deathCause === 'Police') opening += ' in a fatal confrontation with law enforcement.';
+    else if (s.deathCause === 'injuries') opening += ' from injuries sustained in an altercation.';
+    else if (s.deathCause === 'died in prison') opening += ' while serving time in prison.';
+    else if (s.deathCause === 'executed for crimes') opening += ' by execution, having been convicted of serious crimes.';
+    else if (s.deathCause === 'inmate attack') opening += ' after being attacked by a fellow inmate.';
+    else if (s.age >= 75) opening += ', passing peacefully after a long life.';
+    else if (s.age >= 60) opening += '.';
+    else opening += ', taken far too soon.';
+    paras.push(opening);
 
-    // Dark deeds
-    var hasBadDeeds = s.kills > 0 || (s.totalThefts || 0) > 0 || (s.totalExtortions || 0) > 0 || s.timesJailed > 0;
-    if (hasBadDeeds) {
-        lines.push('');
-        lines.push('── DARK DEEDS ──');
-        if (s.kills > 0) lines.push('Lives taken: ' + s.kills);
-        if ((s.totalThefts || 0) > 0) lines.push('Thefts committed: ' + s.totalThefts);
-        if ((s.totalExtortions || 0) > 0) lines.push('People extorted: ' + s.totalExtortions);
-        if ((s.betrayals || 0) > 0) lines.push('People betrayed: ' + s.betrayals);
-        if ((s.innocentsHarmed || 0) > 0) lines.push('Innocents harmed: ' + s.innocentsHarmed);
-        if (s.timesJailed > 0) lines.push('Times imprisoned: ' + s.timesJailed);
-        if (s.bounty > 0) lines.push('Outstanding bounty: $' + s.bounty.toLocaleString());
-        if (s.drugUses > 0) lines.push('Drug uses: ' + s.drugUses);
-    }
-
-    // Life milestones (the story of their life)
-    if (s.milestones && s.milestones.length > 0) {
-        lines.push('');
-        lines.push('── KEY MOMENTS ──');
-        // Sort by age
-        var sorted = s.milestones.slice().sort(function(a,b) { return a.age - b.age; });
-        for (var mi = 0; mi < Math.min(sorted.length, 12); mi++) {
-            var m = sorted[mi];
-            var prefix = m.type === 'good' ? '★' : m.type === 'bad' ? '✗' : '•';
-            lines.push('  Age ' + m.age + ': ' + prefix + ' ' + m.text);
-        }
-    }
-
-    // Family violence
-    if (s.familyKiller && s.killedFamily && s.killedFamily.length > 0) {
-        lines.push('');
-        lines.push('You murdered your own family... ' + s.killedFamily.join(', ') + '.');
-    } else if (s.familyAbuser) {
-        lines.push('');
-        lines.push('You were violent toward your own family.');
-    }
-
-    // The epitaph
-    lines.push('');
-    lines.push('═══════════════════════════════');
-
-    // Rich moral epitaph based on life lived
-    if (alignment > 100 && s.reputation >= 70 && (s.livesHelped || 0) >= 5) {
-        lines.push('The world lost a beacon of light today. ' + (s.playerName || 'They') + ' dedicated their');
-        lines.push('life to making others\' lives better. Their name will be spoken');
-        lines.push('with gratitude and reverence for generations to come.');
-        if ((s.livesHelped || 0) >= 10) lines.push('They saved more lives than most people will ever touch.');
-    } else if (alignment > 60 && s.reputation >= 40) {
-        lines.push('A good person has left this world. They chose kindness');
-        lines.push('when it would have been easier to look away. The community');
-        lines.push('is poorer for their passing.');
-    } else if (alignment < -100 && s.kills >= 5) {
-        lines.push('A shadow has lifted from this world. ' + (s.playerName || 'They') + ' left behind');
-        lines.push('a trail of suffering and broken lives. History will');
-        lines.push('remember them as a cautionary tale of what happens');
-        lines.push('when a human being chooses darkness at every turn.');
-    } else if (alignment < -60 && s.reputation <= -50) {
-        lines.push('Few will mourn their passing. Their life was a series');
-        lines.push('of choices that brought pain to those around them.');
-        lines.push('The world moves on, scarred but unbowed.');
-    } else if (s.kills === 0 && s.timesJailed === 0 && s.friends <= 2 && s.reputation > -10 && s.reputation < 10 && s.fame < 10) {
-        lines.push('They came. They lived. They left. No headlines, no monuments,');
-        lines.push('no great deeds or terrible sins. Just another life that');
-        lines.push('passed through the world like a leaf on the wind.');
-        lines.push('Nobody will remember them in twenty years.');
-    } else if (s.fame >= 75 && s.reputation >= 30) {
-        lines.push('A star has gone out. Millions knew their name, and many');
-        lines.push('loved them. Their legacy will echo through the culture');
-        lines.push('for years to come.');
-    } else if (s.money > 1000000 && s.reputation > 0) {
-        lines.push('They built an empire and left behind a fortune.');
-        lines.push('Whether the world is better for it remains to be seen.');
-    } else if (s.married && s.hasKids && s.reputation >= 0) {
-        lines.push('They built a family, loved deeply, and left behind');
-        lines.push('the most important legacy of all — the people');
-        lines.push('whose lives they shaped.');
-    } else if (s.stats.happiness >= 80 && s.reputation >= 0) {
-        lines.push('They lived joyfully and without regret.');
-        lines.push('Not everyone changes the world, but they enjoyed');
-        lines.push('the one they were given. That counts for something.');
-    } else if (s.kills > 0 && s.reputation < -30) {
-        lines.push('Blood stains their legacy. The choices they made');
-        lines.push('cannot be undone, and those they hurt will carry');
-        lines.push('the scars long after today.');
+    // === CAREER & FINANCES PARAGRAPH ===
+    var careerPara = '';
+    var careerTitle = career ? career.title : 'Unemployed';
+    if (career && career.income > 0) {
+        careerPara = 'In life, ' + name + ' worked as a ' + careerTitle;
+        if (s.careerLevel > 0) careerPara += ', rising to level ' + s.careerLevel + ' in their field';
+        careerPara += '.';
     } else {
-        lines.push('And so another life comes to an end.');
-        lines.push('They were neither saint nor sinner — just human.');
+        careerPara = name + ' never held a steady career.';
+    }
+    if (s.fame >= 75) {
+        var fameInfo = LIFE.economy.getFameLevel();
+        careerPara += ' They achieved ' + fameInfo.title.toLowerCase() + ' status, becoming a household name.';
+    } else if (s.fame >= 30) {
+        careerPara += ' They gained some measure of local fame along the way.';
+    }
+    var netWorth = Math.floor(Math.max(0, s.money));
+    if (netWorth > 500000) careerPara += ' They amassed a fortune of $' + netWorth.toLocaleString() + '.';
+    else if (netWorth > 50000) careerPara += ' They left behind $' + netWorth.toLocaleString() + ' in savings.';
+    else if (netWorth < 100) careerPara += ' They died with virtually nothing to their name.';
+
+    if (s.properties && s.properties.length > 0) {
+        careerPara += ' They owned ' + s.properties.length + ' propert' + (s.properties.length > 1 ? 'ies' : 'y') + '.';
+    }
+    if (s.ownedCar) careerPara += ' They drove a ' + s.ownedCar.name + '.';
+    paras.push(careerPara);
+
+    // === FAMILY PARAGRAPH ===
+    var familyPara = '';
+    if (s.married && s.hasKids) {
+        familyPara = name + ' is survived by ' + (s.spouseName ? 'their spouse ' + s.spouseName : 'a loving spouse');
+        if (s.childCount > 0) {
+            var kidNames = s.childNames && s.childNames.length > 0 ? s.childNames.join(', ') : '';
+            familyPara += ' and ' + s.childCount + ' child' + (s.childCount > 1 ? 'ren' : '');
+            if (kidNames) familyPara += ' (' + kidNames + ')';
+        }
+        familyPara += '.';
+    } else if (s.married) {
+        familyPara = name + ' is survived by ' + (s.spouseName ? 'their spouse ' + s.spouseName : 'a loving spouse') + '. They had no children.';
+    } else if (s.hasKids && s.childCount > 0) {
+        var kidNames2 = s.childNames && s.childNames.length > 0 ? s.childNames.join(', ') : '';
+        familyPara = name + ' is survived by ' + s.childCount + ' child' + (s.childCount > 1 ? 'ren' : '') + (kidNames2 ? ' (' + kidNames2 + ')' : '') + '. They never married.';
+    } else {
+        familyPara = name + ' never married and had no children.';
     }
 
-    lines.push('═══════════════════════════════');
-    return lines.join('\n');
+    if (s.friends > 5) familyPara += ' They were surrounded by many friends — ' + s.friends + ' people called them a friend.';
+    else if (s.friends > 0) familyPara += ' They had ' + s.friends + ' close friend' + (s.friends > 1 ? 's' : '') + '.';
+    else familyPara += ' They died alone, without any close friends.';
+
+    if (s.enemies > 5) familyPara += ' They also made plenty of enemies — ' + s.enemies + ' people bore them a grudge.';
+    else if (s.enemies > 0) familyPara += ' ' + s.enemies + ' person' + (s.enemies > 1 ? 's' : '') + ' considered them an enemy.';
+    paras.push(familyPara);
+
+    // === GOOD DEEDS PARAGRAPH ===
+    var goodParts = [];
+    if ((s.livesHelped || 0) > 0) goodParts.push('directly helped or saved ' + s.livesHelped + ' ' + (s.livesHelped > 1 ? 'lives' : 'life'));
+    if ((s.peopleMentored || 0) > 0) goodParts.push('mentored ' + s.peopleMentored + ' ' + (s.peopleMentored > 1 ? 'people' : 'person'));
+    if ((s.volunteerHours || 0) > 0) goodParts.push('volunteered their time on ' + s.volunteerHours + ' occasion' + (s.volunteerHours > 1 ? 's' : ''));
+    if ((s.charitableDonations || 0) > 0) goodParts.push('donated $' + s.charitableDonations.toLocaleString() + ' to charitable causes');
+    if ((s.totalSpeeches || 0) > 0) goodParts.push('gave ' + s.totalSpeeches + ' inspirational speech' + (s.totalSpeeches > 1 ? 'es' : ''));
+    if ((s.addictionRecoveries || 0) > 0) goodParts.push('helped ' + s.addictionRecoveries + ' person' + (s.addictionRecoveries > 1 ? 's' : '') + ' recover from addiction');
+    if ((s.scholarshipsGiven || 0) > 0) goodParts.push('supported ' + s.scholarshipsGiven + ' academic achievement' + (s.scholarshipsGiven > 1 ? 's' : ''));
+
+    if (goodParts.length > 0) {
+        var goodPara = 'Throughout their life, ' + name + ' ' + goodParts[0];
+        for (var gi = 1; gi < goodParts.length; gi++) {
+            goodPara += (gi === goodParts.length - 1) ? ', and ' : ', ';
+            goodPara += goodParts[gi];
+        }
+        goodPara += '.';
+        paras.push(goodPara);
+    }
+
+    // === DARK DEEDS PARAGRAPH ===
+    var darkParts = [];
+    if (s.kills > 0) darkParts.push('took ' + s.kills + ' ' + (s.kills > 1 ? 'lives' : 'life'));
+    if ((s.totalThefts || 0) > 0) darkParts.push('committed ' + s.totalThefts + ' theft' + (s.totalThefts > 1 ? 's' : ''));
+    if ((s.totalExtortions || 0) > 0) darkParts.push('extorted ' + s.totalExtortions + ' ' + (s.totalExtortions > 1 ? 'people' : 'person'));
+    if ((s.betrayals || 0) > 0) darkParts.push('betrayed ' + s.betrayals + ' ' + (s.betrayals > 1 ? 'people' : 'person'));
+    if ((s.innocentsHarmed || 0) > 0) darkParts.push('harmed ' + s.innocentsHarmed + ' innocent' + (s.innocentsHarmed > 1 ? 's' : ''));
+    if (s.timesJailed > 0) darkParts.push('spent time in prison ' + s.timesJailed + ' time' + (s.timesJailed > 1 ? 's' : ''));
+    if (s.drugUses > 0) darkParts.push('used drugs on ' + s.drugUses + ' occasion' + (s.drugUses > 1 ? 's' : ''));
+
+    if (darkParts.length > 0) {
+        var darkPara = 'However, ' + name + '\'s life was not without darkness. They ' + darkParts[0];
+        for (var di = 1; di < darkParts.length; di++) {
+            darkPara += (di === darkParts.length - 1) ? ', and ' : ', ';
+            darkPara += darkParts[di];
+        }
+        darkPara += '.';
+        if (s.bounty > 0) darkPara += ' An outstanding bounty of $' + s.bounty.toLocaleString() + ' remained on their head.';
+        paras.push(darkPara);
+    }
+
+    // === FAMILY VIOLENCE ===
+    if (s.familyKiller && s.killedFamily && s.killedFamily.length > 0) {
+        paras.push('In perhaps the most tragic chapter of their story, ' + name + ' murdered members of their own family: ' + s.killedFamily.join(', ') + '.');
+    } else if (s.familyAbuser) {
+        paras.push(name + ' was known to be violent toward members of their own family.');
+    }
+
+    // === KEY MOMENTS PARAGRAPH ===
+    if (s.milestones && s.milestones.length > 0) {
+        var sorted = s.milestones.slice().sort(function(a,b) { return a.age - b.age; });
+        var momentPara = 'Looking back, several moments defined ' + name + '\'s life: ';
+        var shown = Math.min(sorted.length, 8);
+        for (var mi = 0; mi < shown; mi++) {
+            var m = sorted[mi];
+            momentPara += 'At age ' + m.age + ', they ' + m.text.charAt(0).toLowerCase() + m.text.slice(1);
+            if (mi < shown - 1) momentPara += '. ';
+            else momentPara += '.';
+        }
+        paras.push(momentPara);
+    }
+
+    // === CHARACTER SUMMARY LINE ===
+    var charDesc = [];
+    if (s.stats.intelligence >= 80) charDesc.push('brilliant');
+    else if (s.stats.intelligence >= 50) charDesc.push('sharp-minded');
+    else if (s.stats.intelligence < 25) charDesc.push('simple');
+    if (s.stats.charisma >= 80) charDesc.push('incredibly charismatic');
+    else if (s.stats.charisma >= 50) charDesc.push('well-spoken');
+    else if (s.stats.charisma < 20) charDesc.push('awkward');
+    if (s.stats.happiness >= 80) charDesc.push('deeply content');
+    else if (s.stats.happiness < 20) charDesc.push('profoundly unhappy');
+    if (s.stats.beauty >= 80) charDesc.push('strikingly beautiful');
+
+    if (charDesc.length > 0) {
+        var charPara = 'Those who knew ' + name + ' would describe them as ' + charDesc.join(', ');
+        if (repInfo.title) charPara += ', with a reputation as someone ' + repInfo.title.toLowerCase();
+        charPara += '.';
+        paras.push(charPara);
+    } else if (repInfo.title) {
+        paras.push('In the community, ' + name + ' was known as someone ' + repInfo.title.toLowerCase() + '.');
+    }
+
+    // === CLOSING EPITAPH ===
+    var epitaph = '';
+    if (alignment > 100 && s.reputation >= 70 && (s.livesHelped || 0) >= 5) {
+        epitaph = 'The world lost a beacon of light today. ' + name + ' dedicated their life to making others\' lives better. Their name will be spoken with gratitude and reverence for generations to come.';
+    } else if (alignment > 60 && s.reputation >= 40) {
+        epitaph = 'A good person has left this world. They chose kindness when it would have been easier to look away. The community is poorer for their passing.';
+    } else if (alignment < -100 && s.kills >= 5) {
+        epitaph = 'A shadow has lifted from this world. ' + name + ' left behind a trail of suffering and broken lives. History will remember them as a cautionary tale of what happens when someone chooses darkness at every turn.';
+    } else if (alignment < -60 && s.reputation <= -50) {
+        epitaph = 'Few will mourn their passing. Their life was a series of choices that brought pain to those around them. The world moves on, scarred but unbowed.';
+    } else if (s.kills === 0 && s.timesJailed === 0 && s.friends <= 2 && s.reputation > -10 && s.reputation < 10 && s.fame < 10) {
+        epitaph = 'They came. They lived. They left. No headlines, no monuments, no great deeds or terrible sins. Just another life that passed through the world like a leaf on the wind.';
+    } else if (s.fame >= 75 && s.reputation >= 30) {
+        epitaph = 'A star has gone out. Millions knew their name, and many loved them. Their legacy will echo through the culture for years to come.';
+    } else if (s.money > 1000000 && s.reputation > 0) {
+        epitaph = 'They built an empire and left behind a fortune. Whether the world is better for it remains to be seen.';
+    } else if (s.married && s.hasKids && s.reputation >= 0) {
+        epitaph = 'They built a family, loved deeply, and left behind the most important legacy of all — the people whose lives they shaped.';
+    } else if (s.stats.happiness >= 80 && s.reputation >= 0) {
+        epitaph = 'They lived joyfully and without regret. Not everyone changes the world, but they enjoyed the one they were given.';
+    } else if (s.kills > 0 && s.reputation < -30) {
+        epitaph = 'Blood stains their legacy. The choices they made cannot be undone, and those they hurt will carry the scars long after today.';
+    } else {
+        epitaph = 'And so another life comes to an end. They were neither saint nor sinner — just human.';
+    }
+    paras.push(epitaph);
+
+    return paras.join('\n\n');
 };
