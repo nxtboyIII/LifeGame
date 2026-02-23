@@ -13,7 +13,11 @@ LIFE.quests = {
     _bannerText: '',
     _bannerSubText: '',
     _compassTarget: null,
-    logOpen: false
+    logOpen: false,
+    _marker3d: null,
+    _markerBobTime: 0,
+    _activeQuestIndex: 0,
+    _killLog: []
 };
 
 // ============================================================
@@ -331,8 +335,74 @@ LIFE.QUEST_DEFS = [
         ],
         reward: { money: 20, rep: 5, charisma: 2, happiness: 2 },
         timeLimit: 480
+    },
+
+    // ========== KILL QUESTS ==========
+    {
+        id: 'clean_streets', title: 'Clean the Streets',
+        desc: 'There\'s a dealer poisoning this neighborhood. Take him out and I\'ll make it worth your while.',
+        type: 'bad', giver: ['Stranger', 'Neighbor'],
+        minAge: 18, maxAge: 55,
+        objectives: [
+            { type: 'kill', npcType: 'Dealer', count: 1, desc: 'Eliminate the dealer' },
+            { type: 'return', desc: 'Report back' }
+        ],
+        reward: { money: 500, rep: -5, onComplete: function() { LIFE.logCrime('Contract killing'); if (Math.random() < 0.3) LIFE.addWanted(2); } },
+        timeLimit: 600
+    },
+    {
+        id: 'settling_scores', title: 'Settling Scores',
+        desc: 'Someone\'s been causing problems around here. Handle it. Permanently.',
+        type: 'bad', giver: ['Dealer', 'Inmate'],
+        minAge: 16, maxAge: 50,
+        objectives: [
+            { type: 'kill', npcType: 'Stranger', count: 1, desc: 'Take out the target' },
+            { type: 'return', desc: 'Report back' }
+        ],
+        reward: { money: 400, rep: -15, onComplete: function() { LIFE.logCrime('Contract killing'); LIFE.state.betrayals++; } },
+        timeLimit: 600
     }
 ];
+
+// ============================================================
+// LIVE NPC TRACKING
+// ============================================================
+
+// Find the live position of a quest giver NPC (tracks them as they walk)
+LIFE.quests._findLiveGiver = function(quest) {
+    if (!quest.giver) return quest.giverPos;
+    var allNPCs = LIFE.getAllNPCs ? LIFE.getAllNPCs() : LIFE.npcs;
+    for (var i = 0; i < allNPCs.length; i++) {
+        var npc = allNPCs[i];
+        if (!npc.alive) continue;
+        if (npc.name === quest.giver.name || npc.type === quest.giver.type) {
+            return { x: npc.char.group.position.x, z: npc.char.group.position.z };
+        }
+    }
+    // NPC dead or gone — fall back to static snapshot
+    return quest.giverPos;
+};
+
+// Cycle active quest (called by V key)
+LIFE.quests.cycleActiveQuest = function() {
+    if (LIFE.quests.active.length === 0) return;
+    LIFE.quests._activeQuestIndex = (LIFE.quests._activeQuestIndex + 1) % LIFE.quests.active.length;
+    var q = LIFE.quests.active[LIFE.quests._activeQuestIndex];
+    if (q) LIFE.quests._showObjectiveBanner('Tracking: ' + q.title);
+};
+
+// Set active quest by index (called from quest log UI)
+LIFE.quests.setActiveQuest = function(index) {
+    if (index >= 0 && index < LIFE.quests.active.length) {
+        LIFE.quests._activeQuestIndex = index;
+        LIFE.quests.refreshLogUI();
+    }
+};
+
+// Kill tracking callback — called from LIFE.killNPC
+LIFE.quests._onNPCKilled = function(type, name) {
+    LIFE.quests._killLog.push({ type: type, name: name });
+};
 
 // ============================================================
 // QUEST MANAGEMENT
@@ -365,6 +435,8 @@ LIFE.quests.start = function(questDef, giverNPC) {
             desc: obj.desc,
             radius: obj.radius || 15,
             duration: obj.duration || 0,
+            count: obj.count || 0,
+            _killCount: 0,
             completed: false
         });
     }
@@ -520,9 +592,12 @@ LIFE.quests.update = function(dt) {
 
         // Pending return: wait for player to talk to giver NPC (T key near them)
         if (quest._pendingReturn) {
-            // Set compass to giver
-            if (qi === 0 && quest.giverPos) {
-                LIFE.quests._compassTarget = { x: quest.giverPos.x, z: quest.giverPos.z };
+            // Set compass to giver (live tracking)
+            if (qi === LIFE.quests._activeQuestIndex) {
+                var liveReturnPos = LIFE.quests._findLiveGiver(quest);
+                if (liveReturnPos) {
+                    LIFE.quests._compassTarget = { x: liveReturnPos.x, z: liveReturnPos.z };
+                }
             }
             continue;
         }
@@ -534,13 +609,20 @@ LIFE.quests.update = function(dt) {
 
         var obj = quest.objectives[quest.currentObj];
 
-        // Set compass target for first quest
-        if (qi === 0) {
+        // Set compass target for active quest (live tracking)
+        if (qi === LIFE.quests._activeQuestIndex) {
             if (obj.type === 'go_to') {
                 var cp = LIFE.quests._getZonePos(obj.zone);
                 if (cp) LIFE.quests._compassTarget = { x: cp.x, z: cp.z };
-            } else if (obj.type === 'return' && quest.giverPos) {
-                LIFE.quests._compassTarget = { x: quest.giverPos.x, z: quest.giverPos.z };
+            } else if (obj.type === 'return') {
+                var liveGiverPos = LIFE.quests._findLiveGiver(quest);
+                if (liveGiverPos) {
+                    LIFE.quests._compassTarget = { x: liveGiverPos.x, z: liveGiverPos.z };
+                }
+            } else if (obj.type === 'kill') {
+                // Point compass to nearest alive target NPC of the kill type
+                var killTarget = LIFE.quests._findNearestKillTarget(obj.npcType, px, pz);
+                if (killTarget) LIFE.quests._compassTarget = { x: killTarget.x, z: killTarget.z };
             }
         }
 
@@ -557,9 +639,10 @@ LIFE.quests.update = function(dt) {
                 }
             }
         } else if (obj.type === 'return') {
-            if (quest.giverPos) {
-                var rdx = px - quest.giverPos.x;
-                var rdz = pz - quest.giverPos.z;
+            var liveRetPos = LIFE.quests._findLiveGiver(quest);
+            if (liveRetPos) {
+                var rdx = px - liveRetPos.x;
+                var rdz = pz - liveRetPos.z;
                 var rdist = Math.sqrt(rdx * rdx + rdz * rdz);
                 if (rdist < 12) {
                     // Check if this is the last objective
@@ -614,6 +697,24 @@ LIFE.quests.update = function(dt) {
                     LIFE.quests._advanceObjective(quest);
                     break;
                 }
+            }
+        } else if (obj.type === 'kill') {
+            // Check kill log for matching NPC type
+            var killCount = obj._killCount || 0;
+            var needed = obj.count || 1;
+            for (var ki = LIFE.quests._killLog.length - 1; ki >= 0; ki--) {
+                var kEntry = LIFE.quests._killLog[ki];
+                if (kEntry.type === obj.npcType) {
+                    killCount++;
+                    LIFE.quests._killLog.splice(ki, 1);
+                }
+            }
+            obj._killCount = killCount;
+            if (killCount >= needed) {
+                obj.completed = true;
+                quest.currentObj++;
+                LIFE.quests._showObjectiveBanner('Target eliminated!');
+                LIFE.quests._advanceObjective(quest);
             }
         }
     }
@@ -690,6 +791,24 @@ LIFE.quests._getZonePos = function(zone) {
     return null;
 };
 
+// Find nearest alive NPC of a given type (for kill quest compass)
+LIFE.quests._findNearestKillTarget = function(npcType, px, pz) {
+    var allNPCs = LIFE.getAllNPCs ? LIFE.getAllNPCs() : LIFE.npcs;
+    var best = null, bestDist = Infinity;
+    for (var i = 0; i < allNPCs.length; i++) {
+        var npc = allNPCs[i];
+        if (!npc.alive || npc.type !== npcType) continue;
+        var dx = px - npc.char.group.position.x;
+        var dz = pz - npc.char.group.position.z;
+        var d = dx * dx + dz * dz;
+        if (d < bestDist) {
+            bestDist = d;
+            best = { x: npc.char.group.position.x, z: npc.char.group.position.z };
+        }
+    }
+    return best;
+};
+
 // ============================================================
 // QUEST OFFER THROUGH DIALOGUE
 // ============================================================
@@ -716,13 +835,25 @@ LIFE.quests.tryOfferQuest = function(npc) {
     var capturedDef = questDef;
     var capturedNPC = npc;
 
-    LIFE.dialogue.open(npc.name, questDef.desc, [
+    var questOptions = [
         { text: 'Accept' + (rewardParts.length > 0 ? ' (' + rewardParts.join(', ') + ')' : '') + typeLabel,
           onSelect: function() {
             LIFE.quests.start(capturedDef, capturedNPC);
         }},
         { text: 'Not interested.' }
-    ], true);
+    ];
+
+    // Always inject persistent shop options for shop NPCs
+    if (LIFE.NPC_PERSISTENT_OPTIONS) {
+        var persistent = LIFE.NPC_PERSISTENT_OPTIONS[npc.type];
+        if (persistent) {
+            for (var pi = 0; pi < persistent.length; pi++) {
+                questOptions.push(persistent[pi]);
+            }
+        }
+    }
+
+    LIFE.dialogue.open(npc.name, questDef.desc, questOptions, true);
 
     return true;
 };
@@ -757,13 +888,14 @@ LIFE.quests.refreshLogUI = function() {
     for (var i = 0; i < LIFE.quests.active.length; i++) {
         var q = LIFE.quests.active[i];
         var typeClass = q.type === 'good' ? 'questGood' : q.type === 'bad' ? 'questBad' : 'questNeutral';
+        var isActive = (i === LIFE.quests._activeQuestIndex);
         var timeLeft = Math.max(0, q.timeLimit - q._elapsed);
         var timeMin = Math.floor(timeLeft / 60);
         var timeSec = Math.floor(timeLeft % 60);
         var typeIcon = q.type === 'good' ? '&#9733; ' : q.type === 'bad' ? '&#9760; ' : '';
 
-        html += '<div class="questEntry ' + typeClass + '">';
-        html += '<div class="questTitle">' + typeIcon + q.title + '</div>';
+        html += '<div class="questEntry ' + typeClass + (isActive ? ' questActive' : '') + '" onclick="LIFE.quests.setActiveQuest(' + i + ')" style="cursor:pointer">';
+        html += '<div class="questTitle">' + typeIcon + q.title + (isActive ? ' <span class="questTrackBadge">TRACKING</span>' : '') + '</div>';
         html += '<div class="questDesc">' + q.desc + '</div>';
 
         if (q.giver) {
@@ -785,6 +917,11 @@ LIFE.quests.refreshLogUI = function() {
                 var pct = Math.min(100, Math.floor((q._waitTimer / obj.duration) * 100));
                 objText += ' (' + pct + '%)';
             }
+            if (obj.type === 'kill') {
+                var kc = obj._killCount || 0;
+                var kn = obj.count || 1;
+                objText += ' (' + kc + '/' + kn + ')';
+            }
 
             html += '<div class="questObj ' + cls + '">' + marker + ' ' + objText + '</div>';
         }
@@ -803,7 +940,7 @@ LIFE.quests.refreshLogUI = function() {
         if (q.reward.happiness) rewards.push('+' + q.reward.happiness + ' happiness');
         if (rewards.length > 0) html += '<div class="questReward">Reward: ' + rewards.join(', ') + '</div>';
 
-        html += '<div class="questAbandon" onclick="LIFE.quests.abandon(' + q.id + ')">Abandon Quest</div>';
+        html += '<div class="questAbandon" onclick="event.stopPropagation(); LIFE.quests.abandon(' + q.id + ')">Abandon Quest</div>';
         html += '</div>';
     }
 
@@ -831,6 +968,11 @@ LIFE.quests.updateHUD = function() {
     var hud = document.getElementById('questHUD');
     if (!hud) return;
 
+    // Clamp active quest index
+    if (LIFE.quests._activeQuestIndex >= LIFE.quests.active.length) {
+        LIFE.quests._activeQuestIndex = 0;
+    }
+
     if (LIFE.quests.active.length === 0) {
         hud.style.display = 'none';
         var arrow = document.getElementById('questArrow');
@@ -839,7 +981,8 @@ LIFE.quests.updateHUD = function() {
     }
 
     hud.style.display = 'block';
-    var q = LIFE.quests.active[0];
+    var q = LIFE.quests.active[LIFE.quests._activeQuestIndex];
+    if (!q) q = LIFE.quests.active[0];
     var obj = q.objectives[q.currentObj];
 
     var objText;
@@ -853,6 +996,11 @@ LIFE.quests.updateHUD = function() {
         if (obj.type === 'wait' && obj.duration > 0) {
             var pct = Math.min(100, Math.floor((q._waitTimer / obj.duration) * 100));
             objText += ' (' + pct + '%)';
+        }
+        if (obj.type === 'kill') {
+            var kc = obj._killCount || 0;
+            var kn = obj.count || 1;
+            objText += ' (' + kc + '/' + kn + ')';
         }
     } else {
         objText = 'Complete';
@@ -871,20 +1019,58 @@ LIFE.quests.updateHUD = function() {
         '<div class="questHUDTime"' + timeWarn + '>' + timeStr + '</div>';
 
     if (LIFE.quests.active.length > 1) {
-        hud.innerHTML += '<div class="questHUDMore">+' + (LIFE.quests.active.length - 1) + ' more (J)</div>';
+        hud.innerHTML += '<div class="questHUDMore">+' + (LIFE.quests.active.length - 1) + ' more (V: cycle)</div>';
     }
 
     // Update directional compass arrow
     LIFE.quests._updateCompassArrow();
 };
 
+LIFE.quests._create3DMarker = function() {
+    if (LIFE.quests._marker3d) return;
+
+    // Diamond / double-cone marker
+    var coneGeo = new THREE.ConeGeometry(0.4, 1.0, 4);
+    var markerMat = new THREE.MeshPhongMaterial({
+        color: 0x2196f3, emissive: 0x1565c0, emissiveIntensity: 0.6,
+        transparent: true, opacity: 0.85
+    });
+    var topCone = new THREE.Mesh(coneGeo, markerMat);
+    topCone.rotation.y = Math.PI / 4; // rotate diamond shape
+
+    var botGeo = new THREE.ConeGeometry(0.25, 0.5, 4);
+    var botCone = new THREE.Mesh(botGeo, markerMat.clone());
+    botCone.rotation.x = Math.PI; // flip upside down
+    botCone.rotation.y = Math.PI / 4;
+    botCone.position.y = -0.75;
+
+    var group = new THREE.Group();
+    group.add(topCone);
+    group.add(botCone);
+    group.visible = false;
+
+    // Glow ring at the base
+    var ringGeo = new THREE.RingGeometry(0.5, 0.8, 16);
+    var ringMat = new THREE.MeshBasicMaterial({
+        color: 0x2196f3, transparent: true, opacity: 0.35, side: THREE.DoubleSide
+    });
+    var ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = -1.0;
+    group.add(ring);
+
+    LIFE.scene.add(group);
+    LIFE.quests._marker3d = group;
+    LIFE.quests._markerRing = ring;
+};
+
 LIFE.quests._updateCompassArrow = function() {
     var arrow = document.getElementById('questArrow');
-    if (!arrow) return;
 
     var target = LIFE.quests._compassTarget;
     if (!target || !LIFE.player) {
-        arrow.style.display = 'none';
+        if (arrow) arrow.style.display = 'none';
+        if (LIFE.quests._marker3d) LIFE.quests._marker3d.visible = false;
         return;
     }
 
@@ -895,28 +1081,62 @@ LIFE.quests._updateCompassArrow = function() {
     var dist = Math.sqrt(dx * dx + dz * dz);
 
     if (dist < 5) {
-        arrow.style.display = 'none';
+        if (arrow) arrow.style.display = 'none';
+        if (LIFE.quests._marker3d) LIFE.quests._marker3d.visible = false;
         return;
     }
 
-    arrow.style.display = 'block';
+    // --- 3D marker in world space ---
+    LIFE.quests._create3DMarker();
+    var marker = LIFE.quests._marker3d;
+    marker.visible = true;
 
-    // Get camera yaw to make arrow screen-relative
-    var camYaw = LIFE.state.playerRotY || 0;
-    var angleToTarget = Math.atan2(dx, -dz);
-    var relAngle = angleToTarget - camYaw;
+    // Bob up and down
+    LIFE.quests._markerBobTime += 0.03;
+    var bobY = Math.sin(LIFE.quests._markerBobTime * 2) * 0.3;
+    marker.position.set(target.x, 5.5 + bobY, target.z);
 
-    arrow.style.transform = 'rotate(' + (relAngle * 180 / Math.PI) + 'deg)';
-
-    // Show distance
-    var distText = dist < 100 ? Math.round(dist) + 'm' : Math.round(dist) + 'm';
-    arrow.querySelector('.arrowDist').textContent = distText;
+    // Spin slowly
+    marker.rotation.y += 0.02;
 
     // Color based on proximity
-    var arrowEl = arrow.querySelector('.arrowIcon');
-    if (dist < 20) arrowEl.style.color = '#4caf50';
-    else if (dist < 50) arrowEl.style.color = '#ffeb3b';
-    else arrowEl.style.color = '#fff';
+    var markerColor = dist < 20 ? 0x4caf50 : dist < 50 ? 0xffeb3b : 0x2196f3;
+    var emissiveColor = dist < 20 ? 0x2e7d32 : dist < 50 ? 0xf9a825 : 0x1565c0;
+    marker.children[0].material.color.setHex(markerColor);
+    marker.children[0].material.emissive.setHex(emissiveColor);
+    marker.children[1].material.color.setHex(markerColor);
+    marker.children[1].material.emissive.setHex(emissiveColor);
+
+    // Pulse the ring
+    if (LIFE.quests._markerRing) {
+        LIFE.quests._markerRing.material.color.setHex(markerColor);
+        var pulse = 0.25 + Math.sin(LIFE.quests._markerBobTime * 3) * 0.15;
+        LIFE.quests._markerRing.material.opacity = pulse;
+    }
+
+    // --- 2D HUD distance indicator ---
+    if (arrow) {
+        arrow.style.display = 'block';
+
+        // Get camera yaw to make arrow screen-relative
+        var camYaw = LIFE.state.playerRotY || 0;
+        var angleToTarget = Math.atan2(dx, dz);
+        var relAngle = -(angleToTarget - camYaw);
+
+        arrow.style.transform = 'translateX(-50%) rotate(' + (relAngle * 180 / Math.PI) + 'deg)';
+
+        // Show distance
+        var distText = Math.round(dist) + 'm';
+        arrow.querySelector('.arrowDist').textContent = distText;
+
+        // Color based on proximity
+        var arrowPoly = arrow.querySelector('.arrowIcon polygon');
+        if (arrowPoly) {
+            if (dist < 20) arrowPoly.setAttribute('fill', '#4caf50');
+            else if (dist < 50) arrowPoly.setAttribute('fill', '#ffeb3b');
+            else arrowPoly.setAttribute('fill', '#fff');
+        }
+    }
 };
 
 // ============================================================
@@ -929,6 +1149,15 @@ LIFE.quests.reset = function() {
     LIFE.quests._nextId = 1;
     LIFE.quests._offerTimer = 0;
     LIFE.quests._compassTarget = null;
+    LIFE.quests._activeQuestIndex = 0;
+    LIFE.quests._killLog = [];
+    // Clean up 3D marker
+    if (LIFE.quests._marker3d) {
+        LIFE.scene.remove(LIFE.quests._marker3d);
+        LIFE.quests._marker3d = null;
+        LIFE.quests._markerRing = null;
+    }
+    LIFE.quests._markerBobTime = 0;
 };
 
 LIFE.quests.onYearAdvance = function() {

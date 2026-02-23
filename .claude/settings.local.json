@@ -13,7 +13,10 @@
       "Bash(node -e \"new Function\\(require\\(''fs''\\).readFileSync\\(''js/game.js'',''utf8''\\)\\)\")",
       "Bash(grep:*)",
       "Bash(node -c:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "WebSearch",
+      "WebFetch(domain:elevenlabs.io)",
+      "Bash(cd:*)"
     ]
   }
 }

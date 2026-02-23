@@ -43,7 +43,7 @@
     <div id="speedDisplay">72x</div>
     <div id="timerWrap"><div id="timerFill"></div></div>
     <div id="dateTime"></div>
-    <div id="skipHint">E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info</div>
+    <div id="skipHint">E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info | X: Pickup</div>
 
     <!-- News Banner (Plague Inc style) -->
     <div id="newsBanner">
@@ -61,13 +61,16 @@
     <!-- Actions -->
     <div id="actions"></div>
     <div id="weaponIndicator"></div>
-    <div id="controls">WASD: Move | Mouse: Look | Space: Jump | 1-4: Actions | E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info | G: Enter/Exit Building | V: Drive Car | J: Quests</div>
+    <div id="controls">WASD: Move | Mouse: Look | Space: Jump | 1-4: Actions | E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info | G: Enter/Exit Building | V: Drive Car | J: Quests | C: Cycle Quest | I: Inventory</div>
+
+    <!-- Pickup hint -->
+    <div id="pickupHint"></div>
 
     <!-- Quest HUD (small tracker) -->
     <div id="questHUD"></div>
 
     <!-- Quest compass arrow -->
-    <div id="questArrow"><span class="arrowIcon">&#9650;</span><span class="arrowDist"></span></div>
+    <div id="questArrow"><svg class="arrowIcon" width="20" height="36" viewBox="0 0 20 36"><polygon points="10,0 0,36 20,36" fill="#fff"/></svg><span class="arrowDist"></span></div>
 
     <!-- Quest objective banners (Skyrim-style) -->
     <div id="questBanner"><div class="qbTitle"></div><div class="qbSub"></div></div>
@@ -75,6 +78,43 @@
 
     <!-- Quest Log Panel -->
     <div id="questLog"></div>
+
+    <!-- Inventory Panel -->
+    <div id="inventoryPanel">
+        <div class="invHeader">INVENTORY<span class="invClose" onclick="LIFE.ui.closeInventory()">[I / ESC]</span></div>
+        <div class="invBody">
+            <div id="invItemList" class="invItemList"></div>
+            <div class="invPreview">
+                <canvas id="invPreviewCanvas" width="300" height="300"
+                    onmousedown="LIFE._invOnMouseDown(event)"
+                    onmousemove="LIFE._invOnMouseMove(event)"
+                    onmouseup="LIFE._invOnMouseUp()"
+                    onmouseleave="LIFE._invOnMouseUp()"></canvas>
+                <div id="invInfoName" class="invInfoName"></div>
+                <div id="invInfoDesc" class="invInfoDesc"></div>
+                <div id="invInfoStats" class="invInfoStats"></div>
+                <div class="invActions">
+                    <div id="invEquipBtn" class="invBtn" onclick="LIFE._invEquipSelected()">Equip</div>
+                    <div id="invUseBtn" class="invBtn invBtnUse" onclick="LIFE._invUseSelected()" style="display:none">Use</div>
+                    <div id="invDropBtn" class="invBtn invBtnDrop" onclick="LIFE._invDropSelected()">Drop</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug Console -->
+    <div id="debugConsole">
+        <div class="debugHeader">DEBUG CONSOLE <span class="debugClose">[`] Close</span></div>
+        <pre id="debugInfo"></pre>
+        <div class="debugBtns">
+            <div class="debugBtn debugBtnMain" onclick="LIFE.debugSkipTo25()">Skip to Age 25 (City + $100K)</div>
+            <div class="debugBtn" onclick="LIFE.debugGiveMoney(10000)">+$10K</div>
+            <div class="debugBtn" onclick="LIFE.debugGiveMoney(100000)">+$100K</div>
+            <div class="debugBtn" onclick="LIFE.debugHeal()">Full Heal</div>
+            <div class="debugBtn" onclick="LIFE.debugClearWanted()">Clear Wanted</div>
+            <div class="debugBtn" onclick="LIFE.debugGiveAllItems()">Give All Items</div>
+        </div>
+    </div>
 
     <!-- Dialogue box -->
     <div id="dialogueBox">

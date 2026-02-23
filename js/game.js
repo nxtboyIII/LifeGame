@@ -22,6 +22,7 @@ LIFE.state = {
     friendsOpen: false,
     // romance
     playerGender: null, // 'M' or 'F', chosen at birth
+    playerName: null, // set at birth based on gender
     spouseName: null, romanceTarget: null, romanceLevel: 0, childCount: 0, childNames: [], firstChildBornAge: null,
     // combat & crime
     hasGun: false, hasSwitchblade: false, kills: 0, shootCooldown: 0,
@@ -1383,6 +1384,960 @@ LIFE.getEquipped = function() {
 };
 
 // ============================================================
+// DROP & PICKUP ITEMS
+// ============================================================
+LIFE.droppedItems = [];
+
+LIFE.dropItem = function(index) {
+    var inv = LIFE.state.inventory;
+    if (index === undefined) index = LIFE.state.equippedIndex;
+    if (index < 0 || index >= inv.length) return;
+    var itemName = inv[index];
+    if (itemName === 'Fists') return; // can't drop fists
+
+    // Remove from inventory
+    inv.splice(index, 1);
+    if (LIFE.state.equippedIndex >= inv.length) LIFE.state.equippedIndex = Math.max(0, inv.length - 1);
+
+    // Update weapon flags
+    LIFE.state.hasGun = inv.indexOf('Pistol') >= 0;
+    LIFE.state.hasSwitchblade = inv.indexOf('Switchblade') >= 0;
+    LIFE.updateHeldWeapon();
+
+    // Create 3D mesh on the ground
+    if (!LIFE.player) return;
+    var pPos = LIFE.player.group.position;
+    var fwd = LIFE.state.playerRotY || 0;
+    var dropX = pPos.x + Math.sin(fwd) * 2;
+    var dropZ = pPos.z + Math.cos(fwd) * 2;
+
+    var itemData = LIFE.ITEM_DATA[itemName] || {};
+    var mesh;
+    if (itemData.type === 'melee' || itemData.type === 'ranged') {
+        mesh = LIFE.createWeaponMesh(itemName, 1.7);
+    } else {
+        mesh = LIFE.createItemMesh(itemName);
+    }
+    mesh.position.set(dropX, 0.3, dropZ);
+    mesh.scale.set(2, 2, 2);
+    LIFE.scene.add(mesh);
+
+    // Glow ring under item
+    var ringColor = itemData.type === 'valuable' ? 0xffd700
+        : itemData.type === 'food' ? 0x4caf50
+        : itemData.type === 'melee' || itemData.type === 'ranged' ? 0xf44336
+        : 0x4fc3f7;
+    var ringGeo = new THREE.RingGeometry(0.3, 0.5, 16);
+    var ringMat = new THREE.MeshBasicMaterial({
+        color: ringColor, transparent: true, opacity: 0.4, side: THREE.DoubleSide
+    });
+    var ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(dropX, 0.02, dropZ);
+    LIFE.scene.add(ring);
+
+    LIFE.droppedItems.push({
+        name: itemName,
+        mesh: mesh,
+        ring: ring,
+        ringMat: ringMat,
+        x: dropX, z: dropZ,
+        bobTime: 0
+    });
+
+    LIFE.ui.showPopup('Dropped ' + itemName, '#ff9800');
+};
+
+LIFE.pickupItem = function(droppedItem) {
+    if (!droppedItem) return;
+    LIFE.state.inventory.push(droppedItem.name);
+
+    // Update weapon flags
+    if (droppedItem.name === 'Pistol') LIFE.state.hasGun = true;
+    if (droppedItem.name === 'Switchblade') LIFE.state.hasSwitchblade = true;
+
+    // Remove 3D objects
+    LIFE.scene.remove(droppedItem.mesh);
+    LIFE.scene.remove(droppedItem.ring);
+
+    // Remove from array
+    var idx = LIFE.droppedItems.indexOf(droppedItem);
+    if (idx >= 0) LIFE.droppedItems.splice(idx, 1);
+
+    LIFE.ui.showPopup('Picked up ' + droppedItem.name, '#4fc3f7');
+};
+
+LIFE.updateDroppedItems = function(dt) {
+    for (var i = 0; i < LIFE.droppedItems.length; i++) {
+        var item = LIFE.droppedItems[i];
+        // Bob and spin
+        item.bobTime += dt;
+        item.mesh.position.y = 0.3 + Math.sin(item.bobTime * 2) * 0.1;
+        item.mesh.rotation.y += dt * 1.5;
+        // Pulse ring
+        item.ringMat.opacity = 0.25 + Math.sin(item.bobTime * 3) * 0.15;
+        item.ring.rotation.z += dt * 0.5;
+    }
+};
+
+LIFE._nearestDroppedItem = null;
+LIFE._nearestWorldItem = null;
+
+LIFE.updatePickupHint = function() {
+    var hint = document.getElementById('pickupHint');
+    if (!hint || !LIFE.player) {
+        LIFE._nearestDroppedItem = null;
+        LIFE._nearestWorldItem = null;
+        return;
+    }
+    var px = LIFE.player.group.position.x;
+    var pz = LIFE.player.group.position.z;
+    var best = null, bestDist = 4;
+    var bestType = null; // 'dropped' or 'world'
+
+    // Check player-dropped items
+    for (var i = 0; i < LIFE.droppedItems.length; i++) {
+        var item = LIFE.droppedItems[i];
+        var dx = px - item.x;
+        var dz = pz - item.z;
+        var d = Math.sqrt(dx * dx + dz * dz);
+        if (d < bestDist) {
+            bestDist = d;
+            best = item;
+            bestType = 'dropped';
+        }
+    }
+
+    // Check world items
+    for (var j = 0; j < LIFE.worldItems.length; j++) {
+        var wi = LIFE.worldItems[j];
+        var wdx = px - wi.x;
+        var wdz = pz - wi.z;
+        var wd = Math.sqrt(wdx * wdx + wdz * wdz);
+        if (wd < bestDist) {
+            bestDist = wd;
+            best = wi;
+            bestType = 'world';
+        }
+    }
+
+    LIFE._nearestDroppedItem = bestType === 'dropped' ? best : null;
+    LIFE._nearestWorldItem = bestType === 'world' ? best : null;
+
+    if (best) {
+        hint.textContent = 'Press X to pick up ' + best.name;
+        hint.style.display = 'block';
+        hint.style.color = '#4fc3f7';
+        hint.style.borderColor = 'rgba(79,195,247,0.4)';
+    } else {
+        hint.style.display = 'none';
+    }
+};
+
+LIFE.clearDroppedItems = function() {
+    for (var i = 0; i < LIFE.droppedItems.length; i++) {
+        LIFE.scene.remove(LIFE.droppedItems[i].mesh);
+        LIFE.scene.remove(LIFE.droppedItems[i].ring);
+    }
+    LIFE.droppedItems = [];
+    LIFE._nearestDroppedItem = null;
+};
+
+// ============================================================
+// ITEM DATA
+// ============================================================
+LIFE.ITEM_DATA = {
+    'Fists':        { desc: 'Your bare hands. Not great, but always available.', damage: 10, type: 'melee' },
+    'Switchblade':  { desc: 'A sharp folding knife. Quick and deadly up close.', damage: 20, type: 'melee' },
+    'Pistol':       { desc: 'A semi-automatic handgun. Lethal at range.', damage: 50, type: 'ranged' },
+    'Apple':        { desc: 'A crisp red apple. Restores a bit of health.', type: 'food', heal: 5, value: 2 },
+    'Sandwich':     { desc: 'A hearty sandwich. Filling and nutritious.', type: 'food', heal: 15, value: 5 },
+    'Energy Drink': { desc: 'Boosts your energy for a short time.', type: 'food', heal: 10, value: 4 },
+    'Book':         { desc: 'A well-worn paperback novel. Increases intelligence.', type: 'misc', value: 10 },
+    'Laptop':       { desc: 'A portable computer. Quite valuable.', type: 'misc', value: 200 },
+    'Phone':        { desc: 'A smartphone. Everyone seems to have one.', type: 'misc', value: 150 },
+    'Wallet':       { desc: 'A leather wallet. Might contain some cash.', type: 'valuable', value: 50 },
+    'Watch':        { desc: 'A shiny wristwatch. Looks expensive.', type: 'valuable', value: 80 },
+    'Backpack':     { desc: 'A sturdy backpack. Useful for carrying things.', type: 'misc', value: 30 },
+    'Medkit':       { desc: 'A first aid kit. Heals a significant amount.', type: 'food', heal: 40, value: 25 },
+    'Baseball Bat': { desc: 'A solid wooden bat. Hurts more than a punch.', damage: 30, type: 'melee', value: 20 },
+    'Crowbar':      { desc: 'Heavy iron crowbar. Useful as a weapon.', damage: 35, type: 'melee', value: 15 },
+    'Gold Ring':    { desc: 'A gold ring with a small gem. Very valuable.', type: 'valuable', value: 250 },
+    'Sunglasses':   { desc: 'Cool shades. Makes you look stylish.', type: 'misc', value: 15 },
+    'Keys':         { desc: 'A set of keys. Someone probably needs these.', type: 'misc', value: 5 },
+    'Coffee':       { desc: 'A hot cup of coffee. Boosts alertness.', type: 'food', heal: 8, value: 3 },
+    'Pizza Slice':  { desc: 'A slice of pepperoni pizza. Delicious.', type: 'food', heal: 12, value: 4 },
+    'Textbook':     { desc: 'A heavy academic textbook. Great for studying.', type: 'misc', value: 40 },
+    'Guitar':       { desc: 'An acoustic guitar. Play a tune?', type: 'misc', value: 120 },
+    'Headphones':   { desc: 'Wireless headphones. Decent sound quality.', type: 'misc', value: 60 },
+    'Medicine':     { desc: 'Prescription medicine. Heals over time.', type: 'food', heal: 25, value: 20 }
+};
+
+// Items that can spawn in each zone (with weights)
+LIFE.WORLD_ITEM_SPAWNS = {
+    home:        [{ items: ['Apple', 'Sandwich', 'Keys', 'Book', 'Coffee'], count: 3 }],
+    school:      [{ items: ['Textbook', 'Apple', 'Backpack', 'Book', 'Energy Drink'], count: 4 }],
+    highschool:  [{ items: ['Textbook', 'Energy Drink', 'Headphones', 'Switchblade', 'Backpack', 'Phone'], count: 5 }],
+    college:     [{ items: ['Textbook', 'Laptop', 'Coffee', 'Energy Drink', 'Book', 'Headphones', 'Guitar', 'Phone', 'Backpack'], count: 6 }],
+    city:        [{ items: ['Wallet', 'Watch', 'Phone', 'Sunglasses', 'Pizza Slice', 'Coffee', 'Sandwich', 'Baseball Bat', 'Laptop', 'Gold Ring', 'Headphones', 'Crowbar', 'Pistol', 'Switchblade'], count: 10 }],
+    retirement:  [{ items: ['Medicine', 'Book', 'Watch', 'Keys', 'Wallet', 'Phone', 'Medkit'], count: 4 }],
+    dealership:  [{ items: ['Coffee', 'Keys', 'Wallet'], count: 2 }],
+    eventcenter: [{ items: ['Energy Drink', 'Pizza Slice', 'Wallet', 'Phone', 'Sunglasses', 'Headphones'], count: 5 }]
+};
+
+// ============================================================
+// WORLD ITEM MESH CREATION (for non-weapon items)
+// ============================================================
+LIFE.createItemMesh = function(itemName) {
+    var group = new THREE.Group();
+    var data = LIFE.ITEM_DATA[itemName];
+    if (!data) return group;
+
+    // Check if it's a weapon type that already has a mesh creator
+    if (itemName === 'Switchblade' || itemName === 'Pistol') {
+        return LIFE.createWeaponMesh(itemName, 1.7);
+    }
+
+    var mat, geo;
+    switch (itemName) {
+        case 'Apple':
+            geo = new THREE.SphereGeometry(0.08, 8, 8);
+            mat = new THREE.MeshPhongMaterial({ color: 0xcc2222 });
+            var apple = new THREE.Mesh(geo, mat);
+            group.add(apple);
+            // Stem
+            var stem = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.01, 0.01, 0.04, 4),
+                new THREE.MeshPhongMaterial({ color: 0x4a2f00 })
+            );
+            stem.position.y = 0.09;
+            group.add(stem);
+            break;
+        case 'Sandwich':
+            // Two bread slices with filling
+            var bread = new THREE.MeshPhongMaterial({ color: 0xd4a054 });
+            var top = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.12), bread);
+            top.position.y = 0.035;
+            group.add(top);
+            var fill = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.10),
+                new THREE.MeshPhongMaterial({ color: 0x8bc34a }));
+            fill.position.y = 0.015;
+            group.add(fill);
+            var bot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.12), bread);
+            group.add(bot);
+            break;
+        case 'Energy Drink':
+        case 'Coffee':
+            // Cylinder can/cup
+            var col = itemName === 'Energy Drink' ? 0x00e676 : 0x5d4037;
+            geo = new THREE.CylinderGeometry(0.04, 0.04, 0.12, 8);
+            mat = new THREE.MeshPhongMaterial({ color: col });
+            group.add(new THREE.Mesh(geo, mat));
+            break;
+        case 'Book':
+        case 'Textbook':
+            var bCol = itemName === 'Textbook' ? 0x1565c0 : 0x795548;
+            geo = new THREE.BoxGeometry(0.12, 0.03, 0.16);
+            mat = new THREE.MeshPhongMaterial({ color: bCol });
+            group.add(new THREE.Mesh(geo, mat));
+            // Pages
+            var pages = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.02, 0.14),
+                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+            pages.position.y = -0.005;
+            group.add(pages);
+            break;
+        case 'Laptop':
+            // Base
+            var base = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.015, 0.15),
+                new THREE.MeshPhongMaterial({ color: 0x424242 }));
+            group.add(base);
+            // Screen half-open
+            var screen = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.13, 0.008),
+                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+            screen.position.set(0, 0.065, -0.07);
+            screen.rotation.x = -0.3;
+            group.add(screen);
+            // Screen glow
+            var glow = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.10, 0.003),
+                new THREE.MeshBasicMaterial({ color: 0x64b5f6 }));
+            glow.position.set(0, 0.065, -0.065);
+            glow.rotation.x = -0.3;
+            group.add(glow);
+            break;
+        case 'Phone':
+            geo = new THREE.BoxGeometry(0.05, 0.01, 0.10);
+            mat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+            group.add(new THREE.Mesh(geo, mat));
+            var scr = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.005, 0.08),
+                new THREE.MeshBasicMaterial({ color: 0x4fc3f7 }));
+            scr.position.y = 0.005;
+            group.add(scr);
+            break;
+        case 'Wallet':
+            geo = new THREE.BoxGeometry(0.10, 0.02, 0.08);
+            mat = new THREE.MeshPhongMaterial({ color: 0x5d4037 });
+            group.add(new THREE.Mesh(geo, mat));
+            break;
+        case 'Watch':
+            // Band
+            var band = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.01, 0.14),
+                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+            group.add(band);
+            // Face
+            var face = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.015, 12),
+                new THREE.MeshPhongMaterial({ color: 0xffd700, shininess: 100 }));
+            group.add(face);
+            break;
+        case 'Backpack':
+            geo = new THREE.BoxGeometry(0.14, 0.18, 0.08);
+            mat = new THREE.MeshPhongMaterial({ color: 0x1976d2 });
+            var bp = new THREE.Mesh(geo, mat);
+            bp.position.y = 0.09;
+            group.add(bp);
+            // Pocket
+            var pocket = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.06, 0.03),
+                new THREE.MeshPhongMaterial({ color: 0x1565c0 }));
+            pocket.position.set(0, 0.03, 0.05);
+            group.add(pocket);
+            break;
+        case 'Medkit':
+            geo = new THREE.BoxGeometry(0.14, 0.06, 0.10);
+            mat = new THREE.MeshPhongMaterial({ color: 0xfafafa });
+            group.add(new THREE.Mesh(geo, mat));
+            // Red cross
+            var crossH = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.005, 0.025),
+                new THREE.MeshBasicMaterial({ color: 0xf44336 }));
+            crossH.position.y = 0.032;
+            group.add(crossH);
+            var crossV = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.005, 0.08),
+                new THREE.MeshBasicMaterial({ color: 0xf44336 }));
+            crossV.position.y = 0.032;
+            group.add(crossV);
+            break;
+        case 'Baseball Bat':
+            // Long cylinder
+            var bat = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.03, 0.5, 8),
+                new THREE.MeshPhongMaterial({ color: 0x8d6e43 }));
+            bat.rotation.z = Math.PI / 2;
+            group.add(bat);
+            // Grip tape
+            var grip = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.12, 8),
+                new THREE.MeshPhongMaterial({ color: 0x222222 }));
+            grip.rotation.z = Math.PI / 2;
+            grip.position.x = -0.19;
+            group.add(grip);
+            break;
+        case 'Crowbar':
+            var bar = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.025, 0.025),
+                new THREE.MeshPhongMaterial({ color: 0x555555, shininess: 60 }));
+            group.add(bar);
+            // Hook end
+            var hook = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.025, 0.025),
+                new THREE.MeshPhongMaterial({ color: 0x555555, shininess: 60 }));
+            hook.position.set(0.22, 0.025, 0);
+            group.add(hook);
+            break;
+        case 'Gold Ring':
+            geo = new THREE.TorusGeometry(0.03, 0.008, 8, 16);
+            mat = new THREE.MeshPhongMaterial({ color: 0xffd700, shininess: 120 });
+            group.add(new THREE.Mesh(geo, mat));
+            // Gem
+            var gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.012, 0),
+                new THREE.MeshPhongMaterial({ color: 0x00e5ff, shininess: 100 }));
+            gem.position.y = 0.035;
+            group.add(gem);
+            break;
+        case 'Sunglasses':
+            // Frame
+            var frame = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.01, 0.04),
+                new THREE.MeshPhongMaterial({ color: 0x222222 }));
+            group.add(frame);
+            // Lenses
+            var lensL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.005, 0.03),
+                new THREE.MeshPhongMaterial({ color: 0x111111, transparent: true, opacity: 0.7 }));
+            lensL.position.set(-0.03, 0, 0);
+            group.add(lensL);
+            var lensR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.005, 0.03),
+                new THREE.MeshPhongMaterial({ color: 0x111111, transparent: true, opacity: 0.7 }));
+            lensR.position.set(0.03, 0, 0);
+            group.add(lensR);
+            break;
+        case 'Keys':
+            // Key ring + key
+            var ring = new THREE.Mesh(new THREE.TorusGeometry(0.025, 0.004, 8, 12),
+                new THREE.MeshPhongMaterial({ color: 0xaaaaaa, shininess: 80 }));
+            group.add(ring);
+            var key = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 0.005),
+                new THREE.MeshPhongMaterial({ color: 0xffc107 }));
+            key.position.set(0.04, 0, 0);
+            group.add(key);
+            break;
+        case 'Pizza Slice':
+            // Triangle-ish wedge
+            var shape = new THREE.Shape();
+            shape.moveTo(0, 0); shape.lineTo(-0.06, -0.14); shape.lineTo(0.06, -0.14); shape.closePath();
+            var extGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.015, bevelEnabled: false });
+            var pizza = new THREE.Mesh(extGeo, new THREE.MeshPhongMaterial({ color: 0xf4a830 }));
+            pizza.rotation.x = -Math.PI / 2;
+            group.add(pizza);
+            break;
+        case 'Guitar':
+            // Simple body + neck
+            var body = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6),
+                new THREE.MeshPhongMaterial({ color: 0x8d6e43 }));
+            body.scale.set(1, 0.3, 1.3);
+            group.add(body);
+            var neck = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.015, 0.25),
+                new THREE.MeshPhongMaterial({ color: 0x5d4037 }));
+            neck.position.z = -0.2;
+            group.add(neck);
+            break;
+        case 'Headphones':
+            // Band
+            var hBand = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.01, 0.03),
+                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+            hBand.position.y = 0.04;
+            group.add(hBand);
+            // Ear cups
+            var cupL = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 8),
+                new THREE.MeshPhongMaterial({ color: 0x444444 }));
+            cupL.position.set(-0.05, 0.02, 0);
+            group.add(cupL);
+            var cupR = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 8),
+                new THREE.MeshPhongMaterial({ color: 0x444444 }));
+            cupR.position.set(0.05, 0.02, 0);
+            group.add(cupR);
+            break;
+        case 'Medicine':
+            // Pill bottle
+            geo = new THREE.CylinderGeometry(0.03, 0.03, 0.08, 8);
+            mat = new THREE.MeshPhongMaterial({ color: 0xff9800 });
+            group.add(new THREE.Mesh(geo, mat));
+            // Cap
+            var cap = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.015, 8),
+                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+            cap.position.y = 0.045;
+            group.add(cap);
+            break;
+        default:
+            // Generic box for unknown items
+            geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+            mat = new THREE.MeshPhongMaterial({ color: 0x888888 });
+            group.add(new THREE.Mesh(geo, mat));
+            break;
+    }
+    return group;
+};
+
+// ============================================================
+// WORLD ITEMS — items placed in zones with optional owners
+// ============================================================
+LIFE.worldItems = [];
+
+// Road segments for spawn avoidance (simplified waypoints from buildRoads)
+LIFE._roadSegments = [
+    // Main roads (width ~6)
+    [[0,-5],[-8,-40],[5,-90],[-5,-120],[0,-145]],           // Home→School
+    [[0,5],[8,50],[-5,100],[0,145]],                         // Home→City
+    [[5,-150],[35,-160],[70,-155],[100,-158],[115,-150]],     // School→HS
+    [[-5,0],[-40,8],[-80,-5],[-120,5],[-145,5]],            // Home→Hospital
+    [[5,0],[40,-10],[80,5],[130,-8],[175,0]],                 // Home→Retirement
+    [[-5,150],[-40,160],[-80,155],[-115,150]],               // City→College
+    [[15,5],[40,15],[65,35],[85,55]],                         // Home→Dealership
+    [[-8,-5],[-25,-20],[-50,-45],[-70,-65],[-78,-78]],       // Home→EventCenter
+    [[-5,-8],[-20,-30],[-40,-55],[-55,-72],[-58,-78]]        // Home→PoliceStation
+];
+
+LIFE._isOnRoad = function(px, pz) {
+    var roadHalf = 4; // half-width of road clearance
+    for (var r = 0; r < LIFE._roadSegments.length; r++) {
+        var seg = LIFE._roadSegments[r];
+        for (var s = 0; s < seg.length - 1; s++) {
+            var ax = seg[s][0], az = seg[s][1];
+            var bx = seg[s+1][0], bz = seg[s+1][1];
+            // Point-to-segment distance
+            var dx = bx - ax, dz = bz - az;
+            var len2 = dx * dx + dz * dz;
+            if (len2 < 0.01) continue;
+            var t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / len2));
+            var cx = ax + t * dx, cz = az + t * dz;
+            var dist2 = (px - cx) * (px - cx) + (pz - cz) * (pz - cz);
+            if (dist2 < roadHalf * roadHalf) return true;
+        }
+    }
+    return false;
+};
+
+LIFE.spawnWorldItems = function(zoneName) {
+    var def = LIFE.ZONE_DEFS[zoneName];
+    if (!def) return;
+    var zone = LIFE.world.zones[zoneName];
+    if (!zone) return;
+    var spawnDef = LIFE.WORLD_ITEM_SPAWNS[zoneName];
+    if (!spawnDef) return;
+
+    // Remove old world items in this zone
+    for (var ri = LIFE.worldItems.length - 1; ri >= 0; ri--) {
+        if (LIFE.worldItems[ri]._zoneName === zoneName) {
+            LIFE.scene.remove(LIFE.worldItems[ri].mesh);
+            LIFE.scene.remove(LIFE.worldItems[ri].ring);
+            LIFE.worldItems.splice(ri, 1);
+        }
+    }
+
+    // Get zone NPCs for ownership assignment
+    var zoneNPCs = (zone.npcs || []).filter(function(n) { return n.alive; });
+    var b = def.radius * 0.6;
+
+    for (var si = 0; si < spawnDef.length; si++) {
+        var sd = spawnDef[si];
+        var pool = sd.items;
+        var count = sd.count || 1;
+
+        for (var ci = 0; ci < count; ci++) {
+            var itemName = pool[Math.floor(Math.random() * pool.length)];
+
+            // Find a safe position within the zone (avoid colliders and roads)
+            var x, z, safe, tries = 0;
+            do {
+                x = def.cx + (Math.random() - 0.5) * b * 2;
+                z = def.cz + (Math.random() - 0.5) * b * 2;
+                safe = true;
+                for (var coli = 0; coli < zone.colliders.length; coli++) {
+                    var col = zone.colliders[coli];
+                    if (x > col.minX - 0.3 && x < col.maxX + 0.3 && z > col.minZ - 0.3 && z < col.maxZ + 0.3) {
+                        safe = false; break;
+                    }
+                }
+                // Don't place on top of zone center
+                var cdx = x - def.cx, cdz = z - def.cz;
+                if (Math.sqrt(cdx * cdx + cdz * cdz) < 2) safe = false;
+                // Don't place on roads
+                if (safe && LIFE._isOnRoad(x, z)) safe = false;
+                tries++;
+            } while (!safe && tries < 30);
+
+            // Create 3D mesh
+            var mesh = LIFE.createItemMesh(itemName);
+            mesh.position.set(x, 0.3, z);
+            mesh.scale.set(2, 2, 2);
+            LIFE.scene.add(mesh);
+
+            // Glow ring under item (colored by value)
+            var data = LIFE.ITEM_DATA[itemName] || {};
+            var ringColor = data.type === 'valuable' ? 0xffd700
+                : data.type === 'food' ? 0x4caf50
+                : data.type === 'melee' || data.type === 'ranged' ? 0xf44336
+                : 0x4fc3f7;
+            var ringGeo = new THREE.RingGeometry(0.3, 0.5, 16);
+            var ringMat = new THREE.MeshBasicMaterial({
+                color: ringColor, transparent: true, opacity: 0.35, side: THREE.DoubleSide
+            });
+            var ringMesh = new THREE.Mesh(ringGeo, ringMat);
+            ringMesh.rotation.x = -Math.PI / 2;
+            ringMesh.position.set(x, 0.02, z);
+            LIFE.scene.add(ringMesh);
+
+            // Assign owner: ~60% of items have an owner (a nearby NPC)
+            var owner = null;
+            if (zoneNPCs.length > 0 && Math.random() < 0.6) {
+                // Pick a random NPC from the zone as owner
+                owner = zoneNPCs[Math.floor(Math.random() * zoneNPCs.length)];
+            }
+
+            LIFE.worldItems.push({
+                name: itemName,
+                mesh: mesh,
+                ring: ringMesh,
+                ringMat: ringMat,
+                x: x, z: z,
+                bobTime: Math.random() * 6, // stagger animation
+                _zoneName: zoneName,
+                owner: owner, // NPC ref or null
+                ownerName: owner ? owner.name : null
+            });
+        }
+    }
+};
+
+LIFE.updateWorldItems = function(dt) {
+    for (var i = 0; i < LIFE.worldItems.length; i++) {
+        var item = LIFE.worldItems[i];
+        item.bobTime += dt;
+        item.mesh.position.y = 0.3 + Math.sin(item.bobTime * 2) * 0.08;
+        item.mesh.rotation.y += dt * 1.0;
+        item.ringMat.opacity = 0.2 + Math.sin(item.bobTime * 3) * 0.15;
+    }
+};
+
+LIFE.clearWorldItems = function() {
+    for (var i = 0; i < LIFE.worldItems.length; i++) {
+        LIFE.scene.remove(LIFE.worldItems[i].mesh);
+        LIFE.scene.remove(LIFE.worldItems[i].ring);
+    }
+    LIFE.worldItems = [];
+};
+
+// ============================================================
+// STEALING DETECTION
+// ============================================================
+LIFE.tryPickupWorldItem = function(worldItem) {
+    if (!worldItem) return;
+    var player = LIFE.player;
+    if (!player) return;
+
+    var itemName = worldItem.name;
+    var owner = worldItem.owner;
+    var isStolen = false;
+
+    // Only check for stealing if the item has a living owner
+    if (owner && owner.alive) {
+        var px = player.group.position.x, pz = player.group.position.z;
+
+        // Check ALL nearby NPCs — anyone watching can react
+        var allNPCs = LIFE.getAllNPCs();
+        var witnesses = [];
+        var phoneCaller = null;
+
+        for (var i = 0; i < allNPCs.length; i++) {
+            var npc = allNPCs[i];
+            if (!npc.alive || npc._sleeping) continue;
+
+            var nx = npc.char.group.position.x, nz = npc.char.group.position.z;
+            var dx = nx - px, dz = nz - pz;
+            var dist = Math.sqrt(dx * dx + dz * dz);
+
+            // Must be within 20 units and have line-of-sight
+            if (dist >= 20 || !LIFE.hasLineOfSight(px, pz, nx, nz)) continue;
+
+            // Witness if: is the owner, OR has npcReputation > -50
+            var isOwner = (npc === owner);
+            var rep = npc.npcReputation !== undefined ? npc.npcReputation : 30;
+            if (!isOwner && rep <= -50) continue; // shady NPCs don't snitch
+
+            witnesses.push(npc);
+        }
+
+        if (witnesses.length > 0) {
+            isStolen = true;
+
+            // Pick one witness to react (prefer owner if present, else random)
+            var reactor = null;
+            for (var wi = 0; wi < witnesses.length; wi++) {
+                if (witnesses[wi] === owner) { reactor = witnesses[wi]; break; }
+            }
+            if (!reactor) reactor = witnesses[Math.floor(Math.random() * witnesses.length)];
+
+            // React: 50% confront, 50% call police (police always confront directly)
+            if (reactor.isPolice) {
+                LIFE.addWanted(2);
+                LIFE.drawChatBubble(reactor, 'Stop right there, criminal!');
+                reactor.chatSprite.visible = true;
+                reactor.chatTimer = 4;
+                reactor.chatCooldown = 10;
+                LIFE.ui.showPopup('CAUGHT STEALING by police!', '#f44336');
+            } else if (Math.random() < 0.5) {
+                // Confront
+                reactor.fleeing = false;
+                var faceDx = px - reactor.char.group.position.x;
+                var faceDz = pz - reactor.char.group.position.z;
+                reactor.char.group.rotation.y = Math.atan2(faceDx, faceDz);
+
+                var confrontMsg = (reactor === owner)
+                    ? 'Hey! That\'s mine, thief!'
+                    : 'I saw that! Put it back!';
+                LIFE.drawChatBubble(reactor, confrontMsg);
+                reactor.chatSprite.visible = true;
+                reactor.chatTimer = 4;
+                reactor.chatCooldown = 10;
+                LIFE.addWanted(1);
+                LIFE.updateRelationship(reactor.name, -15);
+                LIFE.ui.showPopup('CAUGHT STEALING! ' + reactor.name + ' saw you!', '#f44336');
+            } else {
+                // Call police
+                LIFE.updateRelationship(reactor.name, -20);
+                if (!reactor._callingPolice) {
+                    LIFE.npcStartPhoneCall(reactor, function() {
+                        LIFE.addWanted(2);
+                    });
+                }
+                LIFE.ui.showPopup('CAUGHT STEALING! ' + reactor.name + ' is calling the police!', '#f44336');
+            }
+
+            // All other witnesses also react (flee or lower relationship)
+            for (var j = 0; j < witnesses.length; j++) {
+                if (witnesses[j] === reactor) continue;
+                LIFE.updateRelationship(witnesses[j].name, -10);
+                // Lower the witness NPC's own reputation of the player
+                if (witnesses[j].npcReputation !== undefined) {
+                    witnesses[j].npcReputation -= 5;
+                }
+            }
+        }
+    }
+
+    // Actually pick up the item regardless (they already grabbed it)
+    LIFE.state.inventory.push(itemName);
+
+    // Update weapon flags
+    if (itemName === 'Pistol') LIFE.state.hasGun = true;
+    if (itemName === 'Switchblade') LIFE.state.hasSwitchblade = true;
+
+    // Remove 3D objects
+    LIFE.scene.remove(worldItem.mesh);
+    LIFE.scene.remove(worldItem.ring);
+
+    // Remove from array
+    var idx = LIFE.worldItems.indexOf(worldItem);
+    if (idx >= 0) LIFE.worldItems.splice(idx, 1);
+
+    if (isStolen) {
+        LIFE.ui.showPopup('Stole ' + itemName + '!', '#ff5722');
+    } else {
+        LIFE.ui.showPopup('Picked up ' + itemName, '#4fc3f7');
+    }
+};
+
+// ============================================================
+// SKYRIM-STYLE 3D INVENTORY PANEL
+// ============================================================
+LIFE._invOpen = false;
+LIFE._invPreviewScene = null;
+LIFE._invPreviewCamera = null;
+LIFE._invPreviewRenderer = null;
+LIFE._invPreviewMesh = null;
+LIFE._invSelectedIndex = 0;
+LIFE._invDragging = false;
+LIFE._invDragX = 0;
+LIFE._invDragY = 0;
+LIFE._invRotX = 0;
+LIFE._invRotY = 0;
+LIFE._invAutoRot = 0;
+
+LIFE.ui.openInventory = function() {
+    if (LIFE._invOpen) return;
+    LIFE._invOpen = true;
+    var panel = document.getElementById('inventoryPanel');
+    if (!panel) return;
+    panel.style.display = 'flex';
+    document.exitPointerLock();
+
+    // Init preview renderer if needed
+    if (!LIFE._invPreviewRenderer) {
+        LIFE._invPreviewScene = new THREE.Scene();
+        LIFE._invPreviewScene.background = new THREE.Color(0x1a1a2e);
+        LIFE._invPreviewCamera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+        LIFE._invPreviewCamera.position.set(0, 0.2, 1.5);
+
+        var ambLight = new THREE.AmbientLight(0xffffff, 0.6);
+        LIFE._invPreviewScene.add(ambLight);
+        var dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(2, 3, 2);
+        LIFE._invPreviewScene.add(dirLight);
+
+        var canvas = document.getElementById('invPreviewCanvas');
+        if (canvas) {
+            LIFE._invPreviewRenderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            LIFE._invPreviewRenderer.setSize(canvas.clientWidth, canvas.clientHeight);
+        }
+    }
+
+    LIFE._invSelectedIndex = LIFE.state.equippedIndex;
+    LIFE.ui.refreshInventoryPanel();
+    LIFE._invSetPreviewItem(LIFE.state.inventory[LIFE._invSelectedIndex]);
+    LIFE._invAnimFrame = requestAnimationFrame(LIFE._invRenderLoop);
+};
+
+LIFE.ui.closeInventory = function() {
+    if (!LIFE._invOpen) return;
+    LIFE._invOpen = false;
+    var panel = document.getElementById('inventoryPanel');
+    if (panel) panel.style.display = 'none';
+    if (LIFE._invAnimFrame) cancelAnimationFrame(LIFE._invAnimFrame);
+    LIFE._invAnimFrame = null;
+    // Re-lock cursor
+    if (LIFE.state.gamePhase === 'playing') {
+        LIFE.canvas.requestPointerLock();
+    }
+};
+
+LIFE.ui.refreshInventoryPanel = function() {
+    var list = document.getElementById('invItemList');
+    if (!list) return;
+    var inv = LIFE.state.inventory;
+    var html = '';
+    for (var i = 0; i < inv.length; i++) {
+        var itemName = inv[i];
+        var data = LIFE.ITEM_DATA[itemName] || {};
+        var isEquipped = (i === LIFE.state.equippedIndex);
+        var isSelected = (i === LIFE._invSelectedIndex);
+        html += '<div class="invListItem' + (isSelected ? ' invSelected' : '') + (isEquipped ? ' invEquipped' : '') + '" onclick="LIFE._invSelectItem(' + i + ')">';
+        html += '<span class="invItemName">' + itemName + '</span>';
+        if (isEquipped) html += '<span class="invEquipBadge">E</span>';
+        html += '</div>';
+    }
+    list.innerHTML = html;
+
+    // Update info pane
+    var selItem = inv[LIFE._invSelectedIndex];
+    var data = LIFE.ITEM_DATA[selItem] || {};
+    var nameEl = document.getElementById('invInfoName');
+    var descEl = document.getElementById('invInfoDesc');
+    var statsEl = document.getElementById('invInfoStats');
+    if (nameEl) nameEl.textContent = selItem || '';
+    if (descEl) descEl.textContent = data.desc || '';
+    if (statsEl) {
+        var statsHtml = '';
+        if (data.damage) statsHtml += '<div class="invStat">Damage: ' + data.damage + '</div>';
+        if (data.heal) statsHtml += '<div class="invStat">Heals: +' + data.heal + ' HP</div>';
+        if (data.value) statsHtml += '<div class="invStat">Value: $' + data.value + '</div>';
+        if (data.type) statsHtml += '<div class="invStat">Type: ' + data.type + '</div>';
+        statsEl.innerHTML = statsHtml;
+    }
+
+    // Update buttons
+    var equipBtn = document.getElementById('invEquipBtn');
+    var dropBtn = document.getElementById('invDropBtn');
+    var useBtn = document.getElementById('invUseBtn');
+    var isWeapon = data.type === 'melee' || data.type === 'ranged';
+    var isConsumable = !!data.heal;
+    if (equipBtn) {
+        var isEq = LIFE._invSelectedIndex === LIFE.state.equippedIndex;
+        equipBtn.textContent = isEq ? 'Equipped' : 'Equip';
+        equipBtn.style.opacity = isEq ? '0.4' : '1';
+        equipBtn.style.display = (isWeapon || selItem === 'Fists') ? 'inline-block' : 'none';
+    }
+    if (useBtn) {
+        useBtn.style.display = isConsumable ? 'inline-block' : 'none';
+    }
+    if (dropBtn) {
+        dropBtn.style.display = (selItem === 'Fists') ? 'none' : 'inline-block';
+    }
+};
+
+LIFE._invSelectItem = function(index) {
+    LIFE._invSelectedIndex = index;
+    LIFE.ui.refreshInventoryPanel();
+    LIFE._invSetPreviewItem(LIFE.state.inventory[index]);
+};
+
+LIFE._invEquipSelected = function() {
+    if (LIFE._invSelectedIndex === LIFE.state.equippedIndex) return;
+    LIFE.state.equippedIndex = LIFE._invSelectedIndex;
+    LIFE.updateHeldWeapon();
+    LIFE.ui.refreshInventoryPanel();
+};
+
+LIFE._invDropSelected = function() {
+    var itemName = LIFE.state.inventory[LIFE._invSelectedIndex];
+    if (!itemName || itemName === 'Fists') return;
+    LIFE.dropItem(LIFE._invSelectedIndex);
+    if (LIFE._invSelectedIndex >= LIFE.state.inventory.length) {
+        LIFE._invSelectedIndex = Math.max(0, LIFE.state.inventory.length - 1);
+    }
+    LIFE.ui.refreshInventoryPanel();
+    LIFE._invSetPreviewItem(LIFE.state.inventory[LIFE._invSelectedIndex]);
+    if (LIFE.state.inventory.length <= 1) {
+        LIFE.ui.closeInventory();
+    }
+};
+
+LIFE._invUseSelected = function() {
+    var inv = LIFE.state.inventory;
+    var itemName = inv[LIFE._invSelectedIndex];
+    if (!itemName) return;
+    var data = LIFE.ITEM_DATA[itemName] || {};
+    if (!data.heal) return; // not consumable
+
+    // Apply healing
+    LIFE.state.stats.health = Math.min(100, LIFE.state.stats.health + data.heal);
+    LIFE.ui.showPopup('Used ' + itemName + ' (+' + data.heal + ' HP)', '#4caf50');
+
+    // Remove from inventory
+    inv.splice(LIFE._invSelectedIndex, 1);
+    if (LIFE.state.equippedIndex >= inv.length) LIFE.state.equippedIndex = Math.max(0, inv.length - 1);
+    if (LIFE._invSelectedIndex >= inv.length) LIFE._invSelectedIndex = Math.max(0, inv.length - 1);
+
+    LIFE.ui.refreshInventoryPanel();
+    LIFE._invSetPreviewItem(inv[LIFE._invSelectedIndex]);
+    if (inv.length <= 1) {
+        LIFE.ui.closeInventory();
+    }
+};
+
+LIFE._invSetPreviewItem = function(itemName) {
+    // Remove old preview mesh
+    if (LIFE._invPreviewMesh) {
+        LIFE._invPreviewScene.remove(LIFE._invPreviewMesh);
+        LIFE._invPreviewMesh = null;
+    }
+    LIFE._invRotX = 0;
+    LIFE._invRotY = 0;
+    LIFE._invAutoRot = 0;
+
+    if (!itemName || itemName === 'Fists') {
+        // Show a fist (simple sphere)
+        var fistGeo = new THREE.SphereGeometry(0.15, 12, 12);
+        var fistMat = new THREE.MeshPhongMaterial({ color: 0xd4a574 });
+        var fist = new THREE.Mesh(fistGeo, fistMat);
+        LIFE._invPreviewMesh = fist;
+        LIFE._invPreviewScene.add(fist);
+        return;
+    }
+
+    var data = LIFE.ITEM_DATA[itemName] || {};
+    var mesh;
+    if (data.type === 'melee' || data.type === 'ranged') {
+        mesh = LIFE.createWeaponMesh(itemName, 1.7);
+        mesh.scale.set(4, 4, 4);
+    } else {
+        mesh = LIFE.createItemMesh(itemName);
+        mesh.scale.set(6, 6, 6);
+    }
+    LIFE._invPreviewMesh = mesh;
+    LIFE._invPreviewScene.add(mesh);
+};
+
+LIFE._invRenderLoop = function() {
+    if (!LIFE._invOpen) return;
+    LIFE._invAnimFrame = requestAnimationFrame(LIFE._invRenderLoop);
+
+    if (LIFE._invPreviewMesh) {
+        if (!LIFE._invDragging) {
+            LIFE._invAutoRot += 0.01;
+            LIFE._invPreviewMesh.rotation.y = LIFE._invAutoRot + LIFE._invRotY;
+        } else {
+            LIFE._invPreviewMesh.rotation.y = LIFE._invAutoRot + LIFE._invRotY;
+        }
+        LIFE._invPreviewMesh.rotation.x = LIFE._invRotX;
+    }
+
+    if (LIFE._invPreviewRenderer && LIFE._invPreviewScene && LIFE._invPreviewCamera) {
+        LIFE._invPreviewRenderer.render(LIFE._invPreviewScene, LIFE._invPreviewCamera);
+    }
+};
+
+// Mouse drag on preview canvas
+LIFE._invOnMouseDown = function(e) {
+    LIFE._invDragging = true;
+    LIFE._invDragX = e.clientX;
+    LIFE._invDragY = e.clientY;
+};
+LIFE._invOnMouseMove = function(e) {
+    if (!LIFE._invDragging) return;
+    var dx = e.clientX - LIFE._invDragX;
+    var dy = e.clientY - LIFE._invDragY;
+    LIFE._invRotY += dx * 0.01;
+    LIFE._invRotX += dy * 0.01;
+    LIFE._invRotX = Math.max(-1.2, Math.min(1.2, LIFE._invRotX));
+    LIFE._invDragX = e.clientX;
+    LIFE._invDragY = e.clientY;
+};
+LIFE._invOnMouseUp = function() {
+    LIFE._invDragging = false;
+};
+
+// ============================================================
 // HELD WEAPON VISUALS
 // ============================================================
 LIFE._weaponMesh = null;
@@ -1435,6 +2390,39 @@ LIFE.createWeaponMesh = function(type, playerHeight) {
         group.add(grip);
         // Position at end of arm, pointing forward
         group.position.set(0, -armH * 0.9, 0.02);
+    } else if (type === 'Baseball Bat') {
+        // Long wooden bat held in hand
+        var bat = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.015, 0.03, h * 0.35, 8),
+            new THREE.MeshPhongMaterial({ color: 0x8d6e43 })
+        );
+        bat.position.y = -h * 0.15;
+        group.add(bat);
+        // Grip tape
+        var grip = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.018, 0.018, h * 0.08, 8),
+            new THREE.MeshPhongMaterial({ color: 0x222222 })
+        );
+        grip.position.y = h * 0.05;
+        group.add(grip);
+        group.position.set(0, -armH - h * 0.02, 0);
+        group.rotation.x = -0.4;
+    } else if (type === 'Crowbar') {
+        var bar = new THREE.Mesh(
+            new THREE.BoxGeometry(0.025, h * 0.3, 0.025),
+            new THREE.MeshPhongMaterial({ color: 0x555555, shininess: 60 })
+        );
+        bar.position.y = -h * 0.12;
+        group.add(bar);
+        // Hook end
+        var hook = new THREE.Mesh(
+            new THREE.BoxGeometry(0.025, 0.04, 0.025),
+            new THREE.MeshPhongMaterial({ color: 0x555555, shininess: 60 })
+        );
+        hook.position.set(0, -h * 0.27, 0.02);
+        group.add(hook);
+        group.position.set(0, -armH - h * 0.02, 0);
+        group.rotation.x = -0.3;
     }
     return group;
 };
@@ -1474,6 +2462,10 @@ LIFE.updateHeldWeapon = function() {
         // Hold arm forward, pointing gun ahead
         player.parts.rightArm.rotation.x = -1.4; // arm extended forward
         player.parts.rightArm.rotation.z = -0.1;
+    } else if (equipped === 'Baseball Bat' || equipped === 'Crowbar') {
+        // Hold arm to the side, ready to swing
+        player.parts.rightArm.rotation.x = -0.6;
+        player.parts.rightArm.rotation.z = -0.2;
     }
 };
 
@@ -2176,6 +3168,23 @@ document.addEventListener('keydown', function(e) {
     LIFE.keys[e.code] = true;
     var state = LIFE.state;
 
+    // Debug console toggle — works in ANY game phase
+    if (e.code === 'Backquote') {
+        e.preventDefault();
+        LIFE.toggleDebugConsole();
+        return;
+    }
+    // Block all other input while debug console is open
+    if (LIFE._debugOpen) return;
+
+    if (LIFE._invOpen) {
+        if (e.code === 'KeyI' || e.code === 'Tab' || e.code === 'Escape') {
+            e.preventDefault();
+            LIFE.ui.closeInventory();
+        }
+        return;
+    }
+
     if (state.friendsOpen) {
         if (e.code === 'KeyF' || e.code === 'Escape') { LIFE.ui.closeFriends(); }
         return;
@@ -2228,6 +3237,17 @@ document.addEventListener('keydown', function(e) {
         }
         if (e.code === 'KeyJ' && !LIFE.dialogue.active && !state.shopOpen) {
             LIFE.quests.toggleLog();
+        }
+        if (e.code === 'KeyC' && !LIFE.dialogue.active && !state.shopOpen) {
+            LIFE.quests.cycleActiveQuest();
+        }
+        if (e.code === 'KeyX' && !LIFE.dialogue.active && !state.shopOpen) {
+            if (LIFE._nearestDroppedItem) LIFE.pickupItem(LIFE._nearestDroppedItem);
+            else if (LIFE._nearestWorldItem) LIFE.tryPickupWorldItem(LIFE._nearestWorldItem);
+        }
+        if ((e.code === 'KeyI' || e.code === 'Tab') && !LIFE.dialogue.active && !state.shopOpen && !state.friendsOpen) {
+            e.preventDefault();
+            LIFE.ui.openInventory();
         }
         if (!LIFE.dialogue.active && e.code >= 'Digit1' && e.code <= 'Digit4') {
             LIFE.performAction(parseInt(e.code[5]) - 1);
@@ -2304,6 +3324,8 @@ LIFE.startGame = function() {
     LIFE.sounds.init(); LIFE.sounds.resume();
     if (LIFE.state.gamePhase === 'start') {
         if (LIFE.quests) LIFE.quests.reset();
+        LIFE.clearDroppedItems();
+        LIFE.clearWorldItems();
         LIFE.state.gamePhase = 'womb'; LIFE.state.wombTimer = 0; LIFE.state.age = -1;
         LIFE.buildEnvironment('womb'); LIFE.createPlayer();
         LIFE.player.group.position.set(0, 1.5, 0); LIFE.ui.hideGameUI();
@@ -2907,6 +3929,144 @@ LIFE.updateExecution = function(dt) {
 };
 
 // ============================================================
+// DEBUG CONSOLE
+// ============================================================
+LIFE._debugOpen = false;
+
+LIFE.toggleDebugConsole = function() {
+    var panel = document.getElementById('debugConsole');
+    if (!panel) return;
+    LIFE._debugOpen = !LIFE._debugOpen;
+    panel.style.display = LIFE._debugOpen ? 'flex' : 'none';
+    if (LIFE._debugOpen) LIFE._updateDebugInfo();
+};
+
+LIFE._updateDebugInfo = function() {
+    var info = document.getElementById('debugInfo');
+    if (!info) return;
+    var s = LIFE.state;
+    var lines = [
+        'Phase: ' + s.gamePhase + ' | Stage: ' + s.currentStage,
+        'Age: ' + s.age + ' | Gender: ' + (s.playerGender || '?') + ' | Name: ' + (s.playerName || 'Unknown'),
+        'Money: $' + Math.floor(s.money).toLocaleString() + ' | Health: ' + Math.floor(s.stats.health),
+        'Wanted: ' + s.wantedLevel + ' | Kills: ' + s.kills + ' | Career: ' + (s.career || 'none'),
+        'Inventory: ' + s.inventory.join(', '),
+        'Position: ' + (LIFE.player ? Math.floor(LIFE.player.group.position.x) + ', ' + Math.floor(LIFE.player.group.position.z) : 'N/A'),
+        'World Items: ' + LIFE.worldItems.length + ' | Dropped: ' + LIFE.droppedItems.length
+    ];
+    info.textContent = lines.join('\n');
+};
+
+LIFE.debugSkipTo25 = function() {
+    var state = LIFE.state;
+
+    // Set basic state
+    state.age = 25;
+    state.gamePhase = 'playing';
+    state.currentStage = 'city';
+    state.playerGender = state.playerGender || 'M';
+    if (!state.playerName) {
+        var pool = state.playerGender === 'F' ? LIFE.FEMALE_NAMES : LIFE.MALE_NAMES;
+        state.playerName = pool[Math.floor(Math.random() * pool.length)];
+    }
+    state.money = 100000;
+    state.stats = { intelligence: 50, happiness: 70, charisma: 40, health: 100, beauty: 50 };
+    state.career = 'business';
+    state.careerLevel = 2;
+    state.bounds = 400;
+    state.dayPhase = null;
+    state.wantedLevel = 0;
+    state.wantedTimer = 0;
+    state.criminalRecord = false;
+    state.inventory = ['Fists', 'Switchblade', 'Pistol'];
+    state.equippedIndex = 0;
+    state.hasGun = true;
+    state.hasSwitchblade = true;
+    state.yearTimer = 0;
+    state.locked = true;
+
+    // Make sure player exists
+    if (!LIFE.player) LIFE.createPlayer();
+    LIFE.updatePlayerSize();
+
+    // Build world if needed
+    if (!LIFE.world.built) {
+        LIFE.world.buildWorld();
+        LIFE.world.spawnAllZoneNPCs();
+    }
+
+    // Exit any interior
+    if (LIFE.world.insideInterior) LIFE.world.exitInterior();
+
+    // Teleport to city
+    var cityDef = LIFE.ZONE_DEFS.city;
+    LIFE.player.group.position.set(cityDef.cx, 0, cityDef.cz + 5);
+
+    // Refresh NPCs
+    LIFE.world.spawnZoneNPCs('city');
+    LIFE.world._cullingTimer = 999;
+    LIFE.world.updateCulling(0);
+
+    // Show game UI
+    LIFE.ui.showGameUI();
+    LIFE.ui.updateActionButtons();
+    LIFE.ui.$.age.textContent = state.age;
+    LIFE.ui.$.controls.textContent = 'WASD: Move | Mouse: Look | Space: Jump | 1-4: Actions | E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info | I: Inventory';
+    LIFE.updateHeldWeapon();
+
+    // Restore atmosphere
+    LIFE.scene.background.set(0x87ceeb);
+    LIFE.scene.fog.color.set(0x87ceeb);
+    LIFE.scene.fog.near = 50;
+    LIFE.scene.fog.far = 200;
+
+    // Spawn parked car if owned
+    if (state.ownedCar) LIFE.spawnParkedCar();
+
+    // Close debug console
+    LIFE.toggleDebugConsole();
+    LIFE.lockCursor();
+
+    LIFE.ui.showPopup('DEBUG: Skipped to age 25 in city with $100K', '#ff9800');
+    LIFE.ui.showStageMessage('Welcome to the city. Age 25');
+};
+
+LIFE.debugGiveMoney = function(amount) {
+    LIFE.state.money += amount;
+    LIFE.ui.showPopup('DEBUG: +$' + amount.toLocaleString(), '#4caf50');
+    LIFE._updateDebugInfo();
+};
+
+LIFE.debugHeal = function() {
+    LIFE.state.stats.health = 100;
+    LIFE.ui.showPopup('DEBUG: Health restored', '#4caf50');
+    LIFE._updateDebugInfo();
+};
+
+LIFE.debugClearWanted = function() {
+    LIFE.state.wantedLevel = 0;
+    LIFE.state.wantedTimer = 0;
+    LIFE.state.policeDispatching = false;
+    LIFE.state.swatDispatching = false;
+    LIFE.removeAllPolice();
+    LIFE.ui.showPopup('DEBUG: Wanted level cleared', '#4caf50');
+    LIFE._updateDebugInfo();
+};
+
+LIFE.debugGiveAllItems = function() {
+    var items = Object.keys(LIFE.ITEM_DATA);
+    for (var i = 0; i < items.length; i++) {
+        if (items[i] !== 'Fists' && LIFE.state.inventory.indexOf(items[i]) < 0) {
+            LIFE.state.inventory.push(items[i]);
+        }
+    }
+    if (LIFE.state.inventory.indexOf('Pistol') >= 0) LIFE.state.hasGun = true;
+    if (LIFE.state.inventory.indexOf('Switchblade') >= 0) LIFE.state.hasSwitchblade = true;
+    LIFE.ui.showPopup('DEBUG: All items added', '#4caf50');
+    LIFE._updateDebugInfo();
+};
+
+// ============================================================
 // MAIN GAME LOOP
 // ============================================================
 LIFE.animate = function() {
@@ -2938,6 +4098,7 @@ LIFE.animate = function() {
             LIFE.economy.passiveIncome(dt);
             LIFE.updatePlayer(dt);
             LIFE.updateNPCs(dt);
+            LIFE.updateNPCPhoneCalls(dt);
             LIFE.pathfinding.updateCache(dt);
             LIFE.updatePolice(dt);
             LIFE.updateBullets(dt);
@@ -2949,6 +4110,11 @@ LIFE.animate = function() {
             LIFE.news.update(dt);
             LIFE.quests.update(dt);
             LIFE.quests.updateHUD();
+
+            // Dropped items & world items
+            LIFE.updateDroppedItems(dt);
+            LIFE.updateWorldItems(dt);
+            LIFE.updatePickupHint();
 
             // Open world culling and shadow following
             if (LIFE.world.built && !LIFE.world.insideInterior) {

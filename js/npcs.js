@@ -410,7 +410,8 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
         isDealer: isDealer, isHiring: isHiring, isCarSalesman: isCarSalesman,
         isRealEstate: isRealEstate,
         isVendor: isVendor, vendorType: isVendor ? type : null,
-        stayNear: (isHiring || isCarSalesman || isRealEstate || isVendor) ? new THREE.Vector3(x, 0, z) : null
+        stayNear: (isHiring || isCarSalesman || isRealEstate || isVendor) ? new THREE.Vector3(x, 0, z) : null,
+        npcReputation: isPolice ? 80 : isDealer ? -60 : (Math.floor(Math.random() * 60) + 10) // 10-70 for normal NPCs
     };
 };
 
@@ -700,8 +701,120 @@ LIFE.updateNPCHealthBar = function(npc) {
     npc.hpSprite.visible = (pct < 1 && npc.alive);
 };
 
+// ============================================================
+// NPC PHONE CALL ANIMATION
+// ============================================================
+LIFE._createPhoneMesh = function() {
+    var phone = new THREE.Group();
+    var body = new THREE.Mesh(
+        new THREE.BoxGeometry(0.04, 0.08, 0.02),
+        new THREE.MeshPhongMaterial({ color: 0x111111 })
+    );
+    phone.add(body);
+    // screen glow
+    var screen = new THREE.Mesh(
+        new THREE.BoxGeometry(0.03, 0.05, 0.005),
+        new THREE.MeshBasicMaterial({ color: 0x4fc3f7 })
+    );
+    screen.position.z = 0.012;
+    phone.add(screen);
+    return phone;
+};
+
+// Start an NPC calling the police (with visible phone animation)
+LIFE.npcStartPhoneCall = function(npc, onComplete) {
+    if (!npc || !npc.alive || npc._callingPolice) return;
+    npc._callingPolice = true;
+    npc._phoneCallTimer = 4 + Math.random() * 2; // 4-6 seconds to complete call
+    npc._phoneCallCallback = onComplete || null;
+
+    // Create phone mesh and attach to right hand
+    var phoneMesh = LIFE._createPhoneMesh();
+    npc._phoneMesh = phoneMesh;
+    npc.char.parts.rightArm.add(phoneMesh);
+    // Position phone at end of arm
+    var armH = (npc.char.height || 1.7) * 0.28;
+    phoneMesh.position.set(0, -armH, 0.05);
+
+    // Stop NPC movement
+    npc._preCallWaiting = npc.waiting;
+    npc.waiting = true;
+    npc.waitTimer = 99;
+    npc.fleeing = false;
+};
+
+// Update phone call animation (called every frame for NPCs that are calling)
+LIFE.updateNPCPhoneCalls = function(dt) {
+    var allNPCs = LIFE.getAllNPCs ? LIFE.getAllNPCs() : LIFE.npcs;
+    for (var i = 0; i < allNPCs.length; i++) {
+        var npc = allNPCs[i];
+        if (!npc._callingPolice) continue;
+
+        // NPC died during call — cancel
+        if (!npc.alive) {
+            LIFE.npcCancelPhoneCall(npc);
+            continue;
+        }
+
+        npc._phoneCallTimer -= dt;
+
+        // Phone to ear animation — right arm raised
+        npc.char.parts.rightArm.rotation.x = -2.5; // arm up to ear
+        npc.char.parts.rightArm.rotation.z = 0.3; // angled toward head
+
+        // Face toward player while calling
+        if (LIFE.player) {
+            var dx = LIFE.player.group.position.x - npc.char.group.position.x;
+            var dz = LIFE.player.group.position.z - npc.char.group.position.z;
+            npc.char.group.rotation.y = Math.atan2(dx, dz);
+        }
+
+        // Show chat bubble indicating calling
+        if (npc.chatSprite && !npc.chatSprite.visible) {
+            LIFE.drawChatBubble(npc, 'Calling 911...');
+            npc.chatSprite.visible = true;
+            npc.chatTimer = 99;
+        }
+
+        // Call completed
+        if (npc._phoneCallTimer <= 0) {
+            if (npc._phoneCallCallback) npc._phoneCallCallback();
+            LIFE.npcCancelPhoneCall(npc);
+            LIFE.ui.showPopup(npc.name + ' called the police!', '#f44336');
+            // After calling, flee
+            npc.fleeing = true;
+            npc.fleeTimer = 8 + Math.random() * 4;
+        }
+    }
+};
+
+// Cancel / interrupt a phone call (e.g. NPC killed)
+LIFE.npcCancelPhoneCall = function(npc) {
+    if (!npc._callingPolice) return;
+    npc._callingPolice = false;
+    npc._phoneCallTimer = 0;
+    npc._phoneCallCallback = null;
+    // Remove phone mesh
+    if (npc._phoneMesh) {
+        npc.char.parts.rightArm.remove(npc._phoneMesh);
+        npc._phoneMesh = null;
+    }
+    // Reset arm
+    npc.char.parts.rightArm.rotation.x = 0;
+    npc.char.parts.rightArm.rotation.z = 0;
+    // Hide chat bubble
+    if (npc.chatSprite) npc.chatSprite.visible = false;
+    // Restore movement
+    npc.waitTimer = 0;
+};
+
 LIFE.damageNPC = function(npc, amount) {
     if (!npc || !npc.alive) return;
+    // Cancel phone call if attacked
+    if (npc._callingPolice) {
+        LIFE.npcCancelPhoneCall(npc);
+        LIFE.ui.showPopup('Phone call interrupted!', '#ff9800');
+    }
     // Wake up sleeping NPCs when attacked — stay awake for 30s
     if (npc._sleeping) {
         npc._sleeping = false;
@@ -717,6 +830,10 @@ LIFE.damageNPC = function(npc, amount) {
 
 LIFE.killNPC = function(npc) {
     npc.alive = false;
+    // Notify quest system of kill
+    if (LIFE.quests && LIFE.quests._onNPCKilled) {
+        LIFE.quests._onNPCKilled(npc.type, npc.name);
+    }
     npc.hpSprite.visible = false;
     npc.nameSprite.visible = false;
     npc.ring.visible = false;
@@ -1078,13 +1195,15 @@ LIFE.updateNPCs = function(dt) {
                     var htDist = Math.sqrt(htdx * htdx + htdz * htdz);
 
                     if (htDist < 3) {
-                        // Reached the helper NPC — they witness the crime and call police!
+                        // Reached the helper NPC — they start a phone call to police
                         npc._seekingHelp = false;
-                        npc._helpTarget.fleeing = true;
-                        npc._helpTarget.fleeTimer = 5 + Math.random() * 3;
-                        LIFE.ui.showPopup(npc._helpTarget.name + ' calls the police!', '#f44336');
-                        LIFE.addWanted(2);
-                        if (LIFE.news) LIFE.news.add('Assault reported after victim seeks help from bystander.', 'crime');
+                        var helperNPC = npc._helpTarget;
+                        LIFE.npcStartPhoneCall(helperNPC, function() {
+                            LIFE.addWanted(2);
+                            if (LIFE.news) LIFE.news.add('Assault reported after victim seeks help from bystander.', 'crime');
+                            helperNPC.fleeing = true;
+                            helperNPC.fleeTimer = 5 + Math.random() * 3;
+                        });
                         npc._helpTarget = null;
                         npc._fleeToward = null;
                         // Now flee randomly away from player

@@ -113,6 +113,28 @@ LIFE.DECISIONS = {
     }
 };
 
+// Persistent dialogue options that always appear for certain NPC types
+LIFE.NPC_PERSISTENT_OPTIONS = {
+    'Dealer': [
+        { text: "Show me what you got.", effects: {}, rep: -2, openDealer: true }
+    ],
+    'Food Vendor': [
+        { text: "Let me see the menu.", effects: {}, openVendor: 'Food Vendor' }
+    ],
+    'Clothes Shop': [
+        { text: "Show me the clothes.", effects: {}, openVendor: 'Clothes Shop' }
+    ],
+    'Pharmacist': [
+        { text: "I need some medicine.", effects: {}, openVendor: 'Pharmacist' }
+    ],
+    'Bookstore': [
+        { text: "Show me the books.", effects: {}, openVendor: 'Bookstore' }
+    ],
+    'Electronics': [
+        { text: "Show me the tech.", effects: {}, openVendor: 'Electronics' }
+    ]
+};
+
 // RANDOM NPC DIALOGUES
 LIFE.NPC_DIALOGUES = {
     'Mom': [
@@ -1306,11 +1328,14 @@ LIFE.dialogue.selectOption = function(idx) {
         LIFE.ui.showPopup('Welcome to the family, ' + opt.childName + '!', '#e91e63');
     }
 
-    // gender selection
+    // gender selection + name assignment
     if (opt.setGender) {
         LIFE.state.playerGender = opt.setGender;
+        var namePool = opt.setGender === 'M' ? LIFE.MALE_NAMES : LIFE.FEMALE_NAMES;
+        var playerName = namePool[Math.floor(Math.random() * namePool.length)];
+        LIFE.state.playerName = playerName;
         var label = opt.setGender === 'M' ? 'Boy' : 'Girl';
-        LIFE.ui.showPopup('You are a ' + label + '!', '#4fc3f7');
+        LIFE.ui.showPopup('You are ' + playerName + '! (' + label + ')', '#4fc3f7');
     }
 
     if (opt.career !== undefined) {
@@ -2244,6 +2269,9 @@ LIFE.dialogue.talkToNPC = function(npc) {
         return;
     }
 
+    // CHECK QUEST RETURNS FIRST — always takes priority
+    if (LIFE.quests && LIFE.quests.tryCompleteReturn(npc)) return;
+
     // CHECK FRIENDSHIP - use friend dialogues if already friends
     var rel = LIFE.state.relationships[npc.name];
     var relLevel = rel ? rel.level : 0;
@@ -2399,6 +2427,21 @@ LIFE.dialogue.talkToNPC = function(npc) {
     // add flirt options to eligible NPCs
     if (LIFE.canFlirtWith(npc)) {
         LIFE.getFlirtOptions(npc.name).forEach(function(fo) { finalOpts.push(fo); });
+    }
+
+    // Always inject persistent shop options for shop NPCs (dealer, vendors, etc.)
+    if (LIFE.NPC_PERSISTENT_OPTIONS) {
+        var persistent = LIFE.NPC_PERSISTENT_OPTIONS[type];
+        if (persistent) {
+            // Avoid duplicates — check if option text already exists
+            for (var pi = 0; pi < persistent.length; pi++) {
+                var alreadyExists = false;
+                for (var fi = 0; fi < finalOpts.length; fi++) {
+                    if (finalOpts[fi].openDealer || finalOpts[fi].openVendor) { alreadyExists = true; break; }
+                }
+                if (!alreadyExists) finalOpts.push(persistent[pi]);
+            }
+        }
     }
 
     LIFE.dialogue.open(speakerName, dlg.text, finalOpts, false);

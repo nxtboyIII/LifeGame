@@ -138,4 +138,7 @@ LIFE.clearEnvironment = function() {
     LIFE.colliders = [];
     // Clear pathfinding cache since colliders changed
     if (LIFE.pathfinding) LIFE.pathfinding._cache = {};
+    // Clear dropped items and world items
+    if (LIFE.clearDroppedItems) LIFE.clearDroppedItems();
+    if (LIFE.clearWorldItems) LIFE.clearWorldItems();
 };

@@ -167,6 +167,8 @@ LIFE.performAction = function(idx) {
                 var equipped = LIFE.getEquipped();
                 var dmg = LIFE.getPunchDamage(state.age);
                 if (equipped === 'Switchblade') dmg = Math.floor(dmg * 2);
+                else if (equipped === 'Baseball Bat') dmg = Math.floor(dmg * 2.5);
+                else if (equipped === 'Crowbar') dmg = Math.floor(dmg * 2.8);
 
                 if (dmg <= 0) {
                     LIFE.ui.showPopup('*flails weakly*', '#999');
@@ -185,7 +187,7 @@ LIFE.performAction = function(idx) {
 
                 // wanted level - only if witnessed OR attacking police
                 var isChild = state.age < 13;
-                var hasWeapon = equipped === 'Switchblade';
+                var hasWeapon = equipped === 'Switchblade' || equipped === 'Baseball Bat' || equipped === 'Crowbar';
                 if (npc.isPolice) {
                     // Police ALWAYS know — they are the witness
                     LIFE.logCrime('Assaulting a police officer');
@@ -322,6 +324,7 @@ LIFE.checkWitnesses = function(victim) {
     if (!player) return { count: 0, witnessed: false };
     var px = player.group.position.x, pz = player.group.position.z;
     var witnessCount = 0;
+    var phoneCaller = null; // first civilian witness will call police
     var allNPCs = LIFE.getAllNPCs();
     for (var i = 0; i < allNPCs.length; i++) {
         var npc = allNPCs[i];
@@ -331,16 +334,28 @@ LIFE.checkWitnesses = function(victim) {
         var dist = Math.sqrt(dx * dx + dz * dz);
         if (dist < 18 && LIFE.hasLineOfSight(px, pz, nx, nz)) {
             witnessCount++;
-            if (!npc.isPolice) {
-                npc.fleeing = true;
-                npc.fleeTimer = 5 + Math.random() * 3;
+            if (!npc.isPolice && !npc._callingPolice) {
+                if (!phoneCaller) {
+                    // First witness starts a phone call animation
+                    phoneCaller = npc;
+                } else {
+                    // Other witnesses just flee
+                    npc.fleeing = true;
+                    npc.fleeTimer = 5 + Math.random() * 3;
+                }
+            } else if (npc.isPolice) {
+                // Police witness — instant wanted
+                LIFE.addWanted(2);
             }
             LIFE.updateRelationship(npc.name, -10);
         }
     }
-    if (witnessCount > 0 && !victim.isPolice) {
-        var extra = Math.min(3, Math.floor(witnessCount / 2));
-        if (extra > 0) LIFE.addWanted(extra);
+    // Start phone call for the first civilian witness
+    if (phoneCaller && !victim.isPolice) {
+        var wantedAmount = Math.min(3, Math.max(1, Math.floor(witnessCount / 2)));
+        LIFE.npcStartPhoneCall(phoneCaller, function() {
+            LIFE.addWanted(wantedAmount);
+        });
     }
     return { count: witnessCount, witnessed: witnessCount > 0 };
 };

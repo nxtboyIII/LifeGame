@@ -1319,6 +1319,9 @@ LIFE.world.spawnZoneNPCs = function(zoneName) {
             zone.npcs.push(hireNPC);
         });
     }
+
+    // Spawn world items in this zone (after NPCs so owners can be assigned)
+    if (LIFE.spawnWorldItems) LIFE.spawnWorldItems(zoneName);
 };
 
 LIFE.world.refreshNearbyNPCs = function() {
