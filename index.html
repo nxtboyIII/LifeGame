@@ -98,6 +98,31 @@
     <!-- Inventory Panel -->
     <div id="inventoryPanel">
         <div class="invHeader">INVENTORY<span class="invClose" onclick="LIFE.ui.closeInventory()">[I / ESC]</span></div>
+        <div id="invEquipSlots">
+            <div class="invSlotRow">
+                <div class="invSlotBox" id="eslotHead" onclick="LIFE.unequipSlot('head')">
+                    <div class="invSlotLabel">HEAD</div><div class="invSlotItem" id="eslotHeadItem">Empty</div>
+                </div>
+            </div>
+            <div class="invSlotRow">
+                <div class="invSlotBox" id="eslotChest" onclick="LIFE.unequipSlot('chest')">
+                    <div class="invSlotLabel">CHEST</div><div class="invSlotItem" id="eslotChestItem">Empty</div>
+                </div>
+                <div class="invSlotBox invSlotArmor" id="eslotArmor" onclick="LIFE.unequipSlot('armor')">
+                    <div class="invSlotLabel">ARMOR</div><div class="invSlotItem" id="eslotArmorItem">Empty</div>
+                </div>
+            </div>
+            <div class="invSlotRow">
+                <div class="invSlotBox" id="eslotLegs" onclick="LIFE.unequipSlot('legs')">
+                    <div class="invSlotLabel">LEGS</div><div class="invSlotItem" id="eslotLegsItem">Empty</div>
+                </div>
+            </div>
+            <div class="invSlotRow">
+                <div class="invSlotBox" id="eslotShoes" onclick="LIFE.unequipSlot('shoes')">
+                    <div class="invSlotLabel">SHOES</div><div class="invSlotItem" id="eslotShoesItem">Empty</div>
+                </div>
+            </div>
+        </div>
         <div class="invBody">
             <div id="invItemList" class="invItemList"></div>
             <div class="invPreview">
@@ -111,6 +136,7 @@
                 <div id="invInfoStats" class="invInfoStats"></div>
                 <div class="invActions">
                     <div id="invEquipBtn" class="invBtn" onclick="LIFE._invEquipSelected()">Equip</div>
+                    <div id="invWearBtn" class="invBtn invBtnWear" onclick="LIFE._invWearSelected()" style="display:none">Wear</div>
                     <div id="invUseBtn" class="invBtn invBtnUse" onclick="LIFE._invUseSelected()" style="display:none">Use</div>
                     <div id="invDropBtn" class="invBtn invBtnDrop" onclick="LIFE._invDropSelected()">Drop</div>
                 </div>

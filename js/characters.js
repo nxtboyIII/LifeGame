@@ -42,6 +42,7 @@ LIFE.createCharacter = function(height, skinColor, clothesColor, isPlayer, opts)
 
     var skinMat = new THREE.MeshPhongMaterial({ color: skinColor });
     var clothesMat = new THREE.MeshPhongMaterial({ color: clothesColor });
+    ch.bodyMat = clothesMat;
 
     // Head (sphere, bigger for babies)
     var headGeo = isBaby ? new THREE.SphereGeometry(headR, 12, 10) : new THREE.SphereGeometry(headR, 10, 8);
@@ -123,6 +124,7 @@ LIFE.createCharacter = function(height, skinColor, clothesColor, isPlayer, opts)
     var isNaked = (skinColor === clothesColor);
     var legColor = isNaked ? skinColor : (isPlayer ? 0x1a237e : new THREE.Color(clothesColor).multiplyScalar(0.7));
     var legMat = new THREE.MeshPhongMaterial({ color: legColor });
+    ch.legMat = legMat;
 
     var llG = new THREE.Group();
     llG.position.set(-legW * 0.7, legH, 0);

@@ -869,6 +869,20 @@ body.unlocked { cursor: default; }
 .invBtnDrop:hover { background: rgba(239,83,80,0.22); border-color: #ef5350; }
 .invBtnUse  { background: rgba(79,195,247,0.12); border-color: rgba(79,195,247,0.35); color: var(--c-cyan); }
 .invBtnUse:hover { background: rgba(79,195,247,0.22); border-color: var(--c-cyan); }
+.invBtnWear { background: rgba(156,39,176,0.15); border-color: rgba(156,39,176,0.35); color: #ce93d8; }
+.invBtnWear:hover { background: rgba(156,39,176,0.25); border-color: #ce93d8; }
+
+/* Equipment Slots */
+#invEquipSlots { display:flex; flex-direction:column; align-items:center; gap:4px; margin-bottom:14px; padding:10px; background:rgba(255,255,255,0.02); border-radius:9px; border:1px solid var(--c-border); }
+.invSlotRow { display:flex; gap:8px; justify-content:center; }
+.invSlotBox { width:110px; padding:6px 8px; border-radius:7px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); cursor:pointer; text-align:center; transition:all 0.15s; }
+.invSlotBox:hover { border-color:rgba(79,195,247,0.4); background:rgba(79,195,247,0.06); }
+.invSlotBox.filled { border-color:rgba(76,175,80,0.5); }
+.invSlotBox.invSlotArmor.filled { border-color:rgba(239,83,80,0.5); }
+.invSlotLabel { font-size:9px; letter-spacing:2px; color:rgba(255,255,255,0.35); text-transform:uppercase; margin-bottom:2px; }
+.invSlotItem { font-size:12px; color:var(--c-text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.invSlotBox.filled .invSlotItem { color:#66bb6a; }
+.invSlotBox.invSlotArmor.filled .invSlotItem { color:#ef5350; }
 
 /* ================================================================
    CONTAINER PANEL (Skyrim-style)

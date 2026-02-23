@@ -3,6 +3,14 @@
 // ============================================================
 LIFE.player = null;
 
+LIFE.CLOTHING_COLORS = {
+    'T-Shirt': 0xeeeeee, 'Nice Outfit': 0x1565c0, 'Designer Clothes': 0x6a1b9a,
+    'Formal Suit': 0x212121, 'Event T-Shirt': 0xf44336,
+    'Jeans': 0x1a237e, 'Dress Pants': 0x37474f, 'Shorts': 0xbcaaa4,
+    'Cap': 0xd32f2f, 'Beanie': 0x333333, 'Cowboy Hat': 0x6d4c41,
+    'Sneakers': 0xffffff, 'Boots': 0x3e2723, 'Designer Shoes': 0x1a1a1a
+};
+
 LIFE.createPlayer = function() {
     if (LIFE.player) LIFE.scene.remove(LIFE.player.group);
     var h = LIFE.getHeightForAge(Math.max(0, LIFE.state.age));
@@ -13,6 +21,7 @@ LIFE.createPlayer = function() {
     LIFE.scene.add(LIFE.player.group);
     // Create capsule physics body matching player height
     LIFE.physics.createPlayerBody(h, 0, 0, 0);
+    if (LIFE.updatePlayerAppearance) LIFE.updatePlayerAppearance();
 };
 
 LIFE.updatePlayerSize = function() {
@@ -34,6 +43,7 @@ LIFE.updatePlayerSize = function() {
         if (LIFE.updateHeldWeapon) LIFE.updateHeldWeapon();
         // Recreate capsule physics body with new height
         LIFE.physics.createPlayerBody(h, pos.x, pos.y, pos.z);
+        if (LIFE.updatePlayerAppearance) LIFE.updatePlayerAppearance();
     }
 };
 
@@ -51,6 +61,85 @@ LIFE.teleportPlayer = function(x, y, z) {
         LIFE.physics._currPlayerPos.x = x;
         LIFE.physics._currPlayerPos.y = y + halfH;
         LIFE.physics._currPlayerPos.z = z;
+    }
+};
+
+// ============================================================
+// PLAYER APPEARANCE (equipment-based)
+// ============================================================
+LIFE.updatePlayerAppearance = function() {
+    var player = LIFE.player;
+    if (!player) return;
+    var eq = LIFE.state.equipment;
+    if (!eq) return;
+    var defaultChest = LIFE.state.age < 0 ? 0xffdbac : 0x2196f3;
+    var defaultLegs = 0x1a237e;
+    var h = player.height;
+
+    // Chest color
+    var chestColor = eq.chest ? (LIFE.CLOTHING_COLORS[eq.chest] || defaultChest) : defaultChest;
+    if (player.bodyMat) player.bodyMat.color.setHex(chestColor);
+
+    // Leg color
+    var legColor = eq.legs ? (LIFE.CLOTHING_COLORS[eq.legs] || defaultLegs) : defaultLegs;
+    if (player.legMat) player.legMat.color.setHex(legColor);
+
+    // Remove old accessory meshes
+    if (player._hatMesh) { player.group.remove(player._hatMesh); player._hatMesh = null; }
+    if (player._armorMesh) { player.group.remove(player._armorMesh); player._armorMesh = null; }
+    if (player._shoeMeshL && player.parts.leftLeg) { player.parts.leftLeg.remove(player._shoeMeshL); player._shoeMeshL = null; }
+    if (player._shoeMeshR && player.parts.rightLeg) { player.parts.rightLeg.remove(player._shoeMeshR); player._shoeMeshR = null; }
+
+    // Hat
+    if (eq.head) {
+        var hatColor = LIFE.CLOTHING_COLORS[eq.head] || 0x333333;
+        var hatMat = LIFE.getMaterial({ color: hatColor });
+        var hatGroup = new THREE.Group();
+        if (eq.head === 'Cowboy Hat') {
+            hatGroup.add(new THREE.Mesh(new THREE.BoxGeometry(h*0.35, 0.02, h*0.35), hatMat));
+            var top = new THREE.Mesh(new THREE.BoxGeometry(h*0.18, h*0.08, h*0.18), hatMat);
+            top.position.y = h*0.05; hatGroup.add(top);
+        } else if (eq.head === 'Beanie') {
+            hatGroup.add(new THREE.Mesh(new THREE.BoxGeometry(h*0.22, h*0.1, h*0.22), hatMat));
+        } else { // Cap
+            var capTop = new THREE.Mesh(new THREE.BoxGeometry(h*0.22, h*0.05, h*0.22), hatMat);
+            hatGroup.add(capTop);
+            var brim = new THREE.Mesh(new THREE.BoxGeometry(h*0.22, 0.01, h*0.08), hatMat);
+            brim.position.z = h*0.13; brim.position.y = -h*0.02; hatGroup.add(brim);
+        }
+        var headR = h * 0.13;
+        var legH = h * 0.28;
+        var bodyH = h * 0.32;
+        hatGroup.position.y = legH + bodyH + headR * 2 + h * 0.02;
+        player.group.add(hatGroup);
+        player._hatMesh = hatGroup;
+    }
+
+    // Armor vest overlay
+    if (eq.armor) {
+        var armorMat = LIFE.getMaterial({ color: 0x2d2d2d });
+        var vestH = h * 0.34;
+        var vestW = h * 0.24;
+        var vest = new THREE.Mesh(new THREE.BoxGeometry(vestW, vestH, h * 0.16), armorMat);
+        vest.position.y = h * 0.28 + vestH / 2;
+        player.group.add(vest);
+        player._armorMesh = vest;
+    }
+
+    // Shoes
+    if (eq.shoes && player.parts.leftLeg && player.parts.rightLeg) {
+        var shoeColor = LIFE.CLOTHING_COLORS[eq.shoes] || 0x333333;
+        var shoeMat = LIFE.getMaterial({ color: shoeColor });
+        var legH2 = h * 0.28;
+        var legW2 = h * 0.08;
+        var shoeL = new THREE.Mesh(new THREE.BoxGeometry(legW2*1.2, legH2*0.2, legW2*1.5), shoeMat);
+        shoeL.position.set(0, -legH2*0.95, legW2*0.2);
+        player.parts.leftLeg.add(shoeL);
+        player._shoeMeshL = shoeL;
+        var shoeR = new THREE.Mesh(new THREE.BoxGeometry(legW2*1.2, legH2*0.2, legW2*1.5), shoeMat);
+        shoeR.position.set(0, -legH2*0.95, legW2*0.2);
+        player.parts.rightLeg.add(shoeR);
+        player._shoeMeshR = shoeR;
     }
 };
 

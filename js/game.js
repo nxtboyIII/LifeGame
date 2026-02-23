@@ -40,6 +40,7 @@ LIFE.state = {
     timeSpeed: 72, // game-seconds per real second (72x = default)
     // inventory
     inventory: ['Fists'], equippedIndex: 0,
+    equipment: { head: null, chest: null, legs: null, shoes: null, armor: null },
     // health
     drugUses: 0,
     // jail
@@ -2215,12 +2216,21 @@ LIFE.ITEM_DATA = {
     'Supplements':      { desc: 'Health supplements.', type: 'food', heal: 6, value: 20 },
     'Prescription':     { desc: 'Prescription medication.', type: 'food', heal: 10, value: 50 },
     // Clothes
-    'T-Shirt':          { desc: 'A casual t-shirt.', type: 'clothing', value: 8 },
-    'Nice Outfit':      { desc: 'A stylish outfit.', type: 'clothing', value: 30 },
-    'Designer Clothes': { desc: 'High-end designer clothing.', type: 'clothing', value: 100 },
-    'Formal Suit':      { desc: 'A sharp formal suit.', type: 'clothing', value: 200 },
+    'T-Shirt':          { desc: 'A casual t-shirt.', type: 'clothing', slot: 'chest', value: 8 },
+    'Nice Outfit':      { desc: 'A stylish outfit.', type: 'clothing', slot: 'chest', value: 30 },
+    'Designer Clothes': { desc: 'High-end designer clothing.', type: 'clothing', slot: 'chest', value: 100 },
+    'Formal Suit':      { desc: 'A sharp formal suit.', type: 'clothing', slot: 'chest', value: 200 },
     'Luxury Watch':     { desc: 'An expensive luxury watch.', type: 'valuable', value: 750 },
-    'Designer Shoes':   { desc: 'Premium designer shoes.', type: 'clothing', value: 150 },
+    'Designer Shoes':   { desc: 'Premium designer shoes.', type: 'clothing', slot: 'shoes', value: 150 },
+    // New clothing (head, legs, shoes)
+    'Cap':              { desc: 'A casual cap.', type: 'clothing', slot: 'head', value: 10 },
+    'Beanie':           { desc: 'A warm knit beanie.', type: 'clothing', slot: 'head', value: 15 },
+    'Cowboy Hat':       { desc: 'A rugged cowboy hat.', type: 'clothing', slot: 'head', value: 25 },
+    'Jeans':            { desc: 'Classic blue jeans.', type: 'clothing', slot: 'legs', value: 20 },
+    'Dress Pants':      { desc: 'Sharp dress pants.', type: 'clothing', slot: 'legs', value: 40 },
+    'Shorts':           { desc: 'Comfortable shorts.', type: 'clothing', slot: 'legs', value: 12 },
+    'Sneakers':         { desc: 'Sporty sneakers.', type: 'clothing', slot: 'shoes', value: 30 },
+    'Boots':            { desc: 'Sturdy leather boots.', type: 'clothing', slot: 'shoes', value: 50 },
     // Books
     'Comic Book':       { desc: 'A colorful comic book.', type: 'misc', value: 3 },
     'Novel':            { desc: 'A paperback novel.', type: 'misc', value: 6 },
@@ -2229,7 +2239,7 @@ LIFE.ITEM_DATA = {
     // Gym
     'Sports Equipment': { desc: 'Quality sports gear.', type: 'misc', value: 100 },
     // Tickets
-    'Event T-Shirt':    { desc: 'A commemorative event t-shirt.', type: 'clothing', value: 10 },
+    'Event T-Shirt':    { desc: 'A commemorative event t-shirt.', type: 'clothing', slot: 'chest', value: 10 },
     'Concert Poster':   { desc: 'A signed concert poster.', type: 'misc', value: 8 },
     'Signed Merch':     { desc: 'Autographed merchandise.', type: 'valuable', value: 40 },
     // Electronics
@@ -2248,7 +2258,7 @@ LIFE.ITEM_DATA = {
     'Lockpick Set':     { desc: 'A set of lockpicks. Useful for breaking in.', type: 'misc', value: 100 },
     // Arms Dealer items
     'Shotgun':          { desc: 'A pump-action shotgun. Devastating at close range.', damage: 60, type: 'ranged', value: 5000 },
-    'Body Armor':       { desc: 'Kevlar body armor. Reduces incoming damage.', type: 'armor', value: 3000 },
+    'Body Armor':       { desc: 'Kevlar body armor. Reduces incoming damage.', type: 'armor', slot: 'armor', value: 3000 },
     'Ammo Crate':       { desc: 'A crate of ammunition.', type: 'misc', value: 500 }
 };
 
@@ -3020,6 +3030,72 @@ LIFE.createItemMesh = function(itemName) {
             label.position.z = 0.051;
             group.add(label);
             break;
+        // === NEW CLOTHING ===
+        case 'Cap':
+            mat = LIFE.getMaterial({ color: 0xd32f2f });
+            var capTop2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.04, 0.12), mat);
+            group.add(capTop2);
+            var capBrim = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.01, 0.06), mat);
+            capBrim.position.set(0, -0.015, 0.08);
+            group.add(capBrim);
+            break;
+        case 'Beanie':
+            mat = LIFE.getMaterial({ color: 0x333333 });
+            group.add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.09, 0.12), mat));
+            break;
+        case 'Cowboy Hat':
+            mat = LIFE.getMaterial({ color: 0x6d4c41 });
+            var cwBrim = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.015, 0.2), mat);
+            group.add(cwBrim);
+            var cwTop = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.07, 0.10), mat);
+            cwTop.position.y = 0.04;
+            group.add(cwTop);
+            break;
+        case 'Jeans':
+            mat = LIFE.getMaterial({ color: 0x1a237e });
+            var jL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.14, 0.04), mat);
+            jL.position.set(-0.03, 0, 0);
+            group.add(jL);
+            var jR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.14, 0.04), mat);
+            jR.position.set(0.03, 0, 0);
+            group.add(jR);
+            break;
+        case 'Dress Pants':
+            mat = LIFE.getMaterial({ color: 0x37474f });
+            var dpL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.14, 0.04), mat);
+            dpL.position.set(-0.03, 0, 0);
+            group.add(dpL);
+            var dpR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.14, 0.04), mat);
+            dpR.position.set(0.03, 0, 0);
+            group.add(dpR);
+            break;
+        case 'Shorts':
+            mat = LIFE.getMaterial({ color: 0xbcaaa4 });
+            var sL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.05), mat);
+            sL.position.set(-0.03, 0, 0);
+            group.add(sL);
+            var sR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.05), mat);
+            sR.position.set(0.03, 0, 0);
+            group.add(sR);
+            break;
+        case 'Sneakers':
+            mat = LIFE.getMaterial({ color: 0xffffff });
+            var snL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.08), mat);
+            snL.position.set(-0.04, 0, 0);
+            group.add(snL);
+            var snR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.08), mat);
+            snR.position.set(0.04, 0, 0);
+            group.add(snR);
+            break;
+        case 'Boots':
+            mat = LIFE.getMaterial({ color: 0x3e2723 });
+            var btL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.08), mat);
+            btL.position.set(-0.04, 0, 0);
+            group.add(btL);
+            var btR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.08), mat);
+            btR.position.set(0.04, 0, 0);
+            group.add(btR);
+            break;
         default:
             // Generic box for unknown items
             geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
@@ -3393,6 +3469,7 @@ LIFE.ui.openInventory = function() {
 
     LIFE._invSelectedIndex = LIFE.state.equippedIndex;
     LIFE.ui.refreshInventoryPanel();
+    LIFE._refreshEquipSlots();
     LIFE._invSetPreviewItem(LIFE.state.inventory[LIFE._invSelectedIndex]);
     LIFE._invAnimFrame = requestAnimationFrame(LIFE._invRenderLoop);
 };
@@ -3451,13 +3528,18 @@ LIFE.ui.refreshInventoryPanel = function() {
     var equipBtn = document.getElementById('invEquipBtn');
     var dropBtn = document.getElementById('invDropBtn');
     var useBtn = document.getElementById('invUseBtn');
+    var wearBtn = document.getElementById('invWearBtn');
     var isWeapon = data.type === 'melee' || data.type === 'ranged';
     var isConsumable = !!(data.heal || data.stat);
+    var hasSlot = !!data.slot;
     if (equipBtn) {
         var isEq = LIFE._invSelectedIndex === LIFE.state.equippedIndex;
         equipBtn.textContent = isEq ? 'Equipped' : 'Equip';
         equipBtn.style.opacity = isEq ? '0.4' : '1';
         equipBtn.style.display = (isWeapon || selBaseName === 'Fists') ? 'inline-block' : 'none';
+    }
+    if (wearBtn) {
+        wearBtn.style.display = hasSlot ? 'inline-block' : 'none';
     }
     if (useBtn) {
         useBtn.style.display = isConsumable ? 'inline-block' : 'none';
@@ -3524,6 +3606,71 @@ LIFE._invUseSelected = function() {
     LIFE.ui.refreshInventoryPanel();
     LIFE._invSetPreviewItem(inv[LIFE._invSelectedIndex]);
     if (inv.length <= 1) {
+        LIFE.ui.closeInventory();
+    }
+};
+
+// ============================================================
+// EQUIPMENT SLOTS — Wear / Unequip clothing
+// ============================================================
+LIFE.equipToSlot = function(itemIndex) {
+    var inv = LIFE.state.inventory;
+    var rawItem = inv[itemIndex];
+    var baseName = LIFE.getItemBaseName(rawItem);
+    var data = LIFE.ITEM_DATA[baseName];
+    if (!data || !data.slot) return;
+    var slot = data.slot;
+    // Unequip current item in that slot first
+    if (LIFE.state.equipment[slot]) {
+        inv.push(LIFE.state.equipment[slot]);
+    }
+    // Remove from inventory and equip
+    inv.splice(itemIndex, 1);
+    if (LIFE.state.equippedIndex >= inv.length) LIFE.state.equippedIndex = Math.max(0, inv.length - 1);
+    LIFE.state.equipment[slot] = baseName;
+    LIFE.ui.showPopup('Wearing: ' + baseName, '#66bb6a', 'equip');
+    if (LIFE.updatePlayerAppearance) LIFE.updatePlayerAppearance();
+    LIFE.updateHeldWeapon();
+    LIFE.ui.refreshInventoryPanel();
+    LIFE._refreshEquipSlots();
+};
+
+LIFE.unequipSlot = function(slotName) {
+    var item = LIFE.state.equipment[slotName];
+    if (!item) return;
+    LIFE.state.inventory.push(item);
+    LIFE.state.equipment[slotName] = null;
+    LIFE.ui.showPopup('Removed: ' + item, '#ef5350', 'equip');
+    if (LIFE.updatePlayerAppearance) LIFE.updatePlayerAppearance();
+    LIFE.updateHeldWeapon();
+    LIFE.ui.refreshInventoryPanel();
+    LIFE._refreshEquipSlots();
+};
+
+LIFE._refreshEquipSlots = function() {
+    var eq = LIFE.state.equipment;
+    if (!eq) return;
+    var slots = ['head', 'chest', 'legs', 'shoes', 'armor'];
+    slots.forEach(function(s) {
+        var box = document.getElementById('eslot' + s.charAt(0).toUpperCase() + s.slice(1));
+        var itemEl = document.getElementById('eslot' + s.charAt(0).toUpperCase() + s.slice(1) + 'Item');
+        if (!box || !itemEl) return;
+        if (eq[s]) {
+            box.classList.add('filled');
+            itemEl.textContent = eq[s];
+        } else {
+            box.classList.remove('filled');
+            itemEl.textContent = 'Empty';
+        }
+    });
+};
+
+LIFE._invWearSelected = function() {
+    LIFE.equipToSlot(LIFE._invSelectedIndex);
+    if (LIFE._invSelectedIndex >= LIFE.state.inventory.length)
+        LIFE._invSelectedIndex = Math.max(0, LIFE.state.inventory.length - 1);
+    LIFE._invSetPreviewItem(LIFE.state.inventory[LIFE._invSelectedIndex]);
+    if (LIFE.state.inventory.length <= 1) {
         LIFE.ui.closeInventory();
     }
 };

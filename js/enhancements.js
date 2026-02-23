@@ -28,10 +28,13 @@ LIFE.enhance.init = function() {
     LIFE.enhance.hitFlash.init();
     LIFE.enhance.emotions.init();
 
-    // Patch LIFE.damagePlayer to trigger shake + vignette
+    // Patch LIFE.damagePlayer to trigger shake + vignette + armor reduction
     var _origDmgP = LIFE.damagePlayer;
     LIFE.damagePlayer = function(amount, source) {
-        _origDmgP.apply(LIFE, arguments);
+        if (LIFE.state.equipment && LIFE.state.equipment.armor) {
+            amount = Math.round(amount * 0.7); // 30% reduction from body armor
+        }
+        _origDmgP.call(LIFE, amount, source);
         LIFE.enhance.shake.add(Math.min(amount * 0.015, 0.3));
     };
 

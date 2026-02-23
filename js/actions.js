@@ -289,7 +289,7 @@ LIFE.hasLineOfSight = function(ax, az, bx, bz) {
     var dx = bx - ax, dz = bz - az;
     var len = Math.sqrt(dx * dx + dz * dz);
     if (len < 0.5) return true; // too close to matter
-    // Step along line checking for collider intersection
+    // Step along line checking for collider intersection (2D AABB)
     var steps = Math.ceil(len / 0.8); // check every 0.8 units
     var sx = dx / steps, sz = dz / steps;
     for (var s = 1; s < steps; s++) {
@@ -299,6 +299,13 @@ LIFE.hasLineOfSight = function(ax, az, bx, bz) {
             if (px >= col.minX && px <= col.maxX && pz >= col.minZ && pz <= col.maxZ) {
                 return false; // blocked by wall/building
             }
+        }
+    }
+    // Physics raycast as secondary check (catches walls the 2D check misses)
+    if (LIFE.physics.raycastLOS) {
+        var eyeY = 1.2; // approximate eye height for LOS
+        if (!LIFE.physics.raycastLOS(ax, eyeY, az, bx, eyeY, bz)) {
+            return false; // blocked by physics body (wall)
         }
     }
     return true;

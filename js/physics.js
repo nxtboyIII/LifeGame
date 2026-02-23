@@ -434,6 +434,34 @@ LIFE.physics.raycastGround = function(x, y, z) {
 };
 
 // ============================================================
+// LINE-OF-SIGHT RAYCAST (ignores NPCs, group 4)
+// ============================================================
+LIFE.physics._losFrom = new CANNON.Vec3();
+LIFE.physics._losTo = new CANNON.Vec3();
+LIFE.physics._losResult = new CANNON.RaycastResult();
+
+LIFE.physics.raycastLOS = function(ax, ay, az, bx, by, bz) {
+    if (!LIFE.physics.world) return true; // no physics = assume clear
+    LIFE.physics._losFrom.set(ax, ay, az);
+    LIFE.physics._losTo.set(bx, by, bz);
+    LIFE.physics._losResult.reset();
+    var hit = LIFE.physics.world.raycastClosest(
+        LIFE.physics._losFrom,
+        LIFE.physics._losTo,
+        { skipBackfaces: true, collisionFilterMask: ~4 }, // exclude NPCs (group 4)
+        LIFE.physics._losResult
+    );
+    if (!hit) return true; // nothing blocking
+    // Check if the hit point is between the two points (not beyond target)
+    var dx = bx - ax, dy = by - ay, dz = bz - az;
+    var totalDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    var hp = LIFE.physics._losResult.hitPointWorld;
+    var hx = hp.x - ax, hy = hp.y - ay, hz = hp.z - az;
+    var hitDist = Math.sqrt(hx * hx + hy * hy + hz * hz);
+    return hitDist >= totalDist * 0.95; // hit is at or beyond target = clear LOS
+};
+
+// ============================================================
 // CLEANUP
 // ============================================================
 LIFE.physics.removeBody = function(body) {

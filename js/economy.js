@@ -106,7 +106,15 @@ LIFE.VENDOR_ITEMS = {
         { name: 'Designer Clothes',cost: 200,   stat: 'charisma',     amount: 6,  minAge: 16, physical: true },
         { name: 'Formal Suit',     cost: 400,   stat: 'charisma',     amount: 8,  minAge: 20, physical: true },
         { name: 'Luxury Watch',    cost: 1500,  stat: 'charisma',     amount: 5,  minAge: 25, once: true, physical: true },
-        { name: 'Designer Shoes',  cost: 300,   stat: 'charisma',     amount: 4,  minAge: 16, physical: true }
+        { name: 'Designer Shoes',  cost: 300,   stat: 'charisma',     amount: 4,  minAge: 16, physical: true },
+        { name: 'Cap',             cost: 20,    stat: 'charisma',     amount: 1,  minAge: 5,  physical: true },
+        { name: 'Jeans',           cost: 30,    stat: 'charisma',     amount: 1,  minAge: 8,  physical: true },
+        { name: 'Shorts',          cost: 20,    stat: 'charisma',     amount: 1,  minAge: 5,  physical: true },
+        { name: 'Sneakers',        cost: 50,    stat: 'charisma',     amount: 2,  minAge: 8,  physical: true },
+        { name: 'Boots',           cost: 100,   stat: 'charisma',     amount: 2,  minAge: 14, physical: true },
+        { name: 'Beanie',          cost: 25,    stat: 'charisma',     amount: 1,  minAge: 8,  physical: true },
+        { name: 'Cowboy Hat',      cost: 50,    stat: 'charisma',     amount: 2,  minAge: 12, physical: true },
+        { name: 'Dress Pants',     cost: 80,    stat: 'charisma',     amount: 3,  minAge: 16, physical: true }
     ],
     'Pharmacist': [
         { name: 'Vitamins',        cost: 10,    stat: 'health',       amount: 3,  minAge: 5,  physical: true },
