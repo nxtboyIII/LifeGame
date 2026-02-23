@@ -180,7 +180,7 @@ LIFE.NPC_DIALOGUES = {
     'Dad': [
         { text: "Hey champ! Want to play catch?", options: [
             { text: "Yeah! Let's go!", effects: { happiness: 3, health: 1 }, rep: 3, response: {
-                text: "Nice throw! You're getting better every day!", options: [
+                text: "Nice throw! Wow, you've got a strong arm!", options: [
                     { text: "Can we play more tomorrow?", effects: { happiness: 2 }, rep: 2 },
                     { text: "I'm gonna be a pro!", effects: { charisma: 1, happiness: 1 }, rep: 1 }
                 ]
@@ -846,25 +846,37 @@ LIFE.NPC_DIALOGUES['Teacher'].push(
 // Neighbor dialogues with moral choices
 LIFE.NPC_DIALOGUES['Neighbor'].push(
     { text: "I'm organizing a neighborhood watch. We've had break-ins lately. Want to help?", minAge: 18, options: [
-        { text: "Absolutely! I'll help keep everyone safe.", effects: { charisma: 3, happiness: 2 }, rep: 12, response: {
-            text: "Great! With your help, we've already scared off two suspicious characters this week.", options: [
-                { text: "Happy to help. This community matters to me.", effects: { happiness: 3 }, rep: 8,
-                    onSelect: function() { LIFE.state.livesHelped += 2; LIFE.logMilestone('Helped organize neighborhood watch', 'good'); }},
-                { text: "We should get more people involved.", effects: { charisma: 2 }, rep: 5 }
-            ]
-        }},
+        { text: "Absolutely! I'll patrol the neighborhood.", effects: { charisma: 2 },
+            onSelect: function(npc) { LIFE.quests.startFromDialogue({
+                id: 'neighborhood_watch', title: 'Neighborhood Watch',
+                desc: 'Patrol the neighborhood to keep everyone safe.',
+                type: 'good', giver: ['Neighbor'],
+                minAge: 0, maxAge: 99,
+                objectives: [
+                    { type: 'go_to', zone: 'city', desc: 'Patrol around the neighborhood', radius: 30 },
+                    { type: 'return', desc: 'Report back to the neighbor' }
+                ],
+                reward: { rep: 15, happiness: 5, charisma: 3, onComplete: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Helped organize neighborhood watch', 'good'); } },
+                timeLimit: 600
+            }, npc); }},
         { text: "I'm too busy, sorry.", effects: {}, rep: -2 },
         { text: "Why would I? Maybe I AM the one breaking in.", effects: {}, rep: -15,
             onSelect: function() { LIFE.logMilestone('Threatened neighbor about break-ins', 'bad'); }}
     ]},
     { text: "My elderly mother needs someone to check on her while I'm at work. Could you look in on her sometimes?", minAge: 16, options: [
-        { text: "Of course! I'd be happy to.", effects: { happiness: 3, charisma: 2 }, rep: 10, response: {
-            text: "You've been visiting her every week. She says you're the highlight of her week now.", options: [
-                { text: "She reminds me of my own family. It's no trouble.", effects: { happiness: 5 }, rep: 8,
-                    onSelect: function() { LIFE.state.livesHelped++; LIFE.state.peopleMentored++; LIFE.logMilestone('Regularly visited an elderly neighbor, became her close companion', 'good'); }},
-                { text: "She's great company!", effects: { happiness: 3 }, rep: 5 }
-            ]
-        }},
+        { text: "Of course! I'll go check on her.", effects: { happiness: 3 },
+            onSelect: function(npc) { LIFE.quests.startFromDialogue({
+                id: 'check_on_grandma', title: 'Check on Grandma',
+                desc: 'Visit the elderly mother at home and make sure she\'s okay.',
+                type: 'good', giver: ['Neighbor'],
+                minAge: 0, maxAge: 99,
+                objectives: [
+                    { type: 'go_to', zone: 'home', desc: 'Visit the elderly mother at home', radius: 15 },
+                    { type: 'return', desc: 'Let the neighbor know she\'s okay' }
+                ],
+                reward: { rep: 12, happiness: 5, charisma: 2, onComplete: function() { LIFE.state.livesHelped++; LIFE.logMilestone('Checked in on an elderly neighbor', 'good'); } },
+                timeLimit: 600
+            }, npc); }},
         { text: "Only if you pay me.", effects: {}, rep: -5, money: 30 },
         { text: "I don't have time for old people.", effects: {}, rep: -8 }
     ]}
@@ -875,9 +887,20 @@ LIFE.NPC_DIALOGUES['Gym Trainer'] = LIFE.NPC_DIALOGUES['Gym Trainer'] || [];
 LIFE.NPC_DIALOGUES['Gym Trainer'].push(
     { text: "You look like you could use a workout. Want me to train you?", minAge: 14, options: [
         { text: "Let's do it! Push me hard!", effects: { health: 5, happiness: 2 }, rep: 3, response: {
-            text: "Great session! You know, I run a free fitness class for underprivileged kids on weekends. We could use a helper.", options: [
-                { text: "I'd love to help with that!", effects: { happiness: 4, charisma: 3, health: 2 }, rep: 12,
-                    onSelect: function() { LIFE.state.volunteerHours++; LIFE.state.peopleMentored += 3; LIFE.logMilestone('Mentored underprivileged kids through fitness classes', 'good'); }},
+            text: "Great session! Hey, I'm running a free fitness class for underprivileged kids this Saturday at the school. Want to come help out?", options: [
+                { text: "Count me in!", effects: { happiness: 2 },
+                    onSelect: function(npc) { LIFE.quests.startFromDialogue({
+                        id: 'kids_fitness', title: 'Kids Fitness Class',
+                        desc: 'Help the gym trainer run a fitness class for underprivileged kids at the school.',
+                        type: 'good', giver: ['Gym Trainer'],
+                        minAge: 0, maxAge: 99,
+                        objectives: [
+                            { type: 'go_to', zone: 'school', desc: 'Go to the school for the fitness class', radius: 20 },
+                            { type: 'wait', duration: 20, desc: 'Help run the fitness class' }
+                        ],
+                        reward: { rep: 12, happiness: 5, charisma: 3, health: 2, onComplete: function() { LIFE.state.volunteerHours++; LIFE.state.peopleMentored += 3; LIFE.logMilestone('Helped run a fitness class for underprivileged kids', 'good'); } },
+                        timeLimit: 600
+                    }, npc); }},
                 { text: "That sounds nice, but I'm busy.", effects: {}, rep: 0 }
             ]
         }},
@@ -911,16 +934,16 @@ LIFE.NPC_DIALOGUES['Coworker'].push(
     ]},
     { text: "There's a new intern who's struggling really badly. They might get fired.", minAge: 23, options: [
         { text: "I'll mentor them. Everyone deserves a chance.", effects: { charisma: 3, happiness: 2 }, rep: 10, response: {
-            text: "A year later, that intern got promoted and publicly thanked you in their speech. The whole office applauded.", options: [
-                { text: "Seeing them succeed is reward enough.", effects: { happiness: 8, charisma: 3 }, rep: 10,
-                    onSelect: function() { LIFE.state.peopleMentored++; LIFE.state.livesHelped++; LIFE.logMilestone('Mentored a struggling intern who later succeeded', 'good'); }},
-                { text: "I'm glad I could help.", effects: { happiness: 5 }, rep: 5,
+            text: "Really? That's great of you. They're at their desk right now looking pretty lost. Maybe go introduce yourself?", options: [
+                { text: "Hey, I heard you could use some help. Let me show you the ropes.", effects: { happiness: 5, charisma: 3 }, rep: 8,
+                    onSelect: function() { LIFE.state.peopleMentored++; LIFE.state.livesHelped++; LIFE.logMilestone('Offered to mentor a struggling intern', 'good'); }},
+                { text: "I'll catch up with them after lunch.", effects: { happiness: 3 }, rep: 5,
                     onSelect: function() { LIFE.state.peopleMentored++; }}
             ]
         }},
         { text: "Not my problem. Sink or swim.", effects: {}, rep: -3 },
         { text: "Good. Less competition for me.", effects: {}, rep: -5, response: {
-            text: "Wow... cold. They got fired the next week. You could hear them crying in the break room.", options: [
+            text: "Wow... cold. They look like they're about to cry right now.", options: [
                 { text: "That's business.", effects: {}, rep: -3,
                     onSelect: function() { LIFE.state.innocentsHarmed++; }},
                 { text: "...maybe I should have helped.", effects: { happiness: -3 }, rep: 2 }
@@ -1029,10 +1052,10 @@ LIFE.NPC_DIALOGUES['Professor'].push(
     ]},
     { text: "I caught your classmate plagiarizing their paper. They're begging me not to report it. What would you do?", minAge: 18, options: [
         { text: "Everyone deserves a second chance. Let them rewrite it.", effects: { charisma: 3, happiness: 2 }, rep: 8, response: {
-            text: "Hmm. Compassionate answer. Perhaps you're right — they've been struggling since their mother's illness.", options: [
-                { text: "I could help them with the rewrite. Nobody should fail over a mistake.", effects: { charisma: 3, happiness: 3 }, rep: 12,
-                    onSelect: function() { LIFE.state.peopleMentored++; LIFE.state.livesHelped++; LIFE.logMilestone('Helped a classmate avoid expulsion and mentored them', 'good'); }},
-                { text: "Just give them the chance. They'll learn.", effects: { charisma: 1 }, rep: 5 }
+            text: "Hmm. Compassionate answer. Perhaps you're right — they told me their mother is sick. It's been rough on them.", options: [
+                { text: "I'll help them with the rewrite tonight.", effects: { charisma: 3, happiness: 3 }, rep: 12,
+                    onSelect: function() { LIFE.state.peopleMentored++; LIFE.state.livesHelped++; LIFE.logMilestone('Helped a classmate avoid expulsion', 'good'); }},
+                { text: "Just give them the chance. They'll figure it out.", effects: { charisma: 1 }, rep: 5 }
             ]
         }},
         { text: "Rules are rules. Report them.", effects: { intelligence: 2 }, rep: 3 },
@@ -1072,6 +1095,16 @@ LIFE.NPC_DIALOGUES['Dealer'].push(
     ]}
 );
 
+// Dealer hints about AK-47 availability in shop for players with gang connections
+LIFE.NPC_DIALOGUES['Dealer'].push(
+    { text: "Yo, you've been putting in real work. I got something special in the back — military grade. Check the shop.", minAge: 18,
+      condition: function() { return LIFE.state.gangRep >= 30 && !LIFE.state.hasRifle; },
+      options: [
+        { text: "Show me what you got.", effects: {}, rep: -2, openDealer: true },
+        { text: "Too hot for me. I'll pass.", effects: { intelligence: 2 }, rep: 3 }
+    ]}
+);
+
 // Doctor moral dialogues
 LIFE.NPC_DIALOGUES['Doctor'] = LIFE.NPC_DIALOGUES['Doctor'] || [];
 LIFE.NPC_DIALOGUES['Doctor'].push(
@@ -1093,9 +1126,20 @@ LIFE.NPC_DIALOGUES['Doctor'].push(
 // Spouse dialogues
 LIFE.NPC_DIALOGUES['Spouse'] = LIFE.NPC_DIALOGUES['Spouse'] || [];
 LIFE.NPC_DIALOGUES['Spouse'].push(
-    { text: "I've been thinking... we should start volunteering at the community center together.", options: [
-        { text: "I'd love that. Let's sign up.", effects: { happiness: 5, charisma: 2 }, rep: 10,
-            onSelect: function() { LIFE.state.volunteerHours++; LIFE.logMilestone('Started volunteering with spouse', 'good'); }},
+    { text: "The community center needs volunteers this weekend. Want to go together?", options: [
+        { text: "Sure, let's head over there.", effects: { happiness: 2 },
+            onSelect: function(npc) { LIFE.quests.startFromDialogue({
+                id: 'spouse_volunteer', title: 'Volunteer Together',
+                desc: 'Go volunteer at the community center with your spouse.',
+                type: 'good', giver: ['Spouse'],
+                minAge: 0, maxAge: 99,
+                objectives: [
+                    { type: 'go_to', zone: 'city', desc: 'Go to the community center', radius: 25 },
+                    { type: 'wait', duration: 20, desc: 'Help out at the community center' }
+                ],
+                reward: { rep: 10, happiness: 8, charisma: 3, onComplete: function() { LIFE.state.volunteerHours++; LIFE.logMilestone('Volunteered at the community center with spouse', 'good'); } },
+                timeLimit: 600
+            }, npc); }},
         { text: "Maybe sometime. I'm pretty busy.", effects: { happiness: -2 } },
         { text: "Volunteering is a waste of time.", effects: { happiness: -5 }, rep: -3 }
     ]},
@@ -1231,7 +1275,7 @@ LIFE.dialogue.close = function() {
         setTimeout(function() {
             if (LIFE.state.gamePhase === 'playing') {
                 // Clear birth scene NPCs (Mom + Doctor) before building world
-                LIFE.npcs.forEach(function(n) { LIFE.scene.remove(n.char.group); });
+                LIFE.npcs.forEach(function(n) { LIFE.scene.remove(n.char.group); LIFE.removeNPCPhysics(n); });
                 LIFE.npcs = [];
                 // Clear any leftover environment objects (womb/hospital ground planes)
                 LIFE.clearEnvironment();
@@ -1246,7 +1290,7 @@ LIFE.dialogue.close = function() {
                 LIFE.state.bounds = 400;
                 LIFE.updatePlayerSize();
                 // Position player at home zone center
-                LIFE.player.group.position.set(0, 0, 5);
+                LIFE.teleportPlayer(0, 0, 5);
                 LIFE.state.heldByParent = true;
                 LIFE.ui.showStageMessage('Home sweet home');
                 // Seed initial news
@@ -1326,6 +1370,18 @@ LIFE.dialogue.selectOption = function(idx) {
         if (!LIFE.state.childNames) LIFE.state.childNames = [];
         LIFE.state.childNames.push(opt.childName);
         LIFE.ui.showPopup('Welcome to the family, ' + opt.childName + '!', '#e91e63');
+        // Register child in NPC registry
+        LIFE.registerNPC({
+            firstName: opt.childName,
+            gender: Math.random() < 0.5 ? 'M' : 'F',
+            birthYear: LIFE.state.age,
+            deathAge: 68 + Math.floor(Math.random() * 27),
+            currentType: 'Your Child',
+            homeZone: 'home',
+            isFamily: true,
+            familyRole: 'Your Child',
+            met: true
+        });
     }
 
     // gender selection + name assignment
@@ -1416,6 +1472,16 @@ LIFE.dialogue.selectOption = function(idx) {
             LIFE.ui.showPopup('You already have a switchblade.', '#ff9800');
         }
     }
+    if (opt.giveRifle) {
+        if (!LIFE.state.hasRifle) {
+            LIFE.state.hasRifle = true;
+            if (LIFE.state.inventory.indexOf('AK-47') < 0) LIFE.state.inventory.push('AK-47');
+            LIFE.logCrime('Illegal firearm possession');
+            LIFE.ui.showPopup('AK-47 acquired!', '#ff9800');
+        } else {
+            LIFE.ui.showPopup('You already have an AK-47.', '#ff9800');
+        }
+    }
     if (opt.careerChange) {
         var careers = ['teacher', 'artist', 'worker'];
         LIFE.state.career = careers[Math.floor(Math.random() * careers.length)];
@@ -1503,6 +1569,20 @@ LIFE.dialogue.selectOption = function(idx) {
         LIFE.state.spouseName = opt.marry;
         LIFE.ui.showPopup('You married ' + opt.marry + '!', '#e91e63');
         if (LIFE.news) LIFE.news.add('Local couple ties the knot in beautiful ceremony.', 'social');
+        // Register spouse in NPC registry
+        var spouseGender = LIFE.state.playerGender === 'F' ? 'M' : 'F';
+        var spouseAge = LIFE.state.age + Math.floor(Math.random() * 6) - 3;
+        LIFE.registerNPC({
+            firstName: opt.marry,
+            gender: spouseGender,
+            birthYear: LIFE.state.age - spouseAge,
+            deathAge: 68 + Math.floor(Math.random() * 24),
+            currentType: 'Spouse',
+            homeZone: 'home',
+            isFamily: true,
+            familyRole: 'Spouse',
+            met: true
+        });
     }
 
     // HAVING KIDS
@@ -1527,7 +1607,7 @@ LIFE.dialogue.selectOption = function(idx) {
 
     // Execute custom callback for moral choice tracking
     if (opt.onSelect && typeof opt.onSelect === 'function') {
-        try { opt.onSelect(); } catch(e) {}
+        try { opt.onSelect(LIFE.dialogue.npc); } catch(e) {}
     }
 
     if (dlg.isDecision) {
@@ -2404,6 +2484,9 @@ LIFE.dialogue.talkToNPC = function(npc) {
         LIFE.dialogue.open(speakerName, fd.text, fd.options, false);
         return;
     }
+
+    // Gang interaction check (recruitment, friendly, rival)
+    if (npc.isGangMember && LIFE.gangs && LIFE.gangs.tryGangInteraction(npc)) return;
 
     // Try to offer a quest before regular dialogue
     if (LIFE.quests && LIFE.quests.tryOfferQuest(npc)) return;

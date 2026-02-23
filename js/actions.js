@@ -163,12 +163,15 @@ LIFE.performAction = function(idx) {
                 LIFE.resolveCollisions(npc.char.group.position);
                 LIFE.sounds.punch();
 
-                // age-based damage
+                // damage: weapons have flat damage, only fists scale with age
                 var equipped = LIFE.getEquipped();
-                var dmg = LIFE.getPunchDamage(state.age);
-                if (equipped === 'Switchblade') dmg = Math.floor(dmg * 2);
-                else if (equipped === 'Baseball Bat') dmg = Math.floor(dmg * 2.5);
-                else if (equipped === 'Crowbar') dmg = Math.floor(dmg * 2.8);
+                var eqData = LIFE.ITEM_DATA[equipped];
+                var dmg;
+                if (eqData && eqData.damage) {
+                    dmg = eqData.damage; // flat weapon damage
+                } else {
+                    dmg = LIFE.getPunchDamage(state.age); // fists scale with age
+                }
 
                 if (dmg <= 0) {
                     LIFE.ui.showPopup('*flails weakly*', '#999');
@@ -334,7 +337,8 @@ LIFE.checkWitnesses = function(victim) {
         var dist = Math.sqrt(dx * dx + dz * dz);
         if (dist < 18 && LIFE.hasLineOfSight(px, pz, nx, nz)) {
             witnessCount++;
-            if (!npc.isPolice && !npc._callingPolice) {
+            var npcRep = npc.npcReputation !== undefined ? npc.npcReputation : 30;
+            if (!npc.isPolice && npcRep > -30 && !npc._callingPolice) {
                 if (!phoneCaller) {
                     // First witness starts a phone call animation
                     phoneCaller = npc;
@@ -401,7 +405,7 @@ LIFE.makeVictimSeekHelp = function(victim) {
 LIFE.bullets = [];
 LIFE.impactEffects = [];
 
-LIFE.createBullet = function(origin, direction, isPolice) {
+LIFE.createBullet = function(origin, direction, isPolice, baseDamage) {
     var geo = new THREE.SphereGeometry(0.04, 4, 4);
     var color = isPolice ? 0xff4444 : 0xffeb3b;
     var mat = new THREE.MeshBasicMaterial({ color: color });
@@ -430,6 +434,7 @@ LIFE.createBullet = function(origin, direction, isPolice) {
         speed: 55,
         life: 1.5,
         isPolice: isPolice,
+        baseDamage: baseDamage || 50,
         hit: false
     };
     LIFE.bullets.push(bullet);
@@ -524,9 +529,9 @@ LIFE.updateBullets = function(dt) {
                     b.hit = true;
 
                     // damage falloff with distance from origin
-                    var dmg = 50;
+                    var dmg = b.baseDamage || 50;
                     var traveled = 1.5 - b.life; // time traveled
-                    if (traveled > 0.5) dmg = Math.max(20, 50 - traveled * 20);
+                    if (traveled > 0.5) dmg = Math.max(dmg * 0.4, dmg - traveled * 20);
                     LIFE.damageNPC(npc, Math.floor(dmg));
 
                     LIFE.createImpactEffect(b.mesh.position);
@@ -614,10 +619,14 @@ LIFE.updateBullets = function(dt) {
 // ============================================================
 LIFE.shootGun = function() {
     var state = LIFE.state;
-    if (LIFE.getEquipped() !== 'Pistol' || state.shootCooldown > 0) return;
-    state.shootCooldown = 0.4;
-    state.actionCooldown = 0.4;
-    state.actionAnim = { type: 'punch', timer: 0.3 };
+    var equipped = LIFE.getEquipped();
+    var isRifle = equipped === 'AK-47';
+    if (equipped !== 'Pistol' && !isRifle) return;
+    if (state.shootCooldown > 0) return;
+    // AK-47: faster fire rate (0.1s), Pistol: 0.4s
+    state.shootCooldown = isRifle ? 0.1 : 0.4;
+    state.actionCooldown = isRifle ? 0.1 : 0.4;
+    state.actionAnim = { type: 'punch', timer: 0.15 };
     LIFE.sounds.gunshot();
 
     var player = LIFE.player;
@@ -638,18 +647,19 @@ LIFE.shootGun = function() {
 
     var direction = new THREE.Vector3(fwdX, 0, fwdZ).normalize();
 
-    // slight spread/inaccuracy
-    direction.x += (Math.random() - 0.5) * 0.04;
-    direction.z += (Math.random() - 0.5) * 0.04;
+    // spread: AK-47 has more spread than pistol
+    var spread = isRifle ? 0.07 : 0.04;
+    direction.x += (Math.random() - 0.5) * spread;
+    direction.z += (Math.random() - 0.5) * spread;
     direction.normalize();
 
-    LIFE.createBullet(origin, direction, false);
+    var bulletDmg = isRifle ? 40 : 50;
+    LIFE.createBullet(origin, direction, false, bulletDmg);
     LIFE.createMuzzleFlash(origin);
 
     // firing gun — check if anyone nearby can hear/see
     if (state.wantedLevel < 1) {
         LIFE.logCrime('Illegal discharge of a firearm');
-        // Check if any NPC is within earshot (gunshots are LOUD — 25 unit range)
         var heardGunshot = false;
         var allGunNPCs = LIFE.getAllNPCs();
         for (var gi = 0; gi < allGunNPCs.length; gi++) {
@@ -659,7 +669,7 @@ LIFE.shootGun = function() {
             var gdz = gnpc.char.group.position.z - player.group.position.z;
             if (Math.sqrt(gdx * gdx + gdz * gdz) < 25) { heardGunshot = true; break; }
         }
-        if (heardGunshot) LIFE.addWanted(1);
+        if (heardGunshot) LIFE.addWanted(isRifle ? 2 : 1);
     }
     if (state.wantedLevel > 0) state.reputation = Math.max(-100, state.reputation - 3);
 };

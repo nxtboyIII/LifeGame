@@ -88,6 +88,7 @@ LIFE.buildNursery = function() {
     }
     // shelf
     LIFE.addEnv(LIFE.makeBox(3, 0.1, 0.5, 0x8d6e63, 3, 1.5, -5.8));
+    LIFE.physics.addStaticBox(3, 0.1, 0.5, 3, 1.5, -5.8);
     // lamp
     LIFE.addEnv(LIFE.makeBox(0.1, 1, 0.1, 0x757575, 4, 0.5, -4));
     var lamp = new THREE.Mesh(
@@ -110,44 +111,352 @@ LIFE.makeBed = function(x, z, color) {
     LIFE.addEnv(LIFE.makeBox(1.0, 0.06, 1.2, color, x, 0.42, z + 0.3));
     // pillow
     LIFE.addEnv(LIFE.makeBox(0.6, 0.1, 0.3, 0xfff9c4, x, 0.42, z - 0.8));
+    // physics body for bed surface (mattress top)
+    LIFE.physics.addStaticBox(1.2, 0.45, 2.2, x, 0.225, z);
 };
 
 LIFE.buildHome = function() {
     LIFE.makeGround(32, 0x4a7c3f);
-    // house floor (raised above zone ground to avoid z-fighting)
-    LIFE.addEnv(LIFE.makeBox(14, 0.1, 10, 0xdeb887, 0, 0.08, -5));
-    // walls (solid)
-    LIFE.addSolid(14, 3.5, 0.3, 0xfff8e1, 0, 1.75, -10);
-    LIFE.addSolid(0.3, 3.5, 10, 0xfff8e1, -7, 1.75, -5);
-    LIFE.addSolid(0.3, 3.5, 10, 0xfff8e1, 7, 1.75, -5);
-    // furniture (solid)
-    LIFE.addSolid(3, 1, 1.5, 0x5d4037, 0, 0.5, -8); // table
-    LIFE.addSolid(2, 0.8, 1, 0x795548, -4, 0.4, -8); // side table
-    LIFE.addSolid(1.5, 1.8, 0.3, 0x424242, 5, 0.9, -9.7); // TV
-    // beds for parents
-    LIFE.makeBed(-4, -3, 0x1565c0); // Mom's side
-    LIFE.makeBed(-2.5, -3, 0x1565c0); // Dad's side (double bed look)
-    // kid's bed
-    LIFE.makeBed(5, -4, 0x66bb6a);
-    // yard
-    LIFE.makeTree(10, 5);
-    LIFE.makeTree(-10, 8);
-    LIFE.makeTree(12, -3);
-    // fence
-    for (var x = -15; x <= 15; x += 2) {
-        LIFE.addEnv(LIFE.makeBox(0.1, 0.8, 0.1, 0xdeb887, x, 0.4, 15));
-        LIFE.addEnv(LIFE.makeBox(0.1, 0.8, 0.1, 0xdeb887, x, 0.4, -15));
+
+    // === HOUSE DIMENSIONS ===
+    var W = 18, D = 14, wallH = 3.5, wallT = 0.3;
+    var floorY = 0.08;       // ground floor
+    var floor2Y = wallH + 0.08; // second floor (3.58)
+    var roofY = wallH * 2 + 0.2; // roof top (7.2)
+    var hW = W / 2, hD = D / 2; // half dimensions (9, 7)
+    // House centered at (0, 0) in zone-local coords, front at z=7, back at z=-7
+
+    // ===================== GROUND FLOOR =====================
+    // Floor
+    LIFE.addEnv(LIFE.makeBox(W, 0.1, D, 0xdeb887, 0, floorY, 0));
+    LIFE.physics.addStaticBox(W, 0.1, D, 0, floorY, 0);
+
+    // Exterior walls
+    LIFE.addSolid(W, wallH, wallT, 0xfff8e1, 0, wallH / 2, -hD);       // back wall
+    LIFE.addSolid(wallT, wallH, D, 0xfff8e1, -hW, wallH / 2, 0);       // left wall
+    LIFE.addSolid(wallT, wallH, D, 0xfff8e1, hW, wallH / 2, 0);        // right wall
+    // Front wall with door gap (center 3-unit gap)
+    LIFE.addSolid((hW - 1.5), wallH, wallT, 0xfff8e1, -(hW / 2 + 0.75), wallH / 2, hD);  // front-left
+    LIFE.addSolid((hW - 1.5), wallH, wallT, 0xfff8e1, (hW / 2 + 0.75), wallH / 2, hD);   // front-right
+    LIFE.addEnv(LIFE.makeBox(3, 0.5, wallT, 0xfff8e1, 0, wallH - 0.25, hD)); // above door
+
+    // Interior divider: living/kitchen wall (x=0, z=0 to z=7 with 2-unit gap near z=2)
+    LIFE.addSolid(wallT, wallH, 3.5, 0xfff8e1, 0, wallH / 2, 5.25);    // front segment (z=3.5 to z=7)
+    LIFE.addSolid(wallT, wallH, 1.5, 0xfff8e1, 0, wallH / 2, 0.75);    // back segment (z=0 to z=1.5)
+
+    // Back hallway divider (z=0 line, with gap at center for hallway)
+    LIFE.addSolid(4.5, wallH, wallT, 0xfff8e1, -6.75, wallH / 2, 0);   // left section
+    LIFE.addSolid(4.5, wallH, wallT, 0xfff8e1, 6.75, wallH / 2, 0);    // right section
+
+    // Bathroom walls (back-right: x=3 to x=9, z=-7 to z=0)
+    LIFE.addSolid(wallT, wallH, 3, 0xfff8e1, 3, wallH / 2, -5.5);      // bathroom left wall (z=-7 to z=-4)
+    LIFE.addSolid(wallT, wallH, 2.5, 0xfff8e1, 3, wallH / 2, -1.25);   // bathroom left wall (z=-2.5 to z=0) with door gap
+
+    // --- LIVING ROOM (front-left: x=-9 to x=0, z=0 to z=7) ---
+    // Couch against left wall
+    LIFE.addSolid(1.2, 0.8, 3, 0x795548, -8.2, 0.4, 4);
+    LIFE.addEnv(LIFE.makeBox(1.2, 0.5, 0.15, 0x6d4c41, -8.2, 0.9, 2.5)); // back rest
+    // Cushions
+    LIFE.addEnv(LIFE.makeBox(0.6, 0.15, 0.5, 0xef5350, -8.2, 0.85, 3.5));
+    LIFE.addEnv(LIFE.makeBox(0.6, 0.15, 0.5, 0x42a5f5, -8.2, 0.85, 4.5));
+    // Coffee table
+    LIFE.addEnv(LIFE.makeBox(1.5, 0.08, 1, 0x8d6e63, -6, 0.45, 4));
+    LIFE.physics.addStaticBox(1.5, 0.5, 1, -6, 0.25, 4);
+    // Table legs
+    LIFE.addEnv(LIFE.makeBox(0.08, 0.4, 0.08, 0x795548, -6.6, 0.2, 3.6));
+    LIFE.addEnv(LIFE.makeBox(0.08, 0.4, 0.08, 0x795548, -5.4, 0.2, 3.6));
+    LIFE.addEnv(LIFE.makeBox(0.08, 0.4, 0.08, 0x795548, -6.6, 0.2, 4.4));
+    LIFE.addEnv(LIFE.makeBox(0.08, 0.4, 0.08, 0x795548, -5.4, 0.2, 4.4));
+    // TV stand + TV
+    LIFE.addSolid(2, 0.6, 0.8, 0x424242, -4.5, 0.3, 6.3);
+    LIFE.addEnv(LIFE.makeBox(2.2, 1.4, 0.1, 0x1a1a1a, -4.5, 1.3, 6.4));
+    var tvScreen = new THREE.Mesh(
+        new THREE.BoxGeometry(2.0, 1.2, 0.05),
+        new THREE.MeshPhongMaterial({ color: 0x4fc3f7, emissive: 0x225577, emissiveIntensity: 0.5 })
+    );
+    tvScreen.position.set(-4.5, 1.3, 6.47);
+    LIFE.addEnv(tvScreen);
+    // Bookshelf with container
+    LIFE.addSolid(1.5, 1.8, 0.5, 0x5d4037, -2, 0.9, 6.5);
+    LIFE.addEnv(LIFE.makeBox(1.3, 0.05, 0.4, 0x6d4c41, -2, 0.6, 6.5));  // shelf
+    LIFE.addEnv(LIFE.makeBox(1.3, 0.05, 0.4, 0x6d4c41, -2, 1.2, 6.5));  // shelf
+    // Bookshelf container
+    LIFE.addContainer(-2, 0.9, 6.5, 'Living Room Shelf', [
+        { name: 'Book', parentOnly: false },
+        { name: 'Keys', parentOnly: false },
+        { name: 'Sunglasses', parentOnly: false }
+    ], { ownItem: true });
+    // Rug
+    var rug = new THREE.Mesh(
+        new THREE.CircleGeometry(1.8, 16),
+        new THREE.MeshPhongMaterial({ color: 0xc62828 })
+    );
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.set(-5.5, 0.12, 4);
+    LIFE.addEnv(rug);
+
+    // --- KITCHEN / DINING (front-right: x=0 to x=9, z=0 to z=7) ---
+    // Counter along right wall
+    LIFE.addSolid(3.5, 1, 0.8, 0x90a4ae, 7, 0.5, 5.5);
+    LIFE.addEnv(LIFE.makeBox(3.5, 0.05, 0.8, 0xfafafa, 7, 1.02, 5.5)); // counter top
+    // Fridge (right-back corner)
+    LIFE.addSolid(1, 2.2, 0.8, 0xeceff1, 8.2, 1.1, 3.5);
+    // Stove
+    LIFE.addEnv(LIFE.makeBox(1, 0.9, 0.8, 0x616161, 5, 0.5, 5.5));
+    LIFE.physics.addStaticBox(1, 0.9, 0.8, 5, 0.5, 5.5);
+    LIFE.addEnv(LIFE.makeBox(0.2, 0.02, 0.2, 0x212121, 4.8, 0.97, 5.5)); // burner
+    LIFE.addEnv(LIFE.makeBox(0.2, 0.02, 0.2, 0x212121, 5.2, 0.97, 5.5)); // burner
+    // Kitchen drawer (under counter)
+    LIFE.addContainer(7, 0.5, 5.5, 'Kitchen Drawer', [
+        { name: 'Sandwich', parentOnly: false },
+        { name: 'Apple', parentOnly: false },
+        { isMoney: true, amount: 12, parentOnly: false }
+    ], { ownItem: true });
+    // Dining table + chairs
+    LIFE.addSolid(2.5, 0.8, 1.5, 0x8d6e63, 4, 0.4, 2);
+    for (var ci = 0; ci < 4; ci++) {
+        var cx = 3.2 + (ci % 2) * 1.6;
+        var cz = 1.5 + Math.floor(ci / 2) * 1;
+        LIFE.addEnv(LIFE.makeBox(0.5, 0.5, 0.5, 0x6d4c41, cx, 0.25, cz));
+        LIFE.physics.addStaticBox(0.5, 0.5, 0.5, cx, 0.25, cz);
+        LIFE.addEnv(LIFE.makeBox(0.5, 0.6, 0.08, 0x6d4c41, cx, 0.8, cz - 0.22));
     }
-    // neighbor houses
+
+    // --- BATHROOM (back-right: x=3 to x=9, z=-7 to z=0) ---
+    // Bathroom floor tile
+    LIFE.addEnv(LIFE.makeBox(6, 0.02, 6.5, 0xe0e0e0, 6, 0.1, -3.5));
+    // Toilet
+    LIFE.addEnv(LIFE.makeBox(0.6, 0.5, 0.6, 0xfafafa, 8, 0.25, -6));
+    LIFE.addCollider(8, -6, 0.8, 0.8, 0.27, 0.54);
+    LIFE.physics.addStaticBox(0.6, 0.5, 0.6, 8, 0.25, -6);
+    LIFE.addEnv(LIFE.makeBox(0.55, 0.08, 0.4, 0xfafafa, 8, 0.54, -5.8));
+    // Sink
+    LIFE.addEnv(LIFE.makeBox(0.1, 1.0, 0.1, 0x757575, 6, 0.5, -6.5));
+    LIFE.addEnv(LIFE.makeBox(0.5, 0.06, 0.4, 0xfafafa, 6, 1.0, -6.5));
+    LIFE.addCollider(6, -6.5, 0.6, 0.6, 0.5, 1.0);
+    // Mirror above sink
+    LIFE.addEnv(LIFE.makeBox(0.8, 1, 0.05, 0xbbdefb, 6, 1.8, -6.8));
+    // Bathtub
+    var tub = new THREE.Mesh(
+        new THREE.BoxGeometry(2.5, 0.7, 1.2),
+        new THREE.MeshPhongMaterial({ color: 0xfafafa })
+    );
+    tub.position.set(5, 0.35, -2);
+    LIFE.addEnv(tub);
+    LIFE.addCollider(5, -2, 2.5, 1.2, 0.35, 0.7);
+    LIFE.physics.addStaticBox(2.5, 0.7, 1.2, 5, 0.35, -2);
+    var bathWater = new THREE.Mesh(
+        new THREE.BoxGeometry(2.2, 0.05, 0.9),
+        new THREE.MeshPhongMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.5 })
+    );
+    bathWater.position.set(5, 0.6, -2);
+    LIFE.addEnv(bathWater);
+    // Medicine cabinet (wall-mounted)
+    LIFE.addEnv(LIFE.makeBox(0.8, 0.6, 0.2, 0xfafafa, 8, 1.8, -6.8));
+    LIFE.addContainer(8, 1.8, -6.5, 'Medicine Cabinet', [
+        { name: 'Vitamins', parentOnly: false },
+        { name: 'Cold Medicine', parentOnly: false },
+        { name: 'Pain Killers', parentOnly: false }
+    ], { ownItem: true });
+
+    // --- STAIRS (back-left: x=-9 to x=-5, z=-7 to z=-1) ---
+    var stairW = 3.8, stairSteps = 10;
+    var stepH = wallH / stairSteps; // 0.35 per step
+    var stepD = 5.5 / stairSteps;   // 0.55 per step depth
+    for (var s = 0; s < stairSteps; s++) {
+        var sy = (s + 1) * stepH;
+        var sz = -6.5 + s * stepD;
+        // Step surface
+        LIFE.addEnv(LIFE.makeBox(stairW, 0.15, stepD + 0.05, 0x8d6e63, -7, sy - 0.075, sz));
+        LIFE.physics.addStaticBox(stairW, 0.15, stepD + 0.05, -7, sy - 0.075, sz);
+        // Step riser (front face)
+        LIFE.addEnv(LIFE.makeBox(stairW, stepH, 0.05, 0x795548, -7, sy - stepH / 2, sz - stepD / 2));
+    }
+    // Stair railing (left side)
+    for (var r = 0; r < 5; r++) {
+        var ry = (r + 1) * stepH * 2 + 0.6;
+        var rz = -6.5 + r * stepD * 2;
+        LIFE.addEnv(LIFE.makeBox(0.08, 0.8, 0.08, 0x5d4037, -8.7, ry, rz));
+    }
+    LIFE.addEnv(LIFE.makeBox(0.08, 0.05, 5, 0x5d4037, -8.7, wallH + 0.4, -4));
+
+    // ===================== SECOND FLOOR =====================
+    // Second floor platform (with stairwell opening: skip the x=-9 to x=-5, z=-7 to z=-1 area)
+    // Main floor: right section (x=-5 to x=9, full depth)
+    LIFE.addEnv(LIFE.makeBox(14, 0.15, D, 0xdeb887, 2, floor2Y, 0));
+    LIFE.physics.addStaticBox(14, 0.15, D, 2, floor2Y, 0);
+    // Left section behind stairs (x=-9 to x=-5, z=-1 to z=7)
+    LIFE.addEnv(LIFE.makeBox(4, 0.15, 8, 0xdeb887, -7, floor2Y, 3));
+    LIFE.physics.addStaticBox(4, 0.15, 8, -7, floor2Y, 3);
+
+    // Second floor ceiling / roof
+    LIFE.addEnv(LIFE.makeBox(W + 0.6, 0.2, D + 0.6, 0x8d6e63, 0, roofY, 0));
+    LIFE.physics.addStaticBox(W + 0.6, 0.2, D + 0.6, 0, roofY, 0);
+
+    // Second floor exterior walls
+    LIFE.addSolid(W, wallH, wallT, 0xfff8e1, 0, floor2Y + wallH / 2, -hD);    // back
+    LIFE.addSolid(wallT, wallH, D, 0xfff8e1, -hW, floor2Y + wallH / 2, 0);    // left
+    LIFE.addSolid(wallT, wallH, D, 0xfff8e1, hW, floor2Y + wallH / 2, 0);     // right
+    LIFE.addSolid(W, wallH, wallT, 0xfff8e1, 0, floor2Y + wallH / 2, hD);     // front
+
+    // Divider wall between bedrooms (x=1, full depth with door gap)
+    LIFE.addSolid(wallT, wallH, 5, 0xfff8e1, 1, floor2Y + wallH / 2, -4.5);   // back section
+    LIFE.addSolid(wallT, wallH, 4, 0xfff8e1, 1, floor2Y + wallH / 2, 5);      // front section
+
+    // Stairwell railing on second floor (prevents falling into stair opening)
+    LIFE.addSolid(wallT, 1.2, 6, 0x5d4037, -5, floor2Y + 0.6, -4);            // railing along stairwell
+    LIFE.addSolid(4, 1.2, wallT, 0x5d4037, -7, floor2Y + 0.6, -1);            // railing at stairwell top
+
+    // --- PARENTS' BEDROOM (left: x=-9 to x=1, z=-7 to z=7) ---
+    // Double bed (center-ish)
+    LIFE.addSolid(3, 0.5, 2.2, 0x4e342e, -4, floor2Y + 0.25, 4.5);           // bed frame
+    LIFE.addEnv(LIFE.makeBox(2.8, 0.2, 2.0, 0xfafafa, -4, floor2Y + 0.6, 4.5)); // mattress
+    LIFE.addEnv(LIFE.makeBox(2.5, 0.05, 1.2, 0x1565c0, -4, floor2Y + 0.72, 5)); // blanket
+    LIFE.addEnv(LIFE.makeBox(0.7, 0.12, 0.35, 0xfff9c4, -4.8, floor2Y + 0.72, 3.5)); // pillow
+    LIFE.addEnv(LIFE.makeBox(0.7, 0.12, 0.35, 0xfff9c4, -3.2, floor2Y + 0.72, 3.5)); // pillow
+    // Nightstands
+    LIFE.addSolid(0.6, 0.5, 0.5, 0x5d4037, -6, floor2Y + 0.25, 4.5);
+    LIFE.addSolid(0.6, 0.5, 0.5, 0x5d4037, -2, floor2Y + 0.25, 4.5);
+    // Lamp on nightstand
+    LIFE.addEnv(LIFE.makeBox(0.1, 0.4, 0.1, 0x757575, -6, floor2Y + 0.7, 4.5));
+    var parentLamp = new THREE.Mesh(
+        new THREE.ConeGeometry(0.25, 0.2, 8),
+        new THREE.MeshPhongMaterial({ color: 0xfff176, emissive: 0xfff176, emissiveIntensity: 0.3 })
+    );
+    parentLamp.position.set(-6, floor2Y + 1.0, 4.5);
+    LIFE.addEnv(parentLamp);
+    // Parents' dresser with drawers
+    LIFE.addSolid(2, 1.2, 0.7, 0x5d4037, -7.5, floor2Y + 0.6, -5);
+    // Drawer front panels
+    LIFE.addEnv(LIFE.makeBox(0.85, 0.3, 0.02, 0x6d4c41, -8, floor2Y + 0.3, -4.64));
+    LIFE.addEnv(LIFE.makeBox(0.85, 0.3, 0.02, 0x6d4c41, -7, floor2Y + 0.3, -4.64));
+    LIFE.addEnv(LIFE.makeBox(0.85, 0.3, 0.02, 0x6d4c41, -8, floor2Y + 0.7, -4.64));
+    LIFE.addEnv(LIFE.makeBox(0.85, 0.3, 0.02, 0x6d4c41, -7, floor2Y + 0.7, -4.64));
+    // Drawer handles
+    LIFE.addEnv(LIFE.makeBox(0.3, 0.03, 0.03, 0xbfa87a, -8, floor2Y + 0.3, -4.6));
+    LIFE.addEnv(LIFE.makeBox(0.3, 0.03, 0.03, 0xbfa87a, -7, floor2Y + 0.3, -4.6));
+    LIFE.addEnv(LIFE.makeBox(0.3, 0.03, 0.03, 0xbfa87a, -8, floor2Y + 0.7, -4.6));
+    LIFE.addEnv(LIFE.makeBox(0.3, 0.03, 0.03, 0xbfa87a, -7, floor2Y + 0.7, -4.6));
+    // Parents' dresser container (has dad's switchblade!)
+    LIFE.addContainer(-7.5, floor2Y + 0.6, -5, 'Parents\' Dresser', [
+        { name: 'Wallet', parentOnly: false },
+        { isMoney: true, amount: 35, parentOnly: false },
+        { name: 'Watch', parentOnly: false },
+        { name: 'Switchblade', parentOnly: true }
+    ], { ownItem: true });
+    // Wardrobe
+    LIFE.addSolid(1.5, 2.2, 0.8, 0x4e342e, -3, floor2Y + 1.1, -6.2);
+    // Photo frames on wall
+    LIFE.addEnv(LIFE.makeBox(0.8, 0.6, 0.05, 0x5d4037, -8.7, floor2Y + 2, 2));
+    LIFE.addEnv(LIFE.makeBox(0.6, 0.8, 0.05, 0x5d4037, -8.7, floor2Y + 2, 0));
+
+    // --- KID'S BEDROOM (right: x=1 to x=9, z=-7 to z=7) ---
+    // Kid's bed
+    LIFE.addSolid(1.2, 0.5, 2.2, 0x5d4037, 7, floor2Y + 0.25, 5);           // bed frame
+    LIFE.addEnv(LIFE.makeBox(1.0, 0.15, 2.0, 0xfafafa, 7, floor2Y + 0.55, 5)); // mattress
+    LIFE.addEnv(LIFE.makeBox(1.0, 0.06, 1.2, 0x66bb6a, 7, floor2Y + 0.62, 5.3)); // blanket
+    LIFE.addEnv(LIFE.makeBox(0.6, 0.1, 0.3, 0xfff9c4, 7, floor2Y + 0.62, 3.9)); // pillow
+    // Kid's desk
+    LIFE.addSolid(2, 0.8, 1, 0xbcaaa4, 4, floor2Y + 0.4, -5.5);
+    // Desk legs
+    LIFE.addEnv(LIFE.makeBox(0.08, 0.8, 0.08, 0x9e8e7e, 3.1, floor2Y + 0.4, -5.9));
+    LIFE.addEnv(LIFE.makeBox(0.08, 0.8, 0.08, 0x9e8e7e, 4.9, floor2Y + 0.4, -5.9));
+    // Desk chair
+    LIFE.addEnv(LIFE.makeBox(0.5, 0.5, 0.5, 0x6d4c41, 4, floor2Y + 0.25, -4.5));
+    LIFE.physics.addStaticBox(0.5, 0.5, 0.5, 4, floor2Y + 0.25, -4.5);
+    // Desk drawer container
+    LIFE.addContainer(4, floor2Y + 0.4, -5.5, 'Desk Drawer', [
+        { name: 'Comic Book', parentOnly: false },
+        { isMoney: true, amount: 5, parentOnly: false },
+        { name: 'Book', parentOnly: false }
+    ], { ownItem: true });
+    // Bookshelf
+    LIFE.addSolid(1.5, 1.8, 0.5, 0x5d4037, 2.5, floor2Y + 0.9, 6.5);
+    LIFE.addEnv(LIFE.makeBox(1.3, 0.05, 0.4, 0x6d4c41, 2.5, floor2Y + 0.6, 6.5));
+    LIFE.addEnv(LIFE.makeBox(1.3, 0.05, 0.4, 0x6d4c41, 2.5, floor2Y + 1.2, 6.5));
+    // Toy box (kids)
+    LIFE.addEnv(LIFE.makeBox(1, 0.5, 0.6, 0xff7043, 8, floor2Y + 0.25, 2));
+    LIFE.physics.addStaticBox(1, 0.5, 0.6, 8, floor2Y + 0.25, 2);
+    // Toys scattered
+    var toyColors = [0xff1744, 0x2979ff, 0xffea00, 0x00e676];
+    for (var ti = 0; ti < 4; ti++) {
+        var toy = new THREE.Mesh(
+            new THREE.SphereGeometry(0.12, 6, 4),
+            new THREE.MeshPhongMaterial({ color: toyColors[ti] })
+        );
+        toy.position.set(6 + Math.random() * 2, floor2Y + 0.2, 1 + Math.random() * 2);
+        LIFE.addEnv(toy);
+    }
+    // Poster on wall
+    LIFE.addEnv(LIFE.makeBox(1.2, 0.8, 0.05, 0x1565c0, 8.7, floor2Y + 2, -3));
+    LIFE.addEnv(LIFE.makeBox(1, 1.2, 0.05, 0xc62828, 8.7, floor2Y + 2, 0));
+
+    // ===================== LIGHTING =====================
+    // Ground floor lights
+    var light1 = new THREE.PointLight(0xfff3e0, 0.6, 12);
+    light1.position.set(-4.5, 3.2, 4);
+    LIFE.addEnv(light1);
+    var light2 = new THREE.PointLight(0xfff3e0, 0.5, 12);
+    light2.position.set(5, 3.2, 4);
+    LIFE.addEnv(light2);
+    var light3 = new THREE.PointLight(0xfff3e0, 0.3, 10);
+    light3.position.set(6, 3.2, -4);
+    LIFE.addEnv(light3);
+    // Second floor lights
+    var light4 = new THREE.PointLight(0xfff3e0, 0.5, 12);
+    light4.position.set(-4, floor2Y + 3, 0);
+    LIFE.addEnv(light4);
+    var light5 = new THREE.PointLight(0xfff3e0, 0.5, 12);
+    light5.position.set(5, floor2Y + 3, 0);
+    LIFE.addEnv(light5);
+    // Lamp fixtures
+    LIFE.addEnv(LIFE.makeBox(0.3, 0.08, 0.3, 0xffeb3b, -4.5, 3.4, 4));
+    LIFE.addEnv(LIFE.makeBox(0.3, 0.08, 0.3, 0xffeb3b, 5, 3.4, 4));
+
+    // ===================== WINDOWS =====================
+    var winMat = new THREE.MeshPhongMaterial({ color: 0xbbdefb, emissive: 0x445566, emissiveIntensity: 0.3 });
+    // Ground floor windows
+    LIFE.addEnv(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 0.1), winMat)).position.set(-6, 2, -7.05);
+    LIFE.addEnv(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 0.1), winMat)).position.set(6, 2, -7.05);
+    LIFE.addEnv(new THREE.Mesh(new THREE.BoxGeometry(0.1, 1, 1.2), winMat)).position.set(-9.05, 2, 3);
+    LIFE.addEnv(new THREE.Mesh(new THREE.BoxGeometry(0.1, 1, 1.2), winMat)).position.set(9.05, 2, -4);
+    // Second floor windows
+    LIFE.addEnv(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 0.1), winMat)).position.set(-5, floor2Y + 2, -7.05);
+    LIFE.addEnv(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 0.1), winMat)).position.set(5, floor2Y + 2, -7.05);
+    LIFE.addEnv(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 0.1), winMat)).position.set(-5, floor2Y + 2, 7.05);
+    LIFE.addEnv(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 0.1), winMat)).position.set(5, floor2Y + 2, 7.05);
+
+    // ===================== YARD =====================
+    LIFE.makeTree(12, 5);
+    LIFE.makeTree(-12, 8);
+    LIFE.makeTree(14, -3);
+    LIFE.makeTree(-13, -5);
+    // Fence
+    for (var fx = -15; fx <= 15; fx += 2) {
+        LIFE.addEnv(LIFE.makeBox(0.1, 0.8, 0.1, 0xdeb887, fx, 0.4, 15));
+        LIFE.addEnv(LIFE.makeBox(0.1, 0.8, 0.1, 0xdeb887, fx, 0.4, -15));
+    }
+    for (var fz = -15; fz <= 15; fz += 2) {
+        LIFE.addEnv(LIFE.makeBox(0.1, 0.8, 0.1, 0xdeb887, -15, 0.4, fz));
+        LIFE.addEnv(LIFE.makeBox(0.1, 0.8, 0.1, 0xdeb887, 15, 0.4, fz));
+    }
+    // Mailbox
+    LIFE.addEnv(LIFE.makeBox(0.1, 1.2, 0.1, 0x5d4037, 2, 0.6, 9));
+    LIFE.addEnv(LIFE.makeBox(0.5, 0.3, 0.3, 0x1565c0, 2, 1.3, 9));
+    // Front path
+    LIFE.addEnv(LIFE.makeBox(2, 0.02, 3, 0xbdbdbd, 0, 0.01, 9));
+
+    // ===================== NEIGHBOR HOUSES =====================
     var nhColors = [0xe8eaf6, 0xfce4ec, 0xe0f2f1];
     var nhRoofs = [0x5d4037, 0x37474f, 0x4e342e];
     var nhPositions = [
-        { x: -20, z: -5 }, { x: 20, z: -5 }, { x: -20, z: 10 }
+        { x: -22, z: -5 }, { x: 22, z: -5 }, { x: -22, z: 10 }
     ];
     for (var nh = 0; nh < nhPositions.length; nh++) {
         var np = nhPositions[nh];
         LIFE.addSolid(5, 2.8, 4, nhColors[nh], np.x, 1.4, np.z);
         LIFE.addEnv(LIFE.makeBox(6, 0.3, 5, nhRoofs[nh], np.x, 2.95, np.z));
+        LIFE.physics.addStaticBox(6, 0.3, 5, np.x, 2.95, np.z);
         LIFE.addEnv(LIFE.makeBox(1, 1.8, 0.1, 0x5d4037, np.x, 0.9, np.z + 2.1));
         LIFE.addEnv(LIFE.makeBox(0.8, 0.8, 0.1, 0xbbdefb, np.x + 1.5, 1.5, np.z + 2.1));
     }
@@ -167,6 +476,7 @@ LIFE.buildSchool = function() {
     var slide = LIFE.makeBox(1, 0.05, 3, 0xfdd835, 6, 1, 8);
     slide.rotation.x = 0.3;
     LIFE.addEnv(slide);
+    LIFE.physics.addStaticBox(1, 0.3, 3, 6, 1, 8);
     LIFE.addEnv(LIFE.makeBox(0.1, 2, 0.1, 0x757575, 6.4, 1, 9.5));
     LIFE.addEnv(LIFE.makeBox(0.1, 2, 0.1, 0x757575, 5.6, 1, 9.5));
     // path
@@ -228,7 +538,8 @@ LIFE.buildCollege = function() {
     fountain.position.set(0, 0.4, 5);
     fountain.castShadow = true;
     LIFE.addEnv(fountain);
-    LIFE.addCollider(0, 5, 3.5, 3.5);
+    LIFE.addCollider(0, 5, 3.5, 3.5, 0.4, 0.8);
+    LIFE.physics.addStaticCylinder(2, 0.8, 0, 0.4, 5);
     var water = new THREE.Mesh(
         new THREE.CylinderGeometry(1.3, 1.3, 0.1, 12),
         new THREE.MeshPhongMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.7 })
@@ -447,6 +758,7 @@ LIFE.buildPlayerHome = function() {
 
     // wooden floor
     LIFE.addEnv(LIFE.makeBox(roomW, 0.1, roomD, floorColor, 0, 0.05, 0));
+    LIFE.physics.addStaticBox(roomW, 0.1, roomD, 0, 0.05, 0);
     // walls
     LIFE.addSolid(roomW, 3.5, 0.3, wallColor, 0, 1.75, -roomD / 2);
     LIFE.addSolid(0.3, 3.5, roomD, wallColor, -roomW / 2, 1.75, 0);
@@ -479,6 +791,7 @@ LIFE.buildPlayerHome = function() {
     // couch
     LIFE.addSolid(3.5, 0.8, 1.2, isLuxury ? 0x5d4037 : 0x795548, -2, 0.4, -roomD / 2 + 2);
     LIFE.addEnv(LIFE.makeBox(3.5, 0.5, 0.15, isLuxury ? 0x4e342e : 0x6d4c41, -2, 0.9, -roomD / 2 + 1.4));
+    LIFE.physics.addStaticBox(3.5, 0.5, 0.15, -2, 0.9, -roomD / 2 + 1.4);
     // cushions
     LIFE.addEnv(LIFE.makeBox(0.8, 0.2, 0.5, 0xef5350, -3, 0.9, -roomD / 2 + 2));
     LIFE.addEnv(LIFE.makeBox(0.8, 0.2, 0.5, 0x42a5f5, -1, 0.9, -roomD / 2 + 2));
@@ -496,6 +809,7 @@ LIFE.buildPlayerHome = function() {
 
     // coffee table
     LIFE.addEnv(LIFE.makeBox(2, 0.08, 1, 0x8d6e63, -2, 0.45, -roomD / 2 + 3.5));
+    LIFE.physics.addStaticBox(2, 0.5, 1, -2, 0.25, -roomD / 2 + 3.5);
     LIFE.addEnv(LIFE.makeBox(0.08, 0.4, 0.08, 0x795548, -2.8, 0.2, -roomD / 2 + 3.1));
     LIFE.addEnv(LIFE.makeBox(0.08, 0.4, 0.08, 0x795548, -1.2, 0.2, -roomD / 2 + 3.1));
     LIFE.addEnv(LIFE.makeBox(0.08, 0.4, 0.08, 0x795548, -2.8, 0.2, -roomD / 2 + 3.9));
@@ -515,6 +829,7 @@ LIFE.buildPlayerHome = function() {
         var cx = 2 + (ci % 2) * 2;
         var cz = -0.6 + Math.floor(ci / 2) * 1.2;
         LIFE.addEnv(LIFE.makeBox(0.5, 0.5, 0.5, 0x6d4c41, cx, 0.25, cz));
+        LIFE.physics.addStaticBox(0.5, 0.5, 0.5, cx, 0.25, cz);
         LIFE.addEnv(LIFE.makeBox(0.5, 0.6, 0.08, 0x6d4c41, cx, 0.8, cz - 0.22));
     }
 
@@ -536,7 +851,8 @@ LIFE.buildPlayerHome = function() {
         );
         tub.position.set(roomW / 2 - 2, 0.35, -roomD / 2 + 5);
         LIFE.addEnv(tub);
-        LIFE.addCollider(roomW / 2 - 2, -roomD / 2 + 5, 2.5, 1.2);
+        LIFE.addCollider(roomW / 2 - 2, -roomD / 2 + 5, 2.5, 1.2, 0.35, 0.7);
+        LIFE.physics.addStaticBox(2.5, 0.7, 1.2, roomW / 2 - 2, 0.35, -roomD / 2 + 5);
         // water
         var bathWater = new THREE.Mesh(
             new THREE.BoxGeometry(2.2, 0.05, 0.9),
@@ -578,6 +894,31 @@ LIFE.buildPlayerHome = function() {
             LIFE.addEnv(toy);
         }
     }
+
+    // Dresser / wardrobe
+    LIFE.addSolid(1.5, 1.4, 0.6, 0x5d4037, -roomW / 2 + 1.5, 0.7, roomD / 2 - 1.5);
+    LIFE.addEnv(LIFE.makeBox(0.65, 0.35, 0.02, 0x6d4c41, -roomW / 2 + 1.2, 0.4, roomD / 2 - 1.18));
+    LIFE.addEnv(LIFE.makeBox(0.65, 0.35, 0.02, 0x6d4c41, -roomW / 2 + 1.8, 0.4, roomD / 2 - 1.18));
+    LIFE.addEnv(LIFE.makeBox(0.2, 0.03, 0.03, 0xbfa87a, -roomW / 2 + 1.2, 0.4, roomD / 2 - 1.14));
+    LIFE.addEnv(LIFE.makeBox(0.2, 0.03, 0.03, 0xbfa87a, -roomW / 2 + 1.8, 0.4, roomD / 2 - 1.14));
+    LIFE.addContainer(-roomW / 2 + 1.5, 0.7, roomD / 2 - 1.5, 'Bedroom Dresser', [
+        { name: 'T-Shirt', parentOnly: false },
+        { isMoney: true, amount: 25, parentOnly: false },
+        { name: 'Watch', parentOnly: false }
+    ], { ownItem: true });
+
+    // Kitchen cabinet container (under counter)
+    LIFE.addContainer(roomW / 2 - 2, 0.5, roomD / 2 - 2, 'Kitchen Cabinet', [
+        { name: 'Coffee', parentOnly: false },
+        { name: 'Sandwich', parentOnly: false },
+        { isMoney: true, amount: 10, parentOnly: false }
+    ], { ownItem: true });
+
+    // Items placed on surfaces
+    LIFE.addEnv(LIFE.makeBox(0.15, 0.2, 0.1, 0x5d4037, -2.3, 0.5, -roomD / 2 + 3.5)); // coffee mug on coffee table
+    LIFE.addEnv(LIFE.makeBox(0.25, 0.02, 0.35, 0xfafafa, -1.5, 0.5, -roomD / 2 + 3.3)); // magazine
+    LIFE.addEnv(LIFE.makeBox(0.4, 0.06, 0.3, 0x1565c0, 3.5, 0.82, 0)); // book on dining table
+    LIFE.addEnv(LIFE.makeBox(0.1, 0.1, 0.1, 0xff6f00, 3, 0.82, 0.3)); // salt shaker
 
     // photo frames on wall
     LIFE.addEnv(LIFE.makeBox(0.8, 0.6, 0.05, 0x5d4037, -roomW / 2 + 0.2, 2, -2));
@@ -624,6 +965,7 @@ LIFE.buildClassroom = function() {
             LIFE.addSolid(1.2, 0.55, 0.7, 0xbcaaa4, dx, 0.28, dz);
             // chair
             LIFE.addEnv(LIFE.makeBox(0.5, 0.4, 0.5, 0x8d6e63, dx, 0.2, dz + 0.7));
+            LIFE.physics.addStaticBox(0.5, 0.4, 0.5, dx, 0.2, dz + 0.7);
         }
     }
     // colorful decorations
@@ -638,6 +980,23 @@ LIFE.buildClassroom = function() {
     );
     clock.position.set(5, 2.8, -4.78);
     LIFE.addEnv(clock);
+    // Items on teacher's desk
+    LIFE.addEnv(LIFE.makeBox(0.3, 0.02, 0.4, 0xffecb3, -0.5, 0.82, -3.5)); // clipboard
+    LIFE.addEnv(LIFE.makeBox(0.15, 0.15, 0.15, 0xcc2222, 0.5, 0.47, -3.5)); // apple
+    LIFE.addEnv(LIFE.makeBox(0.02, 0.02, 0.2, 0x1565c0, 0.8, 0.42, -3.3)); // pen
+    // Teacher's desk drawer
+    LIFE.addContainer(0, 0.4, -3.5, 'Teacher\'s Desk', [
+        { name: 'Book', parentOnly: false },
+        { name: 'Apple', parentOnly: false }
+    ], { ownItem: false });
+    // Supply cabinet (back wall, right)
+    LIFE.addSolid(1.5, 1.8, 0.5, 0x8d6e63, 5, 0.9, -4.5);
+    LIFE.addEnv(LIFE.makeBox(1.3, 0.05, 0.4, 0x795548, 5, 0.6, -4.5));
+    LIFE.addEnv(LIFE.makeBox(1.3, 0.05, 0.4, 0x795548, 5, 1.2, -4.5));
+    LIFE.addContainer(5, 0.9, -4.5, 'Supply Cabinet', [
+        { name: 'Textbook', parentOnly: false },
+        { name: 'Book', parentOnly: false }
+    ], { ownItem: false });
     // light
     var classLight = new THREE.PointLight(0xfff3e0, 0.7, 15);
     classLight.position.set(0, 3.3, 0);
@@ -704,6 +1063,7 @@ LIFE.buildHSClassroom = function() {
             var dz = -1.5 + r * 2;
             LIFE.addSolid(1.2, 0.6, 0.7, 0x90a4ae, dx, 0.3, dz);
             LIFE.addEnv(LIFE.makeBox(0.5, 0.45, 0.5, 0x78909c, dx, 0.22, dz + 0.7));
+            LIFE.physics.addStaticBox(0.5, 0.45, 0.5, dx, 0.22, dz + 0.7);
         }
     }
     // posters on walls
@@ -718,6 +1078,35 @@ LIFE.buildHSClassroom = function() {
     );
     hsClock.position.set(6, 3.2, -5.78);
     LIFE.addEnv(hsClock);
+    // Items on teacher's desk
+    LIFE.addEnv(LIFE.makeBox(0.25, 0.02, 0.35, 0xffecb3, -3.5, 0.82, -4)); // papers
+    LIFE.addEnv(LIFE.makeBox(0.5, 0.15, 0.05, 0x263238, -2, 0.88, -3.7)); // laptop (closed)
+    LIFE.addEnv(LIFE.makeBox(0.15, 0.2, 0.1, 0x5d4037, -2.5, 0.5, -4)); // coffee mug
+    // Teacher's desk drawer
+    LIFE.addContainer(-3, 0.4, -4, 'Teacher\'s Desk', [
+        { name: 'Textbook', parentOnly: false },
+        { name: 'Coffee', parentOnly: false },
+        { name: 'Phone', parentOnly: false }
+    ], { ownItem: false });
+    // Filing cabinet (left wall)
+    LIFE.addSolid(0.8, 1.4, 0.6, 0x78909c, -6.3, 0.7, -5);
+    LIFE.addEnv(LIFE.makeBox(0.7, 0.3, 0.02, 0x90a4ae, -6.3, 0.4, -4.68));
+    LIFE.addEnv(LIFE.makeBox(0.7, 0.3, 0.02, 0x90a4ae, -6.3, 0.8, -4.68));
+    LIFE.addEnv(LIFE.makeBox(0.7, 0.3, 0.02, 0x90a4ae, -6.3, 1.2, -4.68));
+    LIFE.addContainer(-6.3, 0.7, -5, 'Filing Cabinet', [
+        { name: 'Textbook', parentOnly: false },
+        { name: 'Energy Drink', parentOnly: false }
+    ], { ownItem: false });
+    // Bookshelf (right wall)
+    LIFE.addSolid(1.5, 2, 0.5, 0x5d4037, 6.3, 1, 3);
+    LIFE.addEnv(LIFE.makeBox(1.3, 0.05, 0.4, 0x795548, 6.3, 0.5, 3));
+    LIFE.addEnv(LIFE.makeBox(1.3, 0.05, 0.4, 0x795548, 6.3, 1.0, 3));
+    LIFE.addEnv(LIFE.makeBox(1.3, 0.05, 0.4, 0x795548, 6.3, 1.5, 3));
+    LIFE.addContainer(6.3, 1, 3, 'Bookshelf', [
+        { name: 'Book', parentOnly: false },
+        { name: 'Novel', parentOnly: false },
+        { name: 'Self-Help Book', parentOnly: false }
+    ], { ownItem: false });
     // fluorescent lights
     LIFE.addEnv(LIFE.makeBox(4, 0.05, 0.3, 0xffffff, -2, 3.9, -2));
     LIFE.addEnv(LIFE.makeBox(4, 0.05, 0.3, 0xffffff, 2, 3.9, 2));
@@ -764,8 +1153,8 @@ LIFE.buildJail = function() {
     // horizontal bar
     LIFE.addEnv(LIFE.makeBox(8, 0.12, 0.12, 0x424242, 0, 2.5, 4));
     LIFE.addEnv(LIFE.makeBox(8, 0.12, 0.12, 0x424242, 0, 0.5, 4));
-    // front wall collider (bars block player)
-    LIFE.addCollider(0, 4, 8, 0.3);
+    // front wall collider (bars block player — full height)
+    LIFE.addCollider(0, 4, 8, 0.3, 1.75, 3.5);
 
     // bed (cot)
     LIFE.addSolid(2.5, 0.4, 1.2, 0x5d4037, -2.5, 0.2, -3);
@@ -773,18 +1162,24 @@ LIFE.buildJail = function() {
     LIFE.addEnv(LIFE.makeBox(2.3, 0.1, 1.0, 0x90a4ae, -2.5, 0.45, -3));
     // pillow
     LIFE.addEnv(LIFE.makeBox(0.5, 0.15, 0.4, 0xbdbdbd, -3.4, 0.5, -3));
+    // Hidden stash under mattress
+    LIFE.addContainer(-2.5, 0.3, -3, 'Under Mattress', [
+        { name: 'Switchblade', parentOnly: false },
+        { isMoney: true, amount: 20, parentOnly: false }
+    ], { ownItem: true });
 
     // toilet
     var toiletBase = LIFE.makeBox(0.6, 0.5, 0.6, 0xeeeeee, 3, 0.25, -3.2);
     LIFE.addEnv(toiletBase);
-    LIFE.addCollider(3, -3.2, 0.8, 0.8);
+    LIFE.addCollider(3, -3.2, 0.8, 0.8, 0.25, 0.5);
+    LIFE.physics.addStaticBox(0.6, 0.5, 0.6, 3, 0.25, -3.2);
     var toiletTop = LIFE.makeBox(0.55, 0.08, 0.4, 0xeeeeee, 3, 0.54, -3);
     LIFE.addEnv(toiletTop);
 
     // sink
     LIFE.addEnv(LIFE.makeBox(0.1, 1.0, 0.1, 0x757575, 3, 0.5, -1.5));
     LIFE.addEnv(LIFE.makeBox(0.5, 0.06, 0.4, 0xeeeeee, 3, 1.0, -1.5));
-    LIFE.addCollider(3, -1.5, 0.6, 0.6);
+    LIFE.addCollider(3, -1.5, 0.6, 0.6, 0.5, 1.0);
 
     // dim light above
     var jailLight = new THREE.PointLight(0xfff3e0, 0.4, 10);
@@ -821,6 +1216,7 @@ LIFE.buildExecution = function() {
     // platform floor
     var platform = LIFE.makeBox(platW, 0.3, platD, 0x5d4037, 0, platY, 0);
     LIFE.addEnv(platform);
+    LIFE.physics.addStaticBox(platW, 0.3, platD, 0, platY, 0);
     // platform support beams underneath
     LIFE.addEnv(LIFE.makeBox(0.3, platY, 0.3, 0x4e342e, -2.5, platY / 2, -2));
     LIFE.addEnv(LIFE.makeBox(0.3, platY, 0.3, 0x4e342e, 2.5, platY / 2, -2));
@@ -831,6 +1227,7 @@ LIFE.buildExecution = function() {
     for (var s = 0; s < 7; s++) {
         var stepH = (s + 1) * (platY / 7);
         LIFE.addEnv(LIFE.makeBox(1.8, 0.2, 0.7, 0x6d4c41, 3.5, stepH - 0.1, -2.5 + s * 0.7));
+        LIFE.physics.addStaticBox(1.8, 0.2, 0.7, 3.5, stepH - 0.1, -2.5 + s * 0.7);
     }
 
     // GALLOWS FRAME - two vertical posts + horizontal beam
@@ -1061,6 +1458,16 @@ LIFE.buildHospital = function() {
     // cabinet doors
     LIFE.addEnv(LIFE.makeBox(0.9, 1.8, 0.05, 0xcfd8dc, 3.5, 1, -5.2));
     LIFE.addEnv(LIFE.makeBox(0.9, 1.8, 0.05, 0xcfd8dc, 4.5, 1, -5.2));
+    // drawer handles
+    LIFE.addEnv(LIFE.makeBox(0.2, 0.03, 0.03, 0xbdbdbd, 3.5, 1, -5.17));
+    LIFE.addEnv(LIFE.makeBox(0.2, 0.03, 0.03, 0xbdbdbd, 4.5, 1, -5.17));
+    // Medical cabinet container
+    LIFE.addContainer(4, 1, -5.5, 'Medical Cabinet', [
+        { name: 'Medkit', parentOnly: false },
+        { name: 'Medicine', parentOnly: false },
+        { name: 'Pain Killers', parentOnly: false },
+        { name: 'Vitamins', parentOnly: false }
+    ], { ownItem: false });
     // red cross on wall
     LIFE.addEnv(LIFE.makeBox(0.6, 0.15, 0.05, 0xf44336, 0, 2.5, -5.8));
     LIFE.addEnv(LIFE.makeBox(0.15, 0.6, 0.05, 0xf44336, 0, 2.5, -5.8));
@@ -1069,16 +1476,33 @@ LIFE.buildHospital = function() {
     LIFE.addSolid(2.5, 0.8, 1, 0x8d6e63, 4, 0.4, 3);
     // chair
     LIFE.addEnv(LIFE.makeBox(0.5, 0.5, 0.5, 0x424242, 4, 0.25, 4));
+    LIFE.physics.addStaticBox(0.5, 0.5, 0.5, 4, 0.25, 4);
     LIFE.addEnv(LIFE.makeBox(0.5, 0.6, 0.08, 0x424242, 4, 0.8, 4.22));
     // clipboard on desk
     LIFE.addEnv(LIFE.makeBox(0.3, 0.02, 0.4, 0xffecb3, 3.5, 0.82, 3));
     // pen
     LIFE.addEnv(LIFE.makeBox(0.02, 0.02, 0.2, 0x1565c0, 4.2, 0.82, 3));
+    // stethoscope on desk
+    LIFE.addEnv(LIFE.makeBox(0.15, 0.04, 0.15, 0x424242, 4.5, 0.82, 2.8));
+    // Doctor's desk drawer
+    LIFE.addContainer(4, 0.4, 3, 'Doctor\'s Desk', [
+        { name: 'Prescription', parentOnly: false },
+        { name: 'Coffee', parentOnly: false }
+    ], { ownItem: false });
+    // Bedside table next to patient bed
+    LIFE.addSolid(0.6, 0.5, 0.4, 0xe0e0e0, -1.2, 0.25, -0.8);
+    // Items on bedside table
+    LIFE.addEnv(LIFE.makeBox(0.15, 0.2, 0.1, 0xfafafa, -1.2, 0.55, -0.8)); // water cup
+    LIFE.addContainer(-1.2, 0.25, -0.8, 'Bedside Table', [
+        { name: 'Apple', parentOnly: false },
+        { isMoney: true, amount: 5, parentOnly: false }
+    ], { ownItem: false });
 
     // SINK (left wall)
     LIFE.addEnv(LIFE.makeBox(0.1, 0.8, 0.1, 0xbdbdbd, -6.7, 0.4, 2));
     LIFE.addEnv(LIFE.makeBox(0.6, 0.06, 0.4, 0xfafafa, -6.7, 0.85, 2));
-    LIFE.addCollider(-6.7, 2, 0.8, 0.6);
+    LIFE.addCollider(-6.7, 2, 0.8, 0.6, 0.43, 0.86);
+    LIFE.physics.addStaticBox(0.6, 0.06, 0.4, -6.7, 0.85, 2);
 
     // FLUORESCENT LIGHTS
     LIFE.addEnv(LIFE.makeBox(4, 0.05, 0.3, 0xffffff, -2, 3.4, 0));
@@ -1401,19 +1825,41 @@ LIFE.buildWorkplace = function(careerType) {
         }
         // Water cooler
         LIFE.addEnv(LIFE.makeBox(0.4, 1.2, 0.4, 0xbbdefb, 6, 0.6, -4));
+        // Items on desks
+        LIFE.addEnv(LIFE.makeBox(0.15, 0.2, 0.1, 0x5d4037, -4.3, 0.82, -1.8)); // coffee mug
+        LIFE.addEnv(LIFE.makeBox(0.25, 0.02, 0.3, 0xfafafa, 0.3, 0.82, -2)); // papers
+        LIFE.addEnv(LIFE.makeBox(0.02, 0.02, 0.15, 0x333333, 4.3, 0.82, -1.7)); // pen
         // File cabinet
         LIFE.addSolid(1, 1.2, 0.6, 0x78909c, -6, 0.6, -4);
+        LIFE.addEnv(LIFE.makeBox(0.85, 0.3, 0.02, 0x90a4ae, -6, 0.3, -3.68));
+        LIFE.addEnv(LIFE.makeBox(0.85, 0.3, 0.02, 0x90a4ae, -6, 0.7, -3.68));
+        LIFE.addEnv(LIFE.makeBox(0.85, 0.3, 0.02, 0x90a4ae, -6, 1.1, -3.68));
+        LIFE.addContainer(-6, 0.6, -4, 'File Cabinet', [
+            { name: 'Laptop', parentOnly: false },
+            { isMoney: true, amount: 50, parentOnly: false }
+        ], { ownItem: false });
     } else if (careerType === 'doctor') {
         // Exam table
         LIFE.addSolid(3, 0.6, 1.5, 0xe0e0e0, -3, 0.3, -2);
         LIFE.addEnv(LIFE.makeBox(2.8, 0.15, 1.4, 0xfafafa, -3, 0.68, -2));
         // Medical cabinet
         LIFE.addSolid(2, 2, 0.5, 0xeceff1, 4, 1, -5.5);
+        LIFE.addContainer(4, 1, -5.5, 'Medicine Cabinet', [
+            { name: 'Medicine', parentOnly: false },
+            { name: 'Medkit', parentOnly: false },
+            { name: 'Supplements', parentOnly: false }
+        ], { ownItem: false });
         // Red cross
         LIFE.addEnv(LIFE.makeBox(0.6, 0.15, 0.05, 0xf44336, 0, 2.5, -5.8));
         LIFE.addEnv(LIFE.makeBox(0.15, 0.6, 0.05, 0xf44336, 0, 2.5, -5.8));
         // Desk
         LIFE.addSolid(2.5, 0.8, 1, 0x8d6e63, 4, 0.4, 3);
+        LIFE.addEnv(LIFE.makeBox(0.3, 0.02, 0.4, 0xffecb3, 3.5, 0.82, 3)); // clipboard
+        LIFE.addEnv(LIFE.makeBox(0.15, 0.15, 0.1, 0x424242, 4.3, 0.82, 2.8)); // stethoscope
+        LIFE.addContainer(4, 0.4, 3, 'Doctor\'s Desk', [
+            { name: 'Prescription', parentOnly: false },
+            { name: 'Coffee', parentOnly: false }
+        ], { ownItem: false });
     } else if (careerType === 'teacher') {
         // Teacher's desk at front
         LIFE.addSolid(3, 0.8, 1.2, 0x8d6e63, 0, 0.4, -4);
@@ -1446,9 +1892,19 @@ LIFE.buildWorkplace = function(careerType) {
             bk.position.set(-4 + bi * 0.6, 1.1, -3);
             LIFE.addEnv(bk);
         }
+        // Supply cabinet
+        LIFE.addSolid(1.2, 1.8, 0.5, 0xeceff1, -6, 0.9, 3);
+        LIFE.addContainer(-6, 0.9, 3, 'Lab Supply Cabinet', [
+            { name: 'Energy Drink', parentOnly: false },
+            { name: 'Supplements', parentOnly: false }
+        ], { ownItem: false });
         // Computer station
         LIFE.addSolid(2, 0.8, 1, 0x455a64, 4, 0.4, 3);
         LIFE.addEnv(LIFE.makeBox(0.8, 0.6, 0.05, 0x263238, 4, 1.1, 2.7));
+        LIFE.addContainer(4, 0.4, 3, 'Lab Desk', [
+            { name: 'Laptop', parentOnly: false },
+            { name: 'Coffee', parentOnly: false }
+        ], { ownItem: false });
     } else if (careerType === 'musician') {
         // Stage area
         LIFE.addEnv(LIFE.makeBox(8, 0.3, 5, 0x5d4037, 0, 0.15, -2));

@@ -9,6 +9,8 @@
 
 <canvas id="c"></canvas>
 
+<div id="debugOverlay" style="display:none; position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:9999; background:rgba(0,0,0,0.85); color:#0f0; font-family:'Courier New',monospace; font-size:12px; padding:10px 14px; border-radius:6px; border:1px solid #0f0; pointer-events:none; white-space:pre; line-height:1.5; min-width:380px;"></div>
+
 <div id="ui">
     <div id="crosshair"></div>
     <div id="damageFlash"></div>
@@ -61,7 +63,21 @@
     <!-- Actions -->
     <div id="actions"></div>
     <div id="weaponIndicator"></div>
-    <div id="controls">WASD: Move | Mouse: Look | Space: Jump | 1-4: Actions | E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info | G: Enter/Exit Building | V: Drive Car | J: Quests | C: Cycle Quest | I: Inventory</div>
+    <div id="controls">
+        <span class="ctrl-item"><span class="ctrl-key">WASD</span> Move</span>
+        <span class="ctrl-item"><span class="ctrl-key">Space</span> Jump</span>
+        <span class="ctrl-item"><span class="ctrl-key">1-4</span> Actions</span>
+        <span class="ctrl-item"><span class="ctrl-key">E</span> Skip Year</span>
+        <span class="ctrl-item"><span class="ctrl-key">R</span> Time Skip</span>
+        <span class="ctrl-item"><span class="ctrl-key">T</span> Talk</span>
+        <span class="ctrl-item"><span class="ctrl-key">Q</span> Switch Item</span>
+        <span class="ctrl-item"><span class="ctrl-key">I</span> Inventory</span>
+        <span class="ctrl-item"><span class="ctrl-key">J</span> Quests</span>
+        <span class="ctrl-item"><span class="ctrl-key">F</span> Info</span>
+        <span class="ctrl-item"><span class="ctrl-key">G</span> Enter/Exit</span>
+        <span class="ctrl-item"><span class="ctrl-key">V</span> Drive</span>
+        <span class="ctrl-item"><span class="ctrl-key">X</span> Pickup</span>
+    </div>
 
     <!-- Pickup hint -->
     <div id="pickupHint"></div>
@@ -100,6 +116,12 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Container Panel (Skyrim-style searchable drawers/cabinets) -->
+    <div id="containerPanel">
+        <div class="containerHeader"><span id="containerName"></span><span class="containerClose" onclick="LIFE.closeContainer()">[ESC / X]</span></div>
+        <div id="containerItems"></div>
     </div>
 
     <!-- Debug Console -->
@@ -190,9 +212,13 @@
 <!-- Three.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
+<!-- Cannon.js physics engine -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+
 <!-- Game modules (load order matters) -->
 <script src="js/config.js"></script>
 <script src="js/scene.js"></script>
+<script src="js/physics.js"></script>
 <script src="js/sounds.js"></script>
 <script src="js/characters.js"></script>
 <script src="js/economy.js"></script>

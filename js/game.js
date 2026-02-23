@@ -78,7 +78,13 @@ LIFE.state = {
     addictionRecoveries: 0,// times beaten addiction
     betrayals: 0,          // people you betrayed
     // life milestones (set as they happen)
-    milestones: []         // array of {age, text, type:'good'|'bad'|'neutral'}
+    milestones: [],        // array of {age, text, type:'good'|'bad'|'neutral'}
+    // NPC lifecycle
+    familyDeaths: [],      // [{name, role, age, playerAge}]
+    // gang system
+    gang: null,            // 'serpents', 'reapers', 'shadows', or null
+    gangRep: 0,            // 0-100 reputation within gang
+    gangJoinedAge: null
 };
 
 // ============================================================
@@ -308,9 +314,35 @@ LIFE.news.update = function(dt) {
 };
 
 // ============================================================
+// CONTROLS DISPLAY HELPER
+// ============================================================
+LIFE._ctrlHtml = function(pairs) {
+    var html = '';
+    for (var i = 0; i < pairs.length; i += 2) {
+        html += '<span class="ctrl-item"><span class="ctrl-key">' + pairs[i] + '</span> ' + pairs[i+1] + '</span>';
+    }
+    return html;
+};
+LIFE._defaultControls = function() {
+    return LIFE._ctrlHtml([
+        'WASD','Move', 'Space','Jump', '1-4','Actions', 'E','Skip Year',
+        'R','Time Skip', 'T','Talk', 'Q','Switch Item', 'I','Inventory',
+        'J','Quests', 'F','Info', 'G','Enter/Exit', 'V','Drive', 'X','Pickup'
+    ]);
+};
+
+// ============================================================
 // CURSOR LOCK / UNLOCK
 // ============================================================
-LIFE.lockCursor = function() { LIFE.canvas.requestPointerLock(); };
+LIFE._suppressPause = false;
+LIFE.lockCursor = function() {
+    LIFE._suppressPause = true;
+    setTimeout(function() {
+        LIFE.canvas.requestPointerLock();
+    }, 100);
+    // Keep suppression for a bit longer so the re-lock + any ESC bounce doesn't trigger pause
+    setTimeout(function() { LIFE._suppressPause = false; }, 400);
+};
 LIFE.unlockCursor = function() {
     if (document.pointerLockElement) document.exitPointerLock();
     document.body.classList.remove('locked');
@@ -375,7 +407,33 @@ LIFE.addWanted = function(amount) {
             // First offense: 5-8 seconds (someone has to witness, call, dispatcher sends cops)
             // Escalation while cops already out: 2-4 seconds (cops radio for backup)
             state.policeDispatchTimer = old === 0 ? (5 + Math.random() * 3) : (2 + Math.random() * 2);
-            if (old === 0) LIFE.ui.showPopup('Someone is calling the police!', '#f44336');
+            if (old === 0) {
+                // Find nearest civilian NPC to be the witness who calls police
+                var callerNpc = null;
+                var callerName = 'A bystander';
+                if (LIFE.player && LIFE.npcs) {
+                    var px = LIFE.player.group.position.x, pz = LIFE.player.group.position.z;
+                    var bestDist = Infinity;
+                    for (var wi = 0; wi < LIFE.npcs.length; wi++) {
+                        var wn = LIFE.npcs[wi];
+                        if (!wn.alive || wn.isPolice || wn._callingPolice) continue;
+                        // Low reputation NPCs won't snitch (dealers, shady characters)
+                        var wnRep = wn.npcReputation !== undefined ? wn.npcReputation : 30;
+                        if (wnRep <= -30) continue;
+                        // Skip NPCs recently attacked — they need 15s to recover before calling
+                        if (wn._lastAttackedTime && (Date.now() - wn._lastAttackedTime) < 15000) continue;
+                        var dx = wn.char.group.position.x - px;
+                        var dz = wn.char.group.position.z - pz;
+                        var d2 = dx * dx + dz * dz;
+                        if (d2 < bestDist) { bestDist = d2; callerNpc = wn; callerName = wn.name; }
+                    }
+                }
+                // Make that NPC actually pull out their phone and call
+                if (callerNpc && LIFE.npcStartPhoneCall) {
+                    LIFE.npcStartPhoneCall(callerNpc);
+                }
+                LIFE.ui.showPopup(callerName + ' is calling the police!', '#f44336');
+            }
         }
     }
     // SWAT check - evaluated every time wanted rises, independent of regular police dispatch
@@ -1101,7 +1159,7 @@ LIFE.arrestPlayer = function() {
         if (LIFE.world.built) {
             if (LIFE.world.insideInterior) {
                 LIFE.npcs.forEach(function(n) {
-                    if (!n._isZoneNPC) LIFE.scene.remove(n.char.group);
+                    if (!n._isZoneNPC) { LIFE.scene.remove(n.char.group); LIFE.removeNPCPhysics(n); }
                 });
                 LIFE.npcs = [];
                 if (LIFE.world._interiorGroup) {
@@ -1111,6 +1169,7 @@ LIFE.arrestPlayer = function() {
                 LIFE.clearEnvironment();
                 LIFE.world.insideInterior = null;
             }
+            LIFE.physics.disableZoneBodies();
             LIFE.world.hideAllZones();
         }
         state.bounds = LIFE.getBoundsForStage('execution');
@@ -1118,7 +1177,7 @@ LIFE.arrestPlayer = function() {
         LIFE.updatePlayerSize();
 
         // position player at bottom of stairs
-        LIFE.player.group.position.set(4.5, 0, -4);
+        LIFE.teleportPlayer(4.5, 0, -4);
         LIFE.player.group.rotation.y = Math.PI * 0.5;
 
         // hide most UI, show only sentencing text
@@ -1126,8 +1185,7 @@ LIFE.arrestPlayer = function() {
         LIFE.ui.hideJailScreen();
         LIFE.ui.$.ageBox.style.display = 'block';
         LIFE.ui.$.controls.style.display = 'block';
-        LIFE.ui.$.controls.textContent = 'SENTENCED TO DEATH BY HANGING';
-        LIFE.ui.$.controls.style.color = '#ff1744';
+        LIFE.ui.$.controls.innerHTML = '<span style="color:#ff1744;font-weight:bold;font-size:15px">SENTENCED TO DEATH BY HANGING</span>';
         LIFE.ui.$.cross.style.display = 'none';
 
         // Big sentencing popup for death penalty
@@ -1202,7 +1260,7 @@ LIFE.arrestPlayer = function() {
         if (LIFE.world.insideInterior) {
             // Clean up current interior NPCs
             LIFE.npcs.forEach(function(n) {
-                if (!n._isZoneNPC) LIFE.scene.remove(n.char.group);
+                if (!n._isZoneNPC) { LIFE.scene.remove(n.char.group); LIFE.removeNPCPhysics(n); }
             });
             LIFE.npcs = [];
             if (LIFE.world._interiorGroup) {
@@ -1212,6 +1270,7 @@ LIFE.arrestPlayer = function() {
             LIFE.clearEnvironment();
             LIFE.world.insideInterior = null;
         }
+        LIFE.physics.disableZoneBodies();
         LIFE.world.hideAllZones();
     }
 
@@ -1235,10 +1294,12 @@ LIFE.arrestPlayer = function() {
         var origAddEnv = LIFE.addEnv;
         var origAddCollider = LIFE.addCollider;
         LIFE.addEnv = function(obj) { jailGroup.add(obj); return obj; };
-        LIFE.addCollider = function(x, z, w, d) {
+        LIFE.addCollider = function(x, z, w, d, y, h) {
             LIFE.colliders.push({
                 minX: (x + jailPos.x) - w / 2, maxX: (x + jailPos.x) + w / 2,
-                minZ: (z + jailPos.z) - d / 2, maxZ: (z + jailPos.z) + d / 2
+                minZ: (z + jailPos.z) - d / 2, maxZ: (z + jailPos.z) + d / 2,
+                minY: (y !== undefined && h !== undefined) ? y - h / 2 : -999,
+                maxY: (y !== undefined && h !== undefined) ? y + h / 2 : 999
             });
         };
         LIFE.buildJail();
@@ -1250,14 +1311,14 @@ LIFE.arrestPlayer = function() {
         LIFE.spawnNPCs('jail');
         LIFE.world._interiorNPCOffset = null;
         LIFE.updatePlayerSize();
-        LIFE.player.group.position.set(jailPos.x, 0, jailPos.z);
+        LIFE.teleportPlayer(jailPos.x, 0, jailPos.z);
     } else {
         // Legacy non-world path
         state.bounds = LIFE.getBoundsForStage('jail');
         LIFE.buildEnvironment('jail');
         LIFE.spawnNPCs('jail');
         LIFE.updatePlayerSize();
-        LIFE.player.group.position.set(0, 0, 0);
+        LIFE.teleportPlayer(0, 0, 0);
     }
 
     // show jail HUD
@@ -1269,7 +1330,7 @@ LIFE.arrestPlayer = function() {
     LIFE.ui.$.ageBox.style.display = 'block';
     LIFE.ui.$.playerHpBar.style.display = 'block';
     LIFE.ui.$.controls.style.display = 'block';
-    LIFE.ui.$.controls.textContent = 'WASD: Move | Mouse: Look | Click/1: Punch | T: Talk';
+    LIFE.ui.$.controls.innerHTML = LIFE._ctrlHtml(['WASD','Move', 'Click/1','Punch', 'T','Talk']);
     LIFE.ui.$.actions.style.display = 'flex';
     LIFE.ui.updateJailActions();
     LIFE.ui.updateWeapon();
@@ -1291,14 +1352,14 @@ LIFE.exitJail = function() {
     state.gamePhase = 'playing';
     LIFE.ui.hideJailScreen();
     LIFE.ui.showGameUI();
-    LIFE.ui.$.controls.textContent = 'WASD: Move | Mouse: Look | Space: Jump | 1-4: Actions | E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info | G: Enter Home';
+    LIFE.ui.$.controls.innerHTML = LIFE._defaultControls();
     var newStage = LIFE.getStageForAge(state.age);
     state.currentStage = newStage;
 
     if (LIFE.world.built) {
         // Remove jail NPCs from scene (zone NPCs stay)
         LIFE.npcs.forEach(function(n) {
-            if (!n._isZoneNPC) LIFE.scene.remove(n.char.group);
+            if (!n._isZoneNPC) { LIFE.scene.remove(n.char.group); LIFE.removeNPCPhysics(n); }
         });
         LIFE.npcs = [];
         // Remove jail interior group
@@ -1308,18 +1369,19 @@ LIFE.exitJail = function() {
         }
         // Clear remaining jail objects
         LIFE.clearEnvironment();
-        // Restore world zones
+        // Restore zone physics bodies and world zones
+        LIFE.physics.enableZoneBodies();
         LIFE.world.showNearbyZones();
         LIFE.world.insideInterior = null;
         // Teleport to correct zone
         var zonePos = LIFE.world.getZonePos(newStage);
-        LIFE.player.group.position.set(zonePos.x, 0, zonePos.z + 5);
+        LIFE.teleportPlayer(zonePos.x, 0, zonePos.z + 5);
         state.bounds = 400;
         // Restore atmosphere
         LIFE.scene.background.set(0x87ceeb);
         LIFE.scene.fog.color.set(0x87ceeb);
-        LIFE.scene.fog.near = 50;
-        LIFE.scene.fog.far = 200;
+        LIFE.scene.fog.near = 80;
+        LIFE.scene.fog.far = 350;
         // Restore persistent police (show them at patrol positions)
         if (LIFE.world.policeCops) {
             for (var ri = 0; ri < LIFE.world.policeCops.length; ri++) {
@@ -1340,7 +1402,7 @@ LIFE.exitJail = function() {
     } else {
         LIFE.buildEnvironment(newStage);
         LIFE.spawnNPCs(newStage);
-        LIFE.player.group.position.set(0, 0, 0);
+        LIFE.teleportPlayer(0, 0, 0);
     }
 
     LIFE.updatePlayerSize();
@@ -1401,15 +1463,17 @@ LIFE.dropItem = function(index) {
 
     // Update weapon flags
     LIFE.state.hasGun = inv.indexOf('Pistol') >= 0;
+    LIFE.state.hasRifle = inv.indexOf('AK-47') >= 0;
     LIFE.state.hasSwitchblade = inv.indexOf('Switchblade') >= 0;
     LIFE.updateHeldWeapon();
 
-    // Create 3D mesh on the ground
+    // Create 3D mesh
     if (!LIFE.player) return;
     var pPos = LIFE.player.group.position;
     var fwd = LIFE.state.playerRotY || 0;
-    var dropX = pPos.x + Math.sin(fwd) * 2;
-    var dropZ = pPos.z + Math.cos(fwd) * 2;
+    var dropX = pPos.x + Math.sin(fwd) * 1.5;
+    var dropZ = pPos.z + Math.cos(fwd) * 1.5;
+    var dropY = pPos.y + 1.0;
 
     var itemData = LIFE.ITEM_DATA[itemName] || {};
     var mesh;
@@ -1418,7 +1482,7 @@ LIFE.dropItem = function(index) {
     } else {
         mesh = LIFE.createItemMesh(itemName);
     }
-    mesh.position.set(dropX, 0.3, dropZ);
+    mesh.position.set(dropX, dropY, dropZ);
     mesh.scale.set(2, 2, 2);
     LIFE.scene.add(mesh);
 
@@ -1436,14 +1500,26 @@ LIFE.dropItem = function(index) {
     ring.position.set(dropX, 0.02, dropZ);
     LIFE.scene.add(ring);
 
-    LIFE.droppedItems.push({
+    // Create physics body with throw velocity
+    var throwSpeed = 3;
+    var velocity = {
+        x: Math.sin(fwd) * throwSpeed,
+        y: 2,
+        z: Math.cos(fwd) * throwSpeed
+    };
+    var body = LIFE.physics.createItemBody(itemName, dropX, dropY, dropZ, velocity);
+
+    var entry = {
         name: itemName,
         mesh: mesh,
         ring: ring,
         ringMat: ringMat,
-        x: dropX, z: dropZ,
-        bobTime: 0
-    });
+        body: body,
+        x: dropX, z: dropZ
+    };
+
+    LIFE.droppedItems.push(entry);
+    if (body) LIFE.physics.dynamicBodies.push(entry);
 
     LIFE.ui.showPopup('Dropped ' + itemName, '#ff9800');
 };
@@ -1455,6 +1531,9 @@ LIFE.pickupItem = function(droppedItem) {
     // Update weapon flags
     if (droppedItem.name === 'Pistol') LIFE.state.hasGun = true;
     if (droppedItem.name === 'Switchblade') LIFE.state.hasSwitchblade = true;
+
+    // Remove physics body
+    if (droppedItem.body) LIFE.physics.removeDynamic(droppedItem);
 
     // Remove 3D objects
     LIFE.scene.remove(droppedItem.mesh);
@@ -1470,13 +1549,15 @@ LIFE.pickupItem = function(droppedItem) {
 LIFE.updateDroppedItems = function(dt) {
     for (var i = 0; i < LIFE.droppedItems.length; i++) {
         var item = LIFE.droppedItems[i];
-        // Bob and spin
-        item.bobTime += dt;
-        item.mesh.position.y = 0.3 + Math.sin(item.bobTime * 2) * 0.1;
-        item.mesh.rotation.y += dt * 1.5;
-        // Pulse ring
-        item.ringMat.opacity = 0.25 + Math.sin(item.bobTime * 3) * 0.15;
-        item.ring.rotation.z += dt * 0.5;
+        // Sync x/z from physics body position (for pickup distance checks)
+        if (item.body) {
+            item.x = item.body.position.x;
+            item.z = item.body.position.z;
+        }
+        // Pulse ring opacity
+        if (!item._ringTime) item._ringTime = 0;
+        item._ringTime += dt;
+        item.ringMat.opacity = 0.25 + Math.sin(item._ringTime * 3) * 0.15;
     }
 };
 
@@ -1491,16 +1572,19 @@ LIFE.updatePickupHint = function() {
         return;
     }
     var px = LIFE.player.group.position.x;
+    var py = LIFE.player.group.position.y;
     var pz = LIFE.player.group.position.z;
     var best = null, bestDist = 4;
     var bestType = null; // 'dropped' or 'world'
 
-    // Check player-dropped items
+    // Check player-dropped items (3D distance)
     for (var i = 0; i < LIFE.droppedItems.length; i++) {
         var item = LIFE.droppedItems[i];
+        var iy = item.body ? item.body.position.y : 0.3;
         var dx = px - item.x;
+        var dy = py - iy;
         var dz = pz - item.z;
-        var d = Math.sqrt(dx * dx + dz * dz);
+        var d = Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (d < bestDist) {
             bestDist = d;
             best = item;
@@ -1508,12 +1592,14 @@ LIFE.updatePickupHint = function() {
         }
     }
 
-    // Check world items
+    // Check world items (3D distance)
     for (var j = 0; j < LIFE.worldItems.length; j++) {
         var wi = LIFE.worldItems[j];
+        var wiy = wi.body ? wi.body.position.y : 0.3;
         var wdx = px - wi.x;
+        var wdy = py - wiy;
         var wdz = pz - wi.z;
-        var wd = Math.sqrt(wdx * wdx + wdz * wdz);
+        var wd = Math.sqrt(wdx * wdx + wdy * wdy + wdz * wdz);
         if (wd < bestDist) {
             bestDist = wd;
             best = wi;
@@ -1521,14 +1607,39 @@ LIFE.updatePickupHint = function() {
         }
     }
 
+    // Check containers (drawers, cabinets, etc.)
+    for (var k = 0; k < LIFE.containers.length; k++) {
+        var cont = LIFE.containers[k];
+        if (cont.items.length === 0) continue; // empty container
+        var cdx = px - cont.x;
+        var cdy = py - cont.y;
+        var cdz = pz - cont.z;
+        var cd = Math.sqrt(cdx * cdx + cdy * cdy + cdz * cdz);
+        if (cd < bestDist) {
+            bestDist = cd;
+            best = cont;
+            bestType = 'container';
+        }
+    }
+
     LIFE._nearestDroppedItem = bestType === 'dropped' ? best : null;
     LIFE._nearestWorldItem = bestType === 'world' ? best : null;
+    LIFE._nearestContainer = bestType === 'container' ? best : null;
 
     if (best) {
-        hint.textContent = 'Press X to pick up ' + best.name;
-        hint.style.display = 'block';
-        hint.style.color = '#4fc3f7';
-        hint.style.borderColor = 'rgba(79,195,247,0.4)';
+        if (bestType === 'container') {
+            var contSteal = !best.ownItem;
+            hint.textContent = (contSteal ? 'Press X to steal from ' : 'Press X to search ') + best.name;
+            hint.style.display = 'block';
+            hint.style.color = contSteal ? '#f44336' : '#ffab40';
+            hint.style.borderColor = contSteal ? 'rgba(244,67,54,0.4)' : 'rgba(255,171,64,0.4)';
+        } else {
+            var isSteal = (bestType === 'world');
+            hint.textContent = isSteal ? ('Press X to steal ' + best.name) : ('Press X to pick up ' + best.name);
+            hint.style.display = 'block';
+            hint.style.color = isSteal ? '#f44336' : '#4fc3f7';
+            hint.style.borderColor = isSteal ? 'rgba(244,67,54,0.4)' : 'rgba(79,195,247,0.4)';
+        }
     } else {
         hint.style.display = 'none';
     }
@@ -1538,18 +1649,158 @@ LIFE.clearDroppedItems = function() {
     for (var i = 0; i < LIFE.droppedItems.length; i++) {
         LIFE.scene.remove(LIFE.droppedItems[i].mesh);
         LIFE.scene.remove(LIFE.droppedItems[i].ring);
+        if (LIFE.droppedItems[i].body) LIFE.physics.removeDynamic(LIFE.droppedItems[i]);
     }
     LIFE.droppedItems = [];
     LIFE._nearestDroppedItem = null;
 };
 
 // ============================================================
+// CONTAINER SYSTEM (Skyrim-style searchable drawers/cabinets)
+// ============================================================
+LIFE.containers = [];
+LIFE._nearestContainer = null;
+LIFE._containerOpen = false;
+LIFE._openContainerRef = null;
+
+LIFE.addContainer = function(x, y, z, name, items, options) {
+    options = options || {};
+    // If building a zone, offset to world space
+    var worldX = x, worldZ = z;
+    if (LIFE.world._currentBuildZone && LIFE.world._currentBuildName) {
+        var def = LIFE.ZONE_DEFS[LIFE.world._currentBuildName];
+        if (def) { worldX += def.cx; worldZ += def.cz; }
+    }
+    var container = {
+        name: name,
+        x: worldX, y: y, z: worldZ,
+        items: items, // [{name: 'Apple', parentOnly: false, isMoney: false}, ...]
+        ownItem: options.ownItem !== false, // default true (family-owned)
+        mesh: options.mesh || null,
+        _zoneName: options.zoneName || (LIFE.world._currentBuildName || null)
+    };
+    LIFE.containers.push(container);
+    return container;
+};
+
+LIFE.clearContainers = function(zoneName) {
+    if (zoneName) {
+        // Clear containers for a specific zone
+        LIFE.containers = LIFE.containers.filter(function(c) { return c._zoneName !== zoneName; });
+    } else {
+        // Clear only non-zone (interior) containers, preserve zone containers
+        LIFE.containers = LIFE.containers.filter(function(c) { return !!c._zoneName; });
+    }
+    LIFE._nearestContainer = null;
+};
+
+LIFE.openContainer = function(container) {
+    if (!container || LIFE._containerOpen) return;
+    LIFE._containerOpen = true;
+    LIFE._openContainerRef = container;
+    var panel = document.getElementById('containerPanel');
+    var nameEl = document.getElementById('containerName');
+    if (nameEl) nameEl.textContent = container.name;
+    LIFE._refreshContainerUI();
+    if (panel) panel.style.display = 'flex';
+    // Unlock cursor for clicking
+    if (document.exitPointerLock) document.exitPointerLock();
+};
+
+LIFE._refreshContainerUI = function() {
+    var container = LIFE._openContainerRef;
+    if (!container) return;
+    var itemsEl = document.getElementById('containerItems');
+    if (!itemsEl) return;
+    if (container.items.length === 0) {
+        itemsEl.innerHTML = '<div class="containerEmpty">Empty</div>';
+        return;
+    }
+    var html = '';
+    var isStealContainer = !container.ownItem; // not family-owned = stealing
+    for (var i = 0; i < container.items.length; i++) {
+        var ci = container.items[i];
+        var isParent = ci.parentOnly;
+        var isStealItem = isStealContainer || isParent;
+        var displayName = ci.isMoney ? ('$' + ci.amount) : ci.name;
+        var itemData = ci.isMoney ? null : (LIFE.ITEM_DATA[ci.name] || {});
+        var valueStr = '';
+        if (itemData && itemData.value) valueStr = '($' + itemData.value + ')';
+        if (ci.isMoney) valueStr = '';
+        html += '<div class="containerItem">';
+        html += '<div><span class="containerItemName' + (isStealItem ? ' parentOwned' : '') + '">' + displayName + '</span>';
+        if (isParent) html += ' <span style="color:#ef5350;font-size:11px">[Parent\'s]</span>';
+        else if (isStealContainer) html += ' <span style="color:#ef5350;font-size:11px">[Steal]</span>';
+        if (valueStr) html += ' <span class="containerItemValue">' + valueStr + '</span>';
+        html += '</div>';
+        html += '<div class="containerTakeBtn" onclick="LIFE.takeContainerItem(' + i + ')">' + (isStealItem ? 'Steal' : 'Take') + '</div>';
+        html += '</div>';
+    }
+    itemsEl.innerHTML = html;
+};
+
+LIFE.takeContainerItem = function(index) {
+    var container = LIFE._openContainerRef;
+    if (!container || index < 0 || index >= container.items.length) return;
+    var ci = container.items[index];
+    var isSteal = !container.ownItem || ci.parentOnly;
+
+    if (ci.isMoney) {
+        LIFE.state.money += ci.amount;
+        if (isSteal) {
+            LIFE.ui.showPopup('Stole $' + ci.amount, '#ff9800');
+            LIFE.state.stats.reputation = Math.max(-100, (LIFE.state.stats.reputation || 0) - 3);
+        } else {
+            LIFE.ui.showPopup('Took $' + ci.amount, '#4caf50');
+        }
+    } else {
+        if (ci.parentOnly) {
+            LIFE.ui.showPopup('Took ' + ci.name + ' (parent\'s item!)', '#ff9800');
+            LIFE.state.stats.reputation = Math.max(-100, (LIFE.state.stats.reputation || 0) - 2);
+        } else if (!container.ownItem) {
+            LIFE.ui.showPopup('Stole ' + ci.name, '#ff9800');
+            LIFE.state.stats.reputation = Math.max(-100, (LIFE.state.stats.reputation || 0) - 3);
+            // Chance of adding wanted level for higher-value thefts
+            var itemData = LIFE.ITEM_DATA[ci.name] || {};
+            if (itemData.value && itemData.value > 40) {
+                LIFE.state.wantedLevel = Math.min(5, (LIFE.state.wantedLevel || 0) + 1);
+            }
+        } else {
+            LIFE.ui.showPopup('Took ' + ci.name, '#4caf50');
+        }
+        LIFE.state.inventory.push(ci.name);
+    }
+
+    container.items.splice(index, 1);
+    if (container.items.length === 0) {
+        LIFE.closeContainer();
+    } else {
+        LIFE._refreshContainerUI();
+    }
+};
+
+LIFE.closeContainer = function() {
+    if (!LIFE._containerOpen) return;
+    LIFE._containerOpen = false;
+    LIFE._openContainerRef = null;
+    var panel = document.getElementById('containerPanel');
+    if (panel) panel.style.display = 'none';
+    // Re-lock cursor
+    if (LIFE.state.gamePhase === 'playing') {
+        LIFE.lockCursor();
+    }
+};
+
+// ============================================================
 // ITEM DATA
 // ============================================================
 LIFE.ITEM_DATA = {
-    'Fists':        { desc: 'Your bare hands. Not great, but always available.', damage: 10, type: 'melee' },
-    'Switchblade':  { desc: 'A sharp folding knife. Quick and deadly up close.', damage: 20, type: 'melee' },
+    'Fists':        { desc: 'Your bare hands. Not great, but always available.', type: 'melee' },
+    'Switchblade':  { desc: 'A sharp folding knife. Quick and deadly up close.', damage: 25, type: 'melee' },
     'Pistol':       { desc: 'A semi-automatic handgun. Lethal at range.', damage: 50, type: 'ranged' },
+    'AK-47':        { desc: 'A fully automatic assault rifle. Devastating firepower.', damage: 40, type: 'ranged', auto: true },
+    'Baseball Bat': { desc: 'A solid wooden bat. Hurts more than a punch.', damage: 35, type: 'melee', value: 20 },
+    'Crowbar':      { desc: 'Heavy iron crowbar. Useful as a weapon.', damage: 40, type: 'melee', value: 15 },
     'Apple':        { desc: 'A crisp red apple. Restores a bit of health.', type: 'food', heal: 5, value: 2 },
     'Sandwich':     { desc: 'A hearty sandwich. Filling and nutritious.', type: 'food', heal: 15, value: 5 },
     'Energy Drink': { desc: 'Boosts your energy for a short time.', type: 'food', heal: 10, value: 4 },
@@ -1560,17 +1811,50 @@ LIFE.ITEM_DATA = {
     'Watch':        { desc: 'A shiny wristwatch. Looks expensive.', type: 'valuable', value: 80 },
     'Backpack':     { desc: 'A sturdy backpack. Useful for carrying things.', type: 'misc', value: 30 },
     'Medkit':       { desc: 'A first aid kit. Heals a significant amount.', type: 'food', heal: 40, value: 25 },
-    'Baseball Bat': { desc: 'A solid wooden bat. Hurts more than a punch.', damage: 30, type: 'melee', value: 20 },
-    'Crowbar':      { desc: 'Heavy iron crowbar. Useful as a weapon.', damage: 35, type: 'melee', value: 15 },
     'Gold Ring':    { desc: 'A gold ring with a small gem. Very valuable.', type: 'valuable', value: 250 },
     'Sunglasses':   { desc: 'Cool shades. Makes you look stylish.', type: 'misc', value: 15 },
     'Keys':         { desc: 'A set of keys. Someone probably needs these.', type: 'misc', value: 5 },
     'Coffee':       { desc: 'A hot cup of coffee. Boosts alertness.', type: 'food', heal: 8, value: 3 },
-    'Pizza Slice':  { desc: 'A slice of pepperoni pizza. Delicious.', type: 'food', heal: 12, value: 4 },
+    'Pizza Slice':  { desc: 'A slice of pepperoni pizza. Delicious.', type: 'food', heal: 12, stat: 'happiness', amount: 3, value: 4 },
     'Textbook':     { desc: 'A heavy academic textbook. Great for studying.', type: 'misc', value: 40 },
     'Guitar':       { desc: 'An acoustic guitar. Play a tune?', type: 'misc', value: 120 },
     'Headphones':   { desc: 'Wireless headphones. Decent sound quality.', type: 'misc', value: 60 },
-    'Medicine':     { desc: 'Prescription medicine. Heals over time.', type: 'food', heal: 25, value: 20 }
+    'Medicine':     { desc: 'Prescription medicine. Heals over time.', type: 'food', heal: 25, value: 20 },
+    // Food vendor
+    'Hot Dog':          { desc: 'A tasty hot dog.', type: 'food', stat: 'happiness', amount: 2, value: 2 },
+    'Smoothie':         { desc: 'A fresh fruit smoothie.', type: 'food', stat: 'health', amount: 2, heal: 2, value: 4 },
+    'Full Meal':        { desc: 'A hearty full meal.', type: 'food', stat: 'happiness', amount: 5, value: 10 },
+    'Protein Shake':    { desc: 'A protein shake. Good for health.', type: 'food', stat: 'health', amount: 4, heal: 4, value: 8 },
+    'Fancy Dinner':     { desc: 'An exquisite gourmet dinner.', type: 'food', stat: 'happiness', amount: 8, value: 40 },
+    // Pharmacist
+    'Vitamins':         { desc: 'Daily vitamins. Boosts health.', type: 'food', heal: 3, value: 5 },
+    'Cold Medicine':    { desc: 'Treats cold symptoms.', type: 'food', heal: 4, value: 8 },
+    'Pain Killers':     { desc: 'Relieves pain quickly.', type: 'food', heal: 5, value: 10 },
+    'Supplements':      { desc: 'Health supplements.', type: 'food', heal: 6, value: 20 },
+    'Prescription':     { desc: 'Prescription medication.', type: 'food', heal: 10, value: 50 },
+    // Clothes
+    'T-Shirt':          { desc: 'A casual t-shirt.', type: 'clothing', value: 8 },
+    'Nice Outfit':      { desc: 'A stylish outfit.', type: 'clothing', value: 30 },
+    'Designer Clothes': { desc: 'High-end designer clothing.', type: 'clothing', value: 100 },
+    'Formal Suit':      { desc: 'A sharp formal suit.', type: 'clothing', value: 200 },
+    'Luxury Watch':     { desc: 'An expensive luxury watch.', type: 'valuable', value: 750 },
+    'Designer Shoes':   { desc: 'Premium designer shoes.', type: 'clothing', value: 150 },
+    // Books
+    'Comic Book':       { desc: 'A colorful comic book.', type: 'misc', value: 3 },
+    'Novel':            { desc: 'A paperback novel.', type: 'misc', value: 6 },
+    'Self-Help Book':   { desc: 'A motivational self-help book.', type: 'misc', value: 12 },
+    'Encyclopedia Set': { desc: 'A complete encyclopedia set.', type: 'misc', value: 75 },
+    // Gym
+    'Sports Equipment': { desc: 'Quality sports gear.', type: 'misc', value: 100 },
+    // Tickets
+    'Event T-Shirt':    { desc: 'A commemorative event t-shirt.', type: 'clothing', value: 10 },
+    'Concert Poster':   { desc: 'A signed concert poster.', type: 'misc', value: 8 },
+    'Signed Merch':     { desc: 'Autographed merchandise.', type: 'valuable', value: 40 },
+    // Electronics
+    'Phone Case':       { desc: 'A protective phone case.', type: 'misc', value: 5 },
+    'Tablet':           { desc: 'A touchscreen tablet.', type: 'misc', value: 100 },
+    'Gaming Console':   { desc: 'A gaming console.', type: 'misc', value: 200 },
+    'Smartphone':       { desc: 'The latest smartphone model.', type: 'misc', value: 250 }
 };
 
 // Items that can spawn in each zone (with weights)
@@ -1579,7 +1863,7 @@ LIFE.WORLD_ITEM_SPAWNS = {
     school:      [{ items: ['Textbook', 'Apple', 'Backpack', 'Book', 'Energy Drink'], count: 4 }],
     highschool:  [{ items: ['Textbook', 'Energy Drink', 'Headphones', 'Switchblade', 'Backpack', 'Phone'], count: 5 }],
     college:     [{ items: ['Textbook', 'Laptop', 'Coffee', 'Energy Drink', 'Book', 'Headphones', 'Guitar', 'Phone', 'Backpack'], count: 6 }],
-    city:        [{ items: ['Wallet', 'Watch', 'Phone', 'Sunglasses', 'Pizza Slice', 'Coffee', 'Sandwich', 'Baseball Bat', 'Laptop', 'Gold Ring', 'Headphones', 'Crowbar', 'Pistol', 'Switchblade'], count: 10 }],
+    city:        [{ items: ['Wallet', 'Phone', 'Sunglasses', 'Pizza Slice', 'Coffee', 'Sandwich', 'Backpack', 'Headphones', 'Keys', 'Energy Drink'], count: 10 }],
     retirement:  [{ items: ['Medicine', 'Book', 'Watch', 'Keys', 'Wallet', 'Phone', 'Medkit'], count: 4 }],
     dealership:  [{ items: ['Coffee', 'Keys', 'Wallet'], count: 2 }],
     eventcenter: [{ items: ['Energy Drink', 'Pizza Slice', 'Wallet', 'Phone', 'Sunglasses', 'Headphones'], count: 5 }]
@@ -1594,7 +1878,7 @@ LIFE.createItemMesh = function(itemName) {
     if (!data) return group;
 
     // Check if it's a weapon type that already has a mesh creator
-    if (itemName === 'Switchblade' || itemName === 'Pistol') {
+    if (itemName === 'Switchblade' || itemName === 'Pistol' || itemName === 'AK-47') {
         return LIFE.createWeaponMesh(itemName, 1.7);
     }
 
@@ -1819,6 +2103,388 @@ LIFE.createItemMesh = function(itemName) {
             cap.position.y = 0.045;
             group.add(cap);
             break;
+        // === FOOD VENDOR ===
+        case 'Hot Dog':
+            // Bun
+            var bun = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 0.05),
+                new THREE.MeshPhongMaterial({ color: 0xd4a054 }));
+            group.add(bun);
+            // Sausage
+            var sausage = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.15, 8),
+                new THREE.MeshPhongMaterial({ color: 0xc0392b }));
+            sausage.rotation.z = Math.PI / 2;
+            sausage.position.y = 0.015;
+            group.add(sausage);
+            // Mustard line
+            var mustard = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.005, 0.008),
+                new THREE.MeshPhongMaterial({ color: 0xf1c40f }));
+            mustard.position.y = 0.03;
+            group.add(mustard);
+            break;
+        case 'Smoothie':
+            // Tall cup
+            var sCup = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.14, 8),
+                new THREE.MeshPhongMaterial({ color: 0xfafafa, transparent: true, opacity: 0.6 }));
+            group.add(sCup);
+            // Liquid inside
+            var sLiq = new THREE.Mesh(new THREE.CylinderGeometry(0.027, 0.032, 0.12, 8),
+                new THREE.MeshPhongMaterial({ color: 0xe91e63 }));
+            group.add(sLiq);
+            // Straw
+            var straw = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.18, 4),
+                new THREE.MeshPhongMaterial({ color: 0xffffff }));
+            straw.position.set(0.01, 0.02, 0);
+            group.add(straw);
+            break;
+        case 'Full Meal':
+            // Plate
+            var plate = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.01, 12),
+                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+            group.add(plate);
+            // Meat
+            var meat = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.025, 0.05),
+                new THREE.MeshPhongMaterial({ color: 0x8d6e43 }));
+            meat.position.set(-0.02, 0.02, 0);
+            group.add(meat);
+            // Veggies
+            var veg = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 6),
+                new THREE.MeshPhongMaterial({ color: 0x4caf50 }));
+            veg.position.set(0.04, 0.015, 0.02);
+            group.add(veg);
+            break;
+        case 'Protein Shake':
+            // Shaker bottle
+            var shaker = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.13, 8),
+                new THREE.MeshPhongMaterial({ color: 0x222222 }));
+            group.add(shaker);
+            // Lid
+            var sLid = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.036, 0.02, 8),
+                new THREE.MeshPhongMaterial({ color: 0x4caf50 }));
+            sLid.position.y = 0.075;
+            group.add(sLid);
+            break;
+        case 'Fancy Dinner':
+            // Fancy plate with dome
+            var fPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.012, 16),
+                new THREE.MeshPhongMaterial({ color: 0xfafafa, shininess: 80 }));
+            group.add(fPlate);
+            // Silver dome cloche
+            var dome = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+                new THREE.MeshPhongMaterial({ color: 0xc0c0c0, shininess: 120 }));
+            dome.position.y = 0.01;
+            group.add(dome);
+            // Handle on top
+            var dHandle = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6),
+                new THREE.MeshPhongMaterial({ color: 0xc0c0c0, shininess: 120 }));
+            dHandle.position.y = 0.09;
+            group.add(dHandle);
+            break;
+
+        // === PHARMACIST ===
+        case 'Vitamins':
+        case 'Supplements':
+            // Pill bottle (orange)
+            var vBottle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.07, 8),
+                new THREE.MeshPhongMaterial({ color: 0xff9800 }));
+            group.add(vBottle);
+            var vCap = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.015, 8),
+                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+            vCap.position.y = 0.04;
+            group.add(vCap);
+            break;
+        case 'Cold Medicine':
+            // Box
+            var cmBox = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.10, 0.03),
+                new THREE.MeshPhongMaterial({ color: 0x2196f3 }));
+            group.add(cmBox);
+            // Label stripe
+            var cmLabel = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.005),
+                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+            cmLabel.position.set(0, 0.01, 0.017);
+            group.add(cmLabel);
+            break;
+        case 'Pain Killers':
+            // Blister pack
+            var pkPack = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.01, 0.05),
+                new THREE.MeshPhongMaterial({ color: 0xeeeeee }));
+            group.add(pkPack);
+            // Pill bumps
+            for (var pi = 0; pi < 6; pi++) {
+                var pill = new THREE.Mesh(new THREE.SphereGeometry(0.008, 6, 6),
+                    new THREE.MeshPhongMaterial({ color: 0xcccccc }));
+                pill.position.set(-0.025 + (pi % 3) * 0.025, 0.008, -0.01 + Math.floor(pi / 3) * 0.02);
+                group.add(pill);
+            }
+            break;
+        case 'Prescription':
+            // Prescription bottle (amber)
+            var rxBottle = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.09, 8),
+                new THREE.MeshPhongMaterial({ color: 0xd4770b, transparent: true, opacity: 0.8 }));
+            group.add(rxBottle);
+            var rxCap = new THREE.Mesh(new THREE.CylinderGeometry(0.027, 0.027, 0.015, 8),
+                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+            rxCap.position.y = 0.05;
+            group.add(rxCap);
+            // Rx label
+            var rxLabel = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.04, 0.03),
+                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+            rxLabel.position.set(0.026, 0, 0);
+            group.add(rxLabel);
+            break;
+        case 'First Aid Kit':
+            // Same as Medkit
+            var fak = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 0.10),
+                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+            group.add(fak);
+            var fakH = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.005, 0.025),
+                new THREE.MeshBasicMaterial({ color: 0xf44336 }));
+            fakH.position.y = 0.032;
+            group.add(fakH);
+            var fakV = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.005, 0.08),
+                new THREE.MeshBasicMaterial({ color: 0xf44336 }));
+            fakV.position.y = 0.032;
+            group.add(fakV);
+            break;
+
+        // === CLOTHES ===
+        case 'T-Shirt':
+        case 'Event T-Shirt':
+            var shirtCol = itemName === 'Event T-Shirt' ? 0x9c27b0 : 0x2196f3;
+            // Body
+            var shirtBody = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.15, 0.02),
+                new THREE.MeshPhongMaterial({ color: shirtCol }));
+            group.add(shirtBody);
+            // Sleeves
+            var sleeveL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.02),
+                new THREE.MeshPhongMaterial({ color: shirtCol }));
+            sleeveL.position.set(-0.09, 0.04, 0);
+            sleeveL.rotation.z = 0.3;
+            group.add(sleeveL);
+            var sleeveR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.02),
+                new THREE.MeshPhongMaterial({ color: shirtCol }));
+            sleeveR.position.set(0.09, 0.04, 0);
+            sleeveR.rotation.z = -0.3;
+            group.add(sleeveR);
+            break;
+        case 'Nice Outfit':
+        case 'Designer Clothes':
+            var outfitCol = itemName === 'Designer Clothes' ? 0x1a1a2e : 0x5c6bc0;
+            // Jacket shape
+            var jacket = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 0.025),
+                new THREE.MeshPhongMaterial({ color: outfitCol }));
+            group.add(jacket);
+            // Collar
+            var collar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.025, 0.03),
+                new THREE.MeshPhongMaterial({ color: outfitCol }));
+            collar.position.y = 0.10;
+            group.add(collar);
+            // Button
+            var btn = new THREE.Mesh(new THREE.SphereGeometry(0.006, 6, 6),
+                new THREE.MeshPhongMaterial({ color: 0xffd700 }));
+            btn.position.set(0, 0.02, 0.014);
+            group.add(btn);
+            break;
+        case 'Formal Suit':
+            // Suit jacket
+            var suitBody = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.20, 0.025),
+                new THREE.MeshPhongMaterial({ color: 0x1a1a2e }));
+            group.add(suitBody);
+            // Lapels
+            var lapelL = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.10, 0.005),
+                new THREE.MeshPhongMaterial({ color: 0x111122 }));
+            lapelL.position.set(-0.04, 0.04, 0.014);
+            lapelL.rotation.z = 0.15;
+            group.add(lapelL);
+            var lapelR = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.10, 0.005),
+                new THREE.MeshPhongMaterial({ color: 0x111122 }));
+            lapelR.position.set(0.04, 0.04, 0.014);
+            lapelR.rotation.z = -0.15;
+            group.add(lapelR);
+            // Tie
+            var tie = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.12, 0.005),
+                new THREE.MeshPhongMaterial({ color: 0xc62828 }));
+            tie.position.set(0, -0.01, 0.014);
+            group.add(tie);
+            break;
+        case 'Luxury Watch':
+            // Fancy watch band
+            var lwBand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.01, 0.14),
+                new THREE.MeshPhongMaterial({ color: 0xffd700, shininess: 120 }));
+            group.add(lwBand);
+            // Watch face
+            var lwFace = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.018, 16),
+                new THREE.MeshPhongMaterial({ color: 0xffd700, shininess: 120 }));
+            group.add(lwFace);
+            // Crystal face
+            var lwCrystal = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.005, 16),
+                new THREE.MeshPhongMaterial({ color: 0x111133, shininess: 100 }));
+            lwCrystal.position.y = 0.01;
+            group.add(lwCrystal);
+            break;
+        case 'Designer Shoes':
+            // Left shoe
+            var shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.12),
+                new THREE.MeshPhongMaterial({ color: 0x222222 }));
+            shoeL.position.set(-0.035, 0, 0);
+            group.add(shoeL);
+            // Right shoe
+            var shoeR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.12),
+                new THREE.MeshPhongMaterial({ color: 0x222222 }));
+            shoeR.position.set(0.035, 0, 0);
+            group.add(shoeR);
+            // Sole
+            var soleL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.008, 0.12),
+                new THREE.MeshPhongMaterial({ color: 0xc62828 }));
+            soleL.position.set(-0.035, -0.019, 0);
+            group.add(soleL);
+            var soleR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.008, 0.12),
+                new THREE.MeshPhongMaterial({ color: 0xc62828 }));
+            soleR.position.set(0.035, -0.019, 0);
+            group.add(soleR);
+            break;
+
+        // === BOOKS ===
+        case 'Comic Book':
+            // Thin colorful booklet
+            var comic = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.008, 0.14),
+                new THREE.MeshPhongMaterial({ color: 0xf44336 }));
+            group.add(comic);
+            // Cover art panel
+            var comicArt = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.003, 0.09),
+                new THREE.MeshPhongMaterial({ color: 0xffeb3b }));
+            comicArt.position.y = 0.005;
+            group.add(comicArt);
+            break;
+        case 'Novel':
+            // Paperback
+            var novel = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.025, 0.15),
+                new THREE.MeshPhongMaterial({ color: 0x6d4c41 }));
+            group.add(novel);
+            var nPages = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 0.13),
+                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+            nPages.position.y = -0.003;
+            group.add(nPages);
+            break;
+        case 'Self-Help Book':
+            var shBook = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.025, 0.15),
+                new THREE.MeshPhongMaterial({ color: 0xff9800 }));
+            group.add(shBook);
+            var shPages = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.02, 0.13),
+                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+            shPages.position.y = -0.003;
+            group.add(shPages);
+            break;
+        case 'Encyclopedia Set':
+            // Stack of books
+            for (var ei = 0; ei < 4; ei++) {
+                var encCol = [0x1565c0, 0xc62828, 0x2e7d32, 0x6a1b9a][ei];
+                var enc = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.025, 0.14),
+                    new THREE.MeshPhongMaterial({ color: encCol }));
+                enc.position.y = ei * 0.028;
+                group.add(enc);
+            }
+            break;
+
+        // === GYM ===
+        case 'Sports Equipment':
+            // Dumbbell
+            var dbBar = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.16, 6),
+                new THREE.MeshPhongMaterial({ color: 0x888888, shininess: 60 }));
+            dbBar.rotation.z = Math.PI / 2;
+            group.add(dbBar);
+            var dbL = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.025, 8),
+                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+            dbL.rotation.z = Math.PI / 2;
+            dbL.position.x = -0.07;
+            group.add(dbL);
+            var dbR = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.025, 8),
+                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+            dbR.rotation.z = Math.PI / 2;
+            dbR.position.x = 0.07;
+            group.add(dbR);
+            break;
+
+        // === TICKETS ===
+        case 'Concert Poster':
+            // Rolled poster
+            var poster = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.20, 8),
+                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+            poster.rotation.z = Math.PI / 2;
+            group.add(poster);
+            // Colorful band
+            var pBand = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.04, 8),
+                new THREE.MeshPhongMaterial({ color: 0xe91e63 }));
+            pBand.rotation.z = Math.PI / 2;
+            group.add(pBand);
+            break;
+        case 'Signed Merch':
+            // Box with star
+            var mBox = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.10),
+                new THREE.MeshPhongMaterial({ color: 0x1a1a2e }));
+            group.add(mBox);
+            // Gold star
+            var star = new THREE.Mesh(new THREE.OctahedronGeometry(0.025, 0),
+                new THREE.MeshPhongMaterial({ color: 0xffd700, shininess: 100 }));
+            star.position.set(0, 0.04, 0.052);
+            group.add(star);
+            break;
+
+        // === ELECTRONICS ===
+        case 'Phone Case':
+            // Phone-shaped case
+            var pcCase = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.012, 0.11),
+                new THREE.MeshPhongMaterial({ color: 0x00bcd4 }));
+            group.add(pcCase);
+            // Camera cutout
+            var camHole = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.005, 8),
+                new THREE.MeshPhongMaterial({ color: 0x111111 }));
+            camHole.rotation.x = Math.PI / 2;
+            camHole.position.set(0, 0.005, -0.04);
+            group.add(camHole);
+            break;
+        case 'Tablet':
+            // Flat rectangle screen
+            var tabBody = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.008, 0.19),
+                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+            group.add(tabBody);
+            var tabScr = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.003, 0.16),
+                new THREE.MeshBasicMaterial({ color: 0x42a5f5 }));
+            tabScr.position.y = 0.005;
+            group.add(tabScr);
+            break;
+        case 'Gaming Console':
+            // Console body
+            var conBody = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.04, 0.12),
+                new THREE.MeshPhongMaterial({ color: 0x111111 }));
+            group.add(conBody);
+            // Disk slot line
+            var conSlot = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.003, 0.002),
+                new THREE.MeshPhongMaterial({ color: 0x444444 }));
+            conSlot.position.set(0, 0.021, 0.04);
+            group.add(conSlot);
+            // Power light
+            var conLed = new THREE.Mesh(new THREE.SphereGeometry(0.005, 6, 6),
+                new THREE.MeshBasicMaterial({ color: 0x00e676 }));
+            conLed.position.set(-0.06, 0.021, 0.04);
+            group.add(conLed);
+            break;
+        case 'Smartphone':
+            // Like Phone but slightly bigger/nicer
+            var spBody = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.008, 0.11),
+                new THREE.MeshPhongMaterial({ color: 0x1a1a2e }));
+            group.add(spBody);
+            var spScr = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.003, 0.095),
+                new THREE.MeshBasicMaterial({ color: 0x64b5f6 }));
+            spScr.position.y = 0.005;
+            group.add(spScr);
+            // Camera bump
+            var spCam = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.004, 8),
+                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+            spCam.rotation.x = Math.PI / 2;
+            spCam.position.set(0.01, -0.005, -0.04);
+            group.add(spCam);
+            break;
+
         default:
             // Generic box for unknown items
             geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
@@ -1881,6 +2547,7 @@ LIFE.spawnWorldItems = function(zoneName) {
         if (LIFE.worldItems[ri]._zoneName === zoneName) {
             LIFE.scene.remove(LIFE.worldItems[ri].mesh);
             LIFE.scene.remove(LIFE.worldItems[ri].ring);
+            if (LIFE.worldItems[ri].body) LIFE.physics.removeDynamic(LIFE.worldItems[ri]);
             LIFE.worldItems.splice(ri, 1);
         }
     }
@@ -1919,7 +2586,8 @@ LIFE.spawnWorldItems = function(zoneName) {
 
             // Create 3D mesh
             var mesh = LIFE.createItemMesh(itemName);
-            mesh.position.set(x, 0.3, z);
+            var spawnY = 2.5 + Math.random() * 1.5; // spawn above furniture height
+            mesh.position.set(x, spawnY, z);
             mesh.scale.set(2, 2, 2);
             LIFE.scene.add(mesh);
 
@@ -1938,6 +2606,9 @@ LIFE.spawnWorldItems = function(zoneName) {
             ringMesh.position.set(x, 0.02, z);
             LIFE.scene.add(ringMesh);
 
+            // Create physics body — drop from height, no initial velocity
+            var body = LIFE.physics.createItemBody(itemName, x, spawnY, z, null);
+
             // Assign owner: ~60% of items have an owner (a nearby NPC)
             var owner = null;
             if (zoneNPCs.length > 0 && Math.random() < 0.6) {
@@ -1945,17 +2616,20 @@ LIFE.spawnWorldItems = function(zoneName) {
                 owner = zoneNPCs[Math.floor(Math.random() * zoneNPCs.length)];
             }
 
-            LIFE.worldItems.push({
+            var entry = {
                 name: itemName,
                 mesh: mesh,
                 ring: ringMesh,
                 ringMat: ringMat,
+                body: body,
                 x: x, z: z,
-                bobTime: Math.random() * 6, // stagger animation
+                _ringTime: Math.random() * 6,
                 _zoneName: zoneName,
-                owner: owner, // NPC ref or null
+                owner: owner,
                 ownerName: owner ? owner.name : null
-            });
+            };
+            LIFE.worldItems.push(entry);
+            if (body) LIFE.physics.dynamicBodies.push(entry);
         }
     }
 };
@@ -1963,10 +2637,15 @@ LIFE.spawnWorldItems = function(zoneName) {
 LIFE.updateWorldItems = function(dt) {
     for (var i = 0; i < LIFE.worldItems.length; i++) {
         var item = LIFE.worldItems[i];
-        item.bobTime += dt;
-        item.mesh.position.y = 0.3 + Math.sin(item.bobTime * 2) * 0.08;
-        item.mesh.rotation.y += dt * 1.0;
-        item.ringMat.opacity = 0.2 + Math.sin(item.bobTime * 3) * 0.15;
+        // Sync x/z from physics body position (for pickup distance checks)
+        if (item.body) {
+            item.x = item.body.position.x;
+            item.z = item.body.position.z;
+        }
+        // Pulse ring opacity
+        if (!item._ringTime) item._ringTime = 0;
+        item._ringTime += dt;
+        item.ringMat.opacity = 0.2 + Math.sin(item._ringTime * 3) * 0.15;
     }
 };
 
@@ -1974,6 +2653,7 @@ LIFE.clearWorldItems = function() {
     for (var i = 0; i < LIFE.worldItems.length; i++) {
         LIFE.scene.remove(LIFE.worldItems[i].mesh);
         LIFE.scene.remove(LIFE.worldItems[i].ring);
+        if (LIFE.worldItems[i].body) LIFE.physics.removeDynamic(LIFE.worldItems[i]);
     }
     LIFE.worldItems = [];
 };
@@ -2010,10 +2690,10 @@ LIFE.tryPickupWorldItem = function(worldItem) {
             // Must be within 20 units and have line-of-sight
             if (dist >= 20 || !LIFE.hasLineOfSight(px, pz, nx, nz)) continue;
 
-            // Witness if: is the owner, OR has npcReputation > -50
+            // Witness if: is the owner, OR has npcReputation > -30 (shady NPCs don't snitch)
             var isOwner = (npc === owner);
             var rep = npc.npcReputation !== undefined ? npc.npcReputation : 30;
-            if (!isOwner && rep <= -50) continue; // shady NPCs don't snitch
+            if (!isOwner && rep <= -30) continue;
 
             witnesses.push(npc);
         }
@@ -2028,7 +2708,11 @@ LIFE.tryPickupWorldItem = function(worldItem) {
             }
             if (!reactor) reactor = witnesses[Math.floor(Math.random() * witnesses.length)];
 
-            // React: 50% confront, 50% call police (police always confront directly)
+            LIFE.logCrime('Theft');
+            var itemData = LIFE.ITEM_DATA[itemName];
+            var itemValue = (itemData && itemData.value) || 0;
+
+            // React: police always confront directly; civilians only call police for items worth >$40
             if (reactor.isPolice) {
                 LIFE.addWanted(2);
                 LIFE.drawChatBubble(reactor, 'Stop right there, criminal!');
@@ -2036,8 +2720,17 @@ LIFE.tryPickupWorldItem = function(worldItem) {
                 reactor.chatTimer = 4;
                 reactor.chatCooldown = 10;
                 LIFE.ui.showPopup('CAUGHT STEALING by police!', '#f44336');
-            } else if (Math.random() < 0.5) {
-                // Confront
+            } else if (itemValue > 40 && Math.random() < 0.5) {
+                // Call police (only for valuable items)
+                LIFE.updateRelationship(reactor.name, -20);
+                if (!reactor._callingPolice) {
+                    LIFE.npcStartPhoneCall(reactor, function() {
+                        LIFE.addWanted(2);
+                    });
+                }
+                LIFE.ui.showPopup('CAUGHT STEALING! ' + reactor.name + ' is calling the police!', '#f44336');
+            } else {
+                // Confront (for cheap items or 50% chance on expensive)
                 reactor.fleeing = false;
                 var faceDx = px - reactor.char.group.position.x;
                 var faceDz = pz - reactor.char.group.position.z;
@@ -2050,18 +2743,13 @@ LIFE.tryPickupWorldItem = function(worldItem) {
                 reactor.chatSprite.visible = true;
                 reactor.chatTimer = 4;
                 reactor.chatCooldown = 10;
-                LIFE.addWanted(1);
                 LIFE.updateRelationship(reactor.name, -15);
-                LIFE.ui.showPopup('CAUGHT STEALING! ' + reactor.name + ' saw you!', '#f44336');
-            } else {
-                // Call police
-                LIFE.updateRelationship(reactor.name, -20);
-                if (!reactor._callingPolice) {
-                    LIFE.npcStartPhoneCall(reactor, function() {
-                        LIFE.addWanted(2);
-                    });
+                if (itemValue > 40) {
+                    LIFE.addWanted(1);
+                    LIFE.ui.showPopup('CAUGHT STEALING! ' + reactor.name + ' saw you!', '#f44336');
+                } else {
+                    LIFE.ui.showPopup(reactor.name + ' caught you stealing!', '#ff9800');
                 }
-                LIFE.ui.showPopup('CAUGHT STEALING! ' + reactor.name + ' is calling the police!', '#f44336');
             }
 
             // All other witnesses also react (flee or lower relationship)
@@ -2082,6 +2770,9 @@ LIFE.tryPickupWorldItem = function(worldItem) {
     // Update weapon flags
     if (itemName === 'Pistol') LIFE.state.hasGun = true;
     if (itemName === 'Switchblade') LIFE.state.hasSwitchblade = true;
+
+    // Remove physics body
+    if (worldItem.body) LIFE.physics.removeDynamic(worldItem);
 
     // Remove 3D objects
     LIFE.scene.remove(worldItem.mesh);
@@ -2157,7 +2848,7 @@ LIFE.ui.closeInventory = function() {
     LIFE._invAnimFrame = null;
     // Re-lock cursor
     if (LIFE.state.gamePhase === 'playing') {
-        LIFE.canvas.requestPointerLock();
+        LIFE.lockCursor();
     }
 };
 
@@ -2200,7 +2891,7 @@ LIFE.ui.refreshInventoryPanel = function() {
     var dropBtn = document.getElementById('invDropBtn');
     var useBtn = document.getElementById('invUseBtn');
     var isWeapon = data.type === 'melee' || data.type === 'ranged';
-    var isConsumable = !!data.heal;
+    var isConsumable = !!(data.heal || data.stat);
     if (equipBtn) {
         var isEq = LIFE._invSelectedIndex === LIFE.state.equippedIndex;
         equipBtn.textContent = isEq ? 'Equipped' : 'Equip';
@@ -2247,11 +2938,20 @@ LIFE._invUseSelected = function() {
     var itemName = inv[LIFE._invSelectedIndex];
     if (!itemName) return;
     var data = LIFE.ITEM_DATA[itemName] || {};
-    if (!data.heal) return; // not consumable
+    if (!data.heal && !data.stat) return; // not consumable
 
+    var popupParts = [];
     // Apply healing
-    LIFE.state.stats.health = Math.min(100, LIFE.state.stats.health + data.heal);
-    LIFE.ui.showPopup('Used ' + itemName + ' (+' + data.heal + ' HP)', '#4caf50');
+    if (data.heal) {
+        LIFE.state.stats.health = Math.min(100, LIFE.state.stats.health + data.heal);
+        popupParts.push('+' + data.heal + ' HP');
+    }
+    // Apply stat boost (happiness, intelligence, charisma, etc.)
+    if (data.stat && data.amount) {
+        LIFE.state.stats[data.stat] = Math.min(100, LIFE.state.stats[data.stat] + data.amount);
+        popupParts.push('+' + data.amount + ' ' + data.stat);
+    }
+    LIFE.ui.showPopup('Used ' + itemName + ' (' + popupParts.join(', ') + ')', '#4caf50');
 
     // Remove from inventory
     inv.splice(LIFE._invSelectedIndex, 1);
@@ -2388,8 +3088,9 @@ LIFE.createWeaponMesh = function(type, playerHeight) {
         grip.position.set(0, -h * 0.02, h * 0.01);
         grip.rotation.x = 0.2;
         group.add(grip);
-        // Position at end of arm, pointing forward
+        // Position at end of arm, rotate so barrel points forward when arm extended
         group.position.set(0, -armH * 0.9, 0.02);
+        group.rotation.x = Math.PI / 2;
     } else if (type === 'Baseball Bat') {
         // Long wooden bat held in hand
         var bat = new THREE.Mesh(
@@ -2423,6 +3124,47 @@ LIFE.createWeaponMesh = function(type, playerHeight) {
         group.add(hook);
         group.position.set(0, -armH - h * 0.02, 0);
         group.rotation.x = -0.3;
+    } else if (type === 'AK-47') {
+        // Receiver body
+        var akBody = new THREE.Mesh(
+            new THREE.BoxGeometry(0.04, 0.05, h * 0.22),
+            new THREE.MeshPhongMaterial({ color: 0x333333 })
+        );
+        akBody.position.z = h * 0.06;
+        group.add(akBody);
+        // Barrel: long thin
+        var akBarrel = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.012, 0.012, h * 0.18, 6),
+            new THREE.MeshPhongMaterial({ color: 0x222222 })
+        );
+        akBarrel.rotation.x = Math.PI / 2;
+        akBarrel.position.set(0, 0.015, h * 0.26);
+        group.add(akBarrel);
+        // Wooden handguard
+        var akGuard = new THREE.Mesh(
+            new THREE.BoxGeometry(0.035, 0.04, h * 0.08),
+            new THREE.MeshPhongMaterial({ color: 0x8d6e43 })
+        );
+        akGuard.position.set(0, -0.005, h * 0.14);
+        group.add(akGuard);
+        // Stock
+        var akStock = new THREE.Mesh(
+            new THREE.BoxGeometry(0.03, 0.04, h * 0.1),
+            new THREE.MeshPhongMaterial({ color: 0x8d6e43 })
+        );
+        akStock.position.set(0, -0.01, -h * 0.04);
+        group.add(akStock);
+        // Magazine (curved)
+        var akMag = new THREE.Mesh(
+            new THREE.BoxGeometry(0.025, h * 0.08, 0.03),
+            new THREE.MeshPhongMaterial({ color: 0x2a2a2a })
+        );
+        akMag.position.set(0, -h * 0.06, h * 0.04);
+        akMag.rotation.x = 0.15;
+        group.add(akMag);
+        // Position at end of arm, rotate so barrel points forward when arm extended
+        group.position.set(0, -armH * 0.9, 0.02);
+        group.rotation.x = Math.PI / 2;
     }
     return group;
 };
@@ -2462,6 +3204,10 @@ LIFE.updateHeldWeapon = function() {
         // Hold arm forward, pointing gun ahead
         player.parts.rightArm.rotation.x = -1.4; // arm extended forward
         player.parts.rightArm.rotation.z = -0.1;
+    } else if (equipped === 'AK-47') {
+        // Hold arm forward, two-handed feel
+        player.parts.rightArm.rotation.x = -1.3;
+        player.parts.rightArm.rotation.z = -0.05;
     } else if (equipped === 'Baseball Bat' || equipped === 'Crowbar') {
         // Hold arm to the side, ready to swing
         player.parts.rightArm.rotation.x = -0.6;
@@ -2476,6 +3222,7 @@ LIFE.triggerRandomEvent = function() {
     if (LIFE.dialogue.active) return;
     var state = LIFE.state;
     var age = state.age;
+    var stage = state.currentStage || '';
 
     // gather all eligible events - static + context-aware
     var allEvents = LIFE.RANDOM_EVENTS.concat(LIFE.getContextEvents());
@@ -2483,6 +3230,8 @@ LIFE.triggerRandomEvent = function() {
     allEvents.forEach(function(evt) {
         if (age < evt.minAge) return;
         if (evt.maxAge && age > evt.maxAge) return;
+        // location-based conditions
+        if (evt.stages && evt.stages.indexOf(stage) === -1) return;
         // state-based conditions
         if (evt.reqMarried && !state.married) return;
         if (evt.reqKids && !state.hasKids) return;
@@ -2557,7 +3306,7 @@ LIFE.getContextEvents = function() {
 
     // FAME events
     events.push(
-        { text: "A fan recognized you on the street and asked for a selfie!", minAge: 18, maxAge: 70, chance: 0.2, reqFame: 30,
+        { text: "A fan recognized you on the street and asked for a selfie!", minAge: 18, maxAge: 70, chance: 0.2, reqFame: 30, stages: ['city', 'college'],
           options: [
             { text: "Of course! Say cheese!", effects: { happiness: 3, charisma: 2 }, rep: 5, fame: 3 },
             { text: "Sorry, I'm in a hurry", effects: {}, rep: -3, fame: -2 },
@@ -2569,7 +3318,7 @@ LIFE.getContextEvents = function() {
             { text: "Only if the price is right ($5,000)", effects: { charisma: 2 }, money: 5000, fame: 10 },
             { text: "I value my privacy", effects: { happiness: 2 }, rep: 2 }
         ]},
-        { text: "Paparazzi are following you everywhere!", minAge: 18, maxAge: 70, chance: 0.15, reqFame: 40,
+        { text: "Paparazzi are following you everywhere!", minAge: 18, maxAge: 70, chance: 0.15, reqFame: 40, stages: ['city'],
           options: [
             { text: "Wave and smile!", effects: { charisma: 3 }, rep: 3, fame: 5 },
             { text: "Confront them angrily", effects: { charisma: -2 }, rep: -8, fame: 3 },
@@ -2585,19 +3334,19 @@ LIFE.getContextEvents = function() {
 
     // BAD REPUTATION events
     events.push(
-        { text: "Someone keyed your car because of your reputation!", minAge: 18, maxAge: 70, chance: 0.15, reqBadRep: -30,
+        { text: "Someone keyed your car because of your reputation!", minAge: 18, maxAge: 70, chance: 0.15, reqBadRep: -30, stages: ['city', 'home', 'college', 'highschool'],
           options: [
             { text: "File a police report", effects: { happiness: -3 }, rep: 3 },
             { text: "Find out who did it", effects: { charisma: 1, happiness: -2 }, rep: -5 },
             { text: "I probably deserved that...", effects: { happiness: -1 }, rep: 5 }
         ]},
-        { text: "A store refused to serve you due to your reputation!", minAge: 16, maxAge: 80, chance: 0.15, reqBadRep: -50,
+        { text: "A store refused to serve you due to your reputation!", minAge: 16, maxAge: 80, chance: 0.15, reqBadRep: -50, stages: ['city'],
           options: [
             { text: "Quietly leave", effects: { happiness: -3 }, rep: 2 },
             { text: "Cause a scene", effects: { charisma: -2 }, rep: -10 },
             { text: "Apologize and try to make amends", effects: { happiness: 1 }, rep: 8 }
         ]},
-        { text: "Anonymous threats were left at your door!", minAge: 18, maxAge: 80, chance: 0.1, reqBadRep: -60,
+        { text: "Anonymous threats were left at your door!", minAge: 18, maxAge: 80, chance: 0.1, reqBadRep: -60, stages: ['home', 'playerhome'],
           options: [
             { text: "Call the police", effects: { happiness: -5 }, rep: 3 },
             { text: "Ignore it, I can handle myself", effects: { charisma: 1 }, rep: -2 },
@@ -2642,7 +3391,7 @@ LIFE.getContextEvents = function() {
             { text: "Pick up odd jobs to make ends meet", effects: { health: -3, happiness: -2 }, money: 150, rep: 2 },
             { text: "Skip rent this month", effects: { happiness: -5 }, rep: -5 }
         ]},
-        { text: "A food bank in the neighborhood is offering free meals.", minAge: 18, maxAge: 80, chance: 0.15, reqPoor: 200,
+        { text: "A food bank in the neighborhood is offering free meals.", minAge: 18, maxAge: 80, chance: 0.15, reqPoor: 200, stages: ['city', 'home'],
           options: [
             { text: "Accept the help gratefully", effects: { happiness: 2, health: 3 }, rep: 2 },
             { text: "I'm too proud for charity", effects: { happiness: -2 }, rep: -1 }
@@ -2651,13 +3400,13 @@ LIFE.getContextEvents = function() {
 
     // CRIMINAL RECORD events
     events.push(
-        { text: "A background check revealed your criminal record to a potential employer.", minAge: 23, maxAge: 65, chance: 0.15, reqCriminal: true,
+        { text: "A background check revealed your criminal record to a potential employer.", minAge: 23, maxAge: 65, chance: 0.15, reqCriminal: true, stages: ['city'],
           options: [
             { text: "Be honest about your past", effects: { charisma: 2 }, rep: 5 },
             { text: "Try to explain the circumstances", effects: { charisma: 1 }, rep: 2 },
             { text: "Walk out of the interview", effects: { happiness: -3 }, rep: -2 }
         ]},
-        { text: "Someone from your past recognized you as an ex-convict.", minAge: 20, maxAge: 80, chance: 0.12, reqCriminal: true,
+        { text: "Someone from your past recognized you as an ex-convict.", minAge: 20, maxAge: 80, chance: 0.12, reqCriminal: true, stages: ['city', 'college', 'retirement'],
           options: [
             { text: "I've changed my ways", effects: { charisma: 2 }, rep: 5 },
             { text: "Mind your own business", effects: {}, rep: -5 },
@@ -2719,7 +3468,7 @@ LIFE.tryEnterExitHome = function() {
         LIFE.buildEnvironment('city');
         LIFE.spawnNPCs('city');
         LIFE.updatePlayerSize();
-        LIFE.player.group.position.set(cityPos.x, 0, cityPos.z + 2);
+        LIFE.teleportPlayer(cityPos.x, 0, cityPos.z + 2);
         LIFE.ui.showPopup('Left your home', '#ff9800');
         return;
     }
@@ -2748,7 +3497,7 @@ LIFE.tryEnterExitHome = function() {
     state.bounds = LIFE.getBoundsForStage('playerhome');
     LIFE.buildEnvironment('playerhome');
     LIFE.updatePlayerSize();
-    LIFE.player.group.position.set(0, 0, 3);
+    LIFE.teleportPlayer(0, 0, 3);
 
     // spawn family NPCs inside home
     LIFE.spawnHomeNPCs();
@@ -2758,7 +3507,7 @@ LIFE.tryEnterExitHome = function() {
 
 LIFE.spawnHomeNPCs = function() {
     // clear current NPCs first
-    LIFE.npcs.forEach(function(n) { LIFE.scene.remove(n.char.group); });
+    LIFE.npcs.forEach(function(n) { LIFE.scene.remove(n.char.group); LIFE.removeNPCPhysics(n); });
     LIFE.npcs = [];
     var state = LIFE.state;
 
@@ -2812,7 +3561,7 @@ LIFE.sendToHospital = function(reason) {
         LIFE.buildEnvironment('hospital');
         LIFE.spawnNPCs('hospital');
         LIFE.updatePlayerSize();
-        LIFE.player.group.position.set(0, 0, 3);
+        LIFE.teleportPlayer(0, 0, 3);
     }
 
     var msgs = {
@@ -2865,7 +3614,7 @@ LIFE.exitHospital = function() {
         LIFE.buildEnvironment(returnStage);
         LIFE.spawnNPCs(returnStage);
         LIFE.updatePlayerSize();
-        LIFE.player.group.position.set(returnPos.x, 0, returnPos.z);
+        LIFE.teleportPlayer(returnPos.x, 0, returnPos.z);
 
         // if school age, restore day phase
         if (LIFE.isSchoolAge(state.age)) {
@@ -3041,15 +3790,15 @@ LIFE.transitionDayPhase = function(phase) {
             if (LIFE.world.insideInterior) LIFE.world.exitInterior();
             var schoolZone = isHS ? 'highschool' : 'school';
             var def = LIFE.ZONE_DEFS[schoolZone];
-            if (def) LIFE.player.group.position.set(def.cx, 0, def.cz + 5);
+            if (def) LIFE.teleportPlayer(def.cx, 0, def.cz + 5);
             LIFE.ui.showPopup('Recess!', '#66bb6a');
         } else if (phase === 'sleep') {
             if (LIFE.world.insideInterior) LIFE.world.exitInterior();
-            LIFE.player.group.position.set(0, 0, -5);
+            LIFE.teleportPlayer(0, 0, -5);
             LIFE.ui.showPopup('Time for bed...', '#5c6bc0');
         } else {
             if (LIFE.world.insideInterior) LIFE.world.exitInterior();
-            LIFE.player.group.position.set(0, 0, 5);
+            LIFE.teleportPlayer(0, 0, 5);
             LIFE.ui.showPopup('Home from school!', '#ff9800');
         }
         return;
@@ -3069,7 +3818,7 @@ LIFE.transitionDayPhase = function(phase) {
     LIFE.buildEnvironment(buildStage);
     LIFE.spawnNPCs(buildStage);
     LIFE.updatePlayerSize();
-    LIFE.player.group.position.set(0, 0, 0);
+    LIFE.teleportPlayer(0, 0, 0);
 
     if (phase === 'classroom') {
         LIFE.ui.showPopup('School time!', '#4fc3f7');
@@ -3174,6 +3923,11 @@ document.addEventListener('keydown', function(e) {
         LIFE.toggleDebugConsole();
         return;
     }
+    // Physics debug view toggle
+    if (e.code === 'ShiftRight') {
+        LIFE.toggleDebugView();
+        return;
+    }
     // Block all other input while debug console is open
     if (LIFE._debugOpen) return;
 
@@ -3242,8 +3996,10 @@ document.addEventListener('keydown', function(e) {
             LIFE.quests.cycleActiveQuest();
         }
         if (e.code === 'KeyX' && !LIFE.dialogue.active && !state.shopOpen) {
-            if (LIFE._nearestDroppedItem) LIFE.pickupItem(LIFE._nearestDroppedItem);
+            if (LIFE._containerOpen) { LIFE.closeContainer(); }
+            else if (LIFE._nearestDroppedItem) LIFE.pickupItem(LIFE._nearestDroppedItem);
             else if (LIFE._nearestWorldItem) LIFE.tryPickupWorldItem(LIFE._nearestWorldItem);
+            else if (LIFE._nearestContainer) LIFE.openContainer(LIFE._nearestContainer);
         }
         if ((e.code === 'KeyI' || e.code === 'Tab') && !LIFE.dialogue.active && !state.shopOpen && !state.friendsOpen) {
             e.preventDefault();
@@ -3257,6 +4013,10 @@ document.addEventListener('keydown', function(e) {
     if (e.code === 'Escape' && LIFE.quests.logOpen) {
         LIFE.quests.toggleLog();
     }
+    // Close container with ESC
+    if (e.code === 'Escape' && LIFE._containerOpen) {
+        LIFE.closeContainer();
+    }
 });
 
 document.addEventListener('keyup', function(e) { LIFE.keys[e.code] = false; });
@@ -3268,6 +4028,8 @@ document.addEventListener('mousemove', function(e) {
     LIFE.state.cameraPitch = Math.max(0.1, Math.min(1.2, LIFE.state.cameraPitch + e.movementY * 0.003));
 });
 
+LIFE._mouseHeld = false;
+
 document.addEventListener('mousedown', function(e) {
     if (e.button !== 0 || !LIFE.state.locked) return;
     if (LIFE.dialogue.active && LIFE.dialogue.blocking) return;
@@ -3278,9 +4040,15 @@ document.addEventListener('mousedown', function(e) {
         return;
     }
     if (LIFE.state.gamePhase !== 'playing') return;
-    if (LIFE.getEquipped() !== 'Pistol') return;
+    LIFE._mouseHeld = true;
+    var eq = LIFE.getEquipped();
+    if (eq !== 'Pistol' && eq !== 'AK-47') return;
     if (LIFE.state.shootCooldown > 0) return;
     LIFE.shootGun();
+});
+
+document.addEventListener('mouseup', function(e) {
+    if (e.button === 0) LIFE._mouseHeld = false;
 });
 
 document.addEventListener('pointerlockchange', function() {
@@ -3297,8 +4065,8 @@ document.addEventListener('pointerlockchange', function() {
     }
     if (!LIFE.state.locked && wasLocked &&
         LIFE.state.gamePhase !== 'start' && LIFE.state.gamePhase !== 'death' &&
-        LIFE.state.gamePhase !== 'execution' &&
-        !LIFE.dialogue.active && !LIFE.state.shopOpen && !LIFE.state.friendsOpen && !LIFE.state.timeSkipOpen) {
+        LIFE.state.gamePhase !== 'execution' && !LIFE._suppressPause &&
+        !LIFE.dialogue.active && !LIFE.state.shopOpen && !LIFE.state.friendsOpen && !LIFE.state.timeSkipOpen && !LIFE._invOpen && !LIFE.quests.logOpen) {
         LIFE.ui.$.start.style.display = 'flex';
         LIFE.ui.$.start.querySelector('h1').textContent = 'PAUSED';
         LIFE.ui.$.start.querySelector('p').textContent = 'Click to Resume';
@@ -3326,9 +4094,10 @@ LIFE.startGame = function() {
         if (LIFE.quests) LIFE.quests.reset();
         LIFE.clearDroppedItems();
         LIFE.clearWorldItems();
+        if (LIFE.physics) LIFE.physics.clear();
         LIFE.state.gamePhase = 'womb'; LIFE.state.wombTimer = 0; LIFE.state.age = -1;
         LIFE.buildEnvironment('womb'); LIFE.createPlayer();
-        LIFE.player.group.position.set(0, 1.5, 0); LIFE.ui.hideGameUI();
+        LIFE.teleportPlayer(0, 1.5, 0); LIFE.ui.hideGameUI();
     }
 };
 
@@ -3357,6 +4126,21 @@ LIFE.advanceYear = function() {
     // start each year at 9:00 AM displayed time
     // 9AM = 9/24 * 1200 = 450
     state.yearTimer = 450;
+
+    // Release from mom's arms immediately when age advances past 0
+    if (state.heldByParent && state.age > 0) {
+        state.heldByParent = false;
+        if (LIFE.player) LIFE.player.group.position.y = 0;
+        state.isGrounded = true;
+        state.playerVelY = 0;
+        for (var mi = 0; mi < LIFE.npcs.length; mi++) {
+            if (LIFE.npcs[mi].type === 'Mom' && LIFE.npcs[mi].alive) {
+                LIFE.npcs[mi].char.parts.leftArm.rotation.set(0, 0, 0);
+                LIFE.npcs[mi].char.parts.rightArm.rotation.set(0, 0, 0);
+                break;
+            }
+        }
+    }
 
     if (state.age > LIFE.MAX_AGE) { state.deathCause = 'old age'; LIFE.triggerDeath(); return; }
 
@@ -3482,7 +4266,7 @@ LIFE.advanceYear = function() {
                 if (LIFE.world.insideInterior) LIFE.world.exitInterior();
                 var targetZone = zoneMapping[newStage] || newStage;
                 var zonePos = LIFE.world.getZonePos(targetZone);
-                LIFE.player.group.position.set(zonePos.x, 0, zonePos.z + 5);
+                LIFE.teleportPlayer(zonePos.x, 0, zonePos.z + 5);
                 LIFE.world.spawnZoneNPCs(targetZone);
                 // Force immediate culling update at new position
                 LIFE.world._cullingTimer = 999;
@@ -3504,7 +4288,7 @@ LIFE.advanceYear = function() {
                 state.dayPhase = null;
                 LIFE.buildEnvironment(newStage);
                 LIFE.spawnNPCs(newStage);
-                LIFE.player.group.position.set(0, 0, 0);
+                LIFE.teleportPlayer(0, 0, 0);
             }
         } else {
             if (LIFE.isSchoolAge(state.age)) {
@@ -3515,7 +4299,7 @@ LIFE.advanceYear = function() {
                 LIFE.buildEnvironment(newStage);
                 LIFE.spawnNPCs(newStage);
             }
-            LIFE.player.group.position.set(0, 0, 0);
+            LIFE.teleportPlayer(0, 0, 0);
         }
     } else if (LIFE.isSchoolAge(state.age)) {
         // same school stage, new year - yearTimer resets to 0 (midnight), so home phase
@@ -3593,11 +4377,304 @@ LIFE.advanceYear = function() {
     // Quest system year advance
     if (LIFE.quests) LIFE.quests.onYearAdvance();
 
+    // NPC lifecycle: aging, death, birth
+    LIFE.processNPCLifecycle();
+
+    // Gang system yearly processing
+    LIFE.gangs.processYearly();
+
     // health death check
     if (state.stats.health <= 0 && !state.deathTriggered) {
         state.deathCause = state.drugUses > 3 ? 'substance abuse' : 'poor health';
         LIFE.triggerDeath();
     }
+};
+
+// ============================================================
+// NPC LIFECYCLE PROCESSING (called each year advance)
+// ============================================================
+LIFE.processNPCLifecycle = function() {
+    var state = LIFE.state;
+    var births = 0;
+
+    // Process all registered NPCs
+    for (var i = 0; i < LIFE.npcRegistry.length; i++) {
+        var entry = LIFE.npcRegistry[i];
+        if (!entry.alive) continue;
+
+        var npcAge = state.age - entry.birthYear;
+
+        // Death check
+        if (npcAge >= entry.deathAge) {
+            entry.alive = false;
+            LIFE.handleNPCDeath(entry, npcAge);
+            continue;
+        }
+
+        // Type transition: update type and home zone as NPC ages
+        if (!entry.isFamily) {
+            var newType = LIFE.NPC_AGE_TYPE(npcAge);
+            if (newType !== entry.currentType) {
+                entry.currentType = newType;
+                entry.homeZone = LIFE.NPC_TYPE_ZONE[newType] || 'city';
+            }
+        }
+    }
+
+    // Birth: count alive non-family per zone, spawn new young NPCs if below target
+    var zoneTargets = { school: 4, highschool: 5, city: 6, retirement: 3 };
+    for (var zone in zoneTargets) {
+        var alive = 0;
+        for (var j = 0; j < LIFE.npcRegistry.length; j++) {
+            var e = LIFE.npcRegistry[j];
+            if (e.alive && !e.isFamily && e.homeZone === zone) alive++;
+        }
+        var deficit = zoneTargets[zone] - alive;
+        for (var k = 0; k < deficit; k++) {
+            var gender = Math.random() < 0.5 ? 'M' : 'F';
+            var pool = gender === 'F' ? LIFE.FEMALE_NAMES : LIFE.MALE_NAMES;
+            var firstName = pool[Math.floor(Math.random() * pool.length)];
+            var newAge;
+            if (zone === 'school') newAge = 5 + Math.floor(Math.random() * 7);
+            else if (zone === 'highschool') newAge = 12 + Math.floor(Math.random() * 6);
+            else if (zone === 'retirement') newAge = 65 + Math.floor(Math.random() * 10);
+            else newAge = 18 + Math.floor(Math.random() * 20);
+            LIFE.registerNPC({
+                firstName: firstName,
+                gender: gender,
+                birthYear: state.age - newAge,
+                deathAge: 65 + Math.floor(Math.random() * 30),
+                currentType: LIFE.NPC_AGE_TYPE(newAge),
+                homeZone: zone
+            });
+            births++;
+        }
+    }
+
+    // Remove dead NPCs from current scene zones
+    if (LIFE.world && LIFE.world.zones) {
+        for (var zn in LIFE.world.zones) {
+            var z = LIFE.world.zones[zn];
+            if (!z.npcs) continue;
+            for (var ni = z.npcs.length - 1; ni >= 0; ni--) {
+                var npc = z.npcs[ni];
+                if (npc._registryId) {
+                    var reg = LIFE.findRegistryById(npc._registryId);
+                    if (reg && !reg.alive) {
+                        LIFE.scene.remove(npc.char.group);
+                        LIFE.removeNPCPhysics(npc);
+                        z.npcs.splice(ni, 1);
+                    }
+                }
+            }
+        }
+    }
+};
+
+LIFE.handleNPCDeath = function(entry, npcAge) {
+    var state = LIFE.state;
+
+    if (entry.isFamily) {
+        var role = entry.familyRole || 'Family member';
+        var name = entry.firstName;
+
+        // Track family death
+        state.familyDeaths.push({ name: name, role: role, age: npcAge, playerAge: state.age });
+
+        // Happiness hit
+        if (role === 'Spouse') {
+            state.stats.happiness = Math.max(0, state.stats.happiness - 25);
+            state.married = false;
+            state.spouseName = null;
+        } else if (role === 'Mom' || role === 'Dad') {
+            state.stats.happiness = Math.max(0, state.stats.happiness - 15);
+        } else if (role === 'Sibling') {
+            state.stats.happiness = Math.max(0, state.stats.happiness - 10);
+        } else {
+            state.stats.happiness = Math.max(0, state.stats.happiness - 8);
+        }
+
+        // Log milestone
+        LIFE.logMilestone(role + ' (' + name + ') passed away at age ' + npcAge, 'bad');
+
+        // News
+        if (LIFE.news) LIFE.news.add(name + ' has passed away at age ' + npcAge + '.', 'social');
+
+        // Deferred dialogue notification
+        setTimeout(function() {
+            if (LIFE.state.gamePhase === 'playing' && !LIFE.dialogue.active) {
+                LIFE.dialogue.open('Life', 'Your ' + role + ', ' + name + ', has passed away at the age of ' + npcAge + '. Rest in peace.', [
+                    { text: "I'll miss them forever...", effects: { happiness: -3 } },
+                    { text: "They lived a good life.", effects: { happiness: 2 } },
+                    { text: "...", effects: {} }
+                ], true);
+            }
+        }, 1000);
+    } else if (entry.met) {
+        // Non-family NPC the player had met
+        if (LIFE.ui && LIFE.ui.showPopup) {
+            LIFE.ui.showPopup(entry.firstName + ' has passed away.', '#90a4ae');
+        }
+    }
+};
+
+// ============================================================
+// GANG SYSTEM
+// ============================================================
+LIFE.gangs = {};
+
+LIFE.gangs.joinGang = function(gangId) {
+    var state = LIFE.state;
+    state.gang = gangId;
+    state.gangRep = 10;
+    state.gangJoinedAge = state.age;
+    LIFE.logMilestone('Joined ' + LIFE.GANGS[gangId].name, 'bad');
+    LIFE.logCrime('Gang membership');
+    if (LIFE.news) LIFE.news.add('Reports of new gang recruitment in the area.', 'crime');
+};
+
+LIFE.gangs.leaveGang = function() {
+    var state = LIFE.state;
+    if (!state.gang) return;
+    var gangName = LIFE.GANGS[state.gang].name;
+    LIFE.logMilestone('Left ' + gangName, 'neutral');
+    state.gang = null;
+    state.gangRep = 0;
+    state.gangJoinedAge = null;
+};
+
+// Gang recruitment interaction — returns true if dialogue opened
+LIFE.gangs.tryGangInteraction = function(npc) {
+    if (!npc.isGangMember || !npc.gangId) return false;
+    var state = LIFE.state;
+    var gangDef = LIFE.GANGS[npc.gangId];
+    if (!gangDef) return false;
+
+    // Same gang: friendly dialogue
+    if (state.gang === npc.gangId) {
+        var rank = LIFE.getGangRank(state.gangRep);
+        var friendlyLines = [
+            "What's good, " + rank.title + "? Need anything?",
+            "Yo, " + rank.title + "! We're running things out here.",
+            "Respect, " + rank.title + ". The streets know your name."
+        ];
+        var line = friendlyLines[Math.floor(Math.random() * friendlyLines.length)];
+        var opts = [
+            { text: "What's the word on the street?", effects: { charisma: 1 }, rep: 1 },
+            { text: "Stay sharp out there.", effects: {}, rep: 1 }
+        ];
+        LIFE.dialogue.open(npc.displayName || npc.name, line, opts, false);
+        return true;
+    }
+
+    // Rival gang: hostile
+    if (state.gang && state.gang !== npc.gangId) {
+        var rivalLines = [
+            "You're on the wrong turf, " + LIFE.GANGS[state.gang].name + " scum.",
+            "Better watch your back around here.",
+            "We don't take kindly to your kind. Move along."
+        ];
+        var rivalLine = rivalLines[Math.floor(Math.random() * rivalLines.length)];
+        LIFE.dialogue.open(npc.displayName || npc.name, rivalLine, [
+            { text: "I'm not looking for trouble.", effects: {}, rep: 0 },
+            { text: "You don't scare me.", effects: { charisma: 1 }, rep: -2 }
+        ], false);
+        return true;
+    }
+
+    // No gang + meets age req: recruitment offer (30% chance)
+    if (!state.gang && state.age >= gangDef.minAge && Math.random() < 0.3) {
+        var capturedGangId = npc.gangId;
+        LIFE.dialogue.open(npc.displayName || npc.name, gangDef.greeting, [
+            { text: "I'm interested. What do I have to do?", effects: {}, rep: -1, onSelect: function() {
+                var initQuestId = 'gang_init_' + capturedGangId;
+                // Start the initiation quest
+                for (var q = 0; q < LIFE.QUEST_DEFS.length; q++) {
+                    if (LIFE.QUEST_DEFS[q].id === initQuestId) {
+                        LIFE.quests.start(LIFE.QUEST_DEFS[q], npc);
+                        break;
+                    }
+                }
+            }},
+            { text: "Not interested.", effects: {}, rep: 0 },
+            { text: "I'd never join a gang.", effects: { charisma: 1 }, rep: 2 }
+        ], false);
+        return true;
+    }
+
+    return false;
+};
+
+// Process gang rank advancement (called in advanceYear)
+LIFE.gangs.processYearly = function() {
+    var state = LIFE.state;
+    if (!state.gang) return;
+
+    // Decay rep by 2/year (must stay active)
+    state.gangRep = Math.max(0, state.gangRep - 2);
+
+    // Check for rank change
+    var oldRank = LIFE.getGangRank(state.gangRep + 2); // what rank was before decay
+    var newRank = LIFE.getGangRank(state.gangRep);
+    if (newRank.title !== oldRank.title && state.gangRep > 5) {
+        // Only notify on promotion, not demotion from decay
+    }
+
+    // If rep drops to 0 for 3+ years, kicked out
+    if (state.gangRep <= 0 && state.gangJoinedAge && (state.age - state.gangJoinedAge) >= 3) {
+        var gangName = LIFE.GANGS[state.gang].name;
+        LIFE.gangs.leaveGang();
+        LIFE.ui.showPopup('You were kicked out of ' + gangName + ' for inactivity.', '#ff9800');
+    }
+};
+
+// Register family NPCs at game start
+LIFE.registerFamilyNPCs = function() {
+    // Clear registry for new game
+    LIFE.npcRegistry = [];
+    LIFE._registryNextId = 1;
+
+    var state = LIFE.state;
+
+    // Mom
+    LIFE.registerNPC({
+        firstName: 'Mom',
+        gender: 'F',
+        birthYear: state.age - (state.age + 25 + Math.floor(Math.random() * 5)),
+        deathAge: 68 + Math.floor(Math.random() * 22),
+        currentType: 'Mom',
+        homeZone: 'home',
+        isFamily: true,
+        familyRole: 'Mom',
+        met: true
+    });
+
+    // Dad
+    LIFE.registerNPC({
+        firstName: 'Dad',
+        gender: 'M',
+        birthYear: state.age - (state.age + 27 + Math.floor(Math.random() * 5)),
+        deathAge: 68 + Math.floor(Math.random() * 22),
+        currentType: 'Dad',
+        homeZone: 'home',
+        isFamily: true,
+        familyRole: 'Dad',
+        met: true
+    });
+
+    // Sibling
+    var sibAge = Math.max(1, state.age + (Math.random() < 0.5 ? -2 - Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 3)));
+    LIFE.registerNPC({
+        firstName: 'Sibling',
+        gender: Math.random() < 0.5 ? 'M' : 'F',
+        birthYear: state.age - sibAge,
+        deathAge: 68 + Math.floor(Math.random() * 24),
+        currentType: 'Sibling',
+        homeZone: 'home',
+        isFamily: true,
+        familyRole: 'Sibling',
+        met: true
+    });
 };
 
 LIFE.startPlaying = function() {
@@ -3612,7 +4689,7 @@ LIFE.startPlaying = function() {
     // baby starts in Mom's arms
     LIFE.state.heldByParent = true;
     // Spawn Mom on hospital bed (reclined) and Doctor for birth scene
-    LIFE.npcs.forEach(function(n) { LIFE.scene.remove(n.char.group); });
+    LIFE.npcs.forEach(function(n) { LIFE.scene.remove(n.char.group); LIFE.removeNPCPhysics(n); });
     LIFE.npcs = [];
     var birthMom = LIFE.createNPC('Mom', -3, -2, 'Mom', true);
     birthMom.speed = 0;
@@ -3631,6 +4708,9 @@ LIFE.startPlaying = function() {
     LIFE.ui.showGameUI(); LIFE.ui.updateActionButtons();
     LIFE.ui.showStageMessage('You are born!'); LIFE.ui.$.age.textContent = '0';
     LIFE.sounds.birth();
+
+    // Register persistent family NPCs
+    LIFE.registerFamilyNPCs();
 
     // Gender selection at birth - in hospital
     setTimeout(function() {
@@ -3672,7 +4752,7 @@ LIFE.triggerDeath = function(cause) {
     }
     if (LIFE.car.parkedModel) { LIFE.scene.remove(LIFE.car.parkedModel); LIFE.car.parkedModel = null; }
     LIFE.ui.hideGameUI(); LIFE.ui.hideJailScreen(); LIFE.removeAllPolice(); LIFE.cleanupBullets();
-    if (LIFE.ui.$.controls) LIFE.ui.$.controls.style.color = '';
+    if (LIFE.ui.$.controls) { LIFE.ui.$.controls.style.color = ''; LIFE.ui.$.controls.innerHTML = LIFE._defaultControls(); }
     LIFE.buildEnvironment('death'); LIFE.sounds.death();
     setTimeout(function() {
         var summary = LIFE.economy.getLifeSummary();
@@ -4000,7 +5080,7 @@ LIFE.debugSkipTo25 = function() {
 
     // Teleport to city
     var cityDef = LIFE.ZONE_DEFS.city;
-    LIFE.player.group.position.set(cityDef.cx, 0, cityDef.cz + 5);
+    LIFE.teleportPlayer(cityDef.cx, 0, cityDef.cz + 5);
 
     // Refresh NPCs
     LIFE.world.spawnZoneNPCs('city');
@@ -4011,14 +5091,14 @@ LIFE.debugSkipTo25 = function() {
     LIFE.ui.showGameUI();
     LIFE.ui.updateActionButtons();
     LIFE.ui.$.age.textContent = state.age;
-    LIFE.ui.$.controls.textContent = 'WASD: Move | Mouse: Look | Space: Jump | 1-4: Actions | E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info | I: Inventory';
+    LIFE.ui.$.controls.innerHTML = LIFE._defaultControls();
     LIFE.updateHeldWeapon();
 
     // Restore atmosphere
     LIFE.scene.background.set(0x87ceeb);
     LIFE.scene.fog.color.set(0x87ceeb);
-    LIFE.scene.fog.near = 50;
-    LIFE.scene.fog.far = 200;
+    LIFE.scene.fog.near = 80;
+    LIFE.scene.fog.far = 350;
 
     // Spawn parked car if owned
     if (state.ownedCar) LIFE.spawnParkedCar();
@@ -4096,6 +5176,7 @@ LIFE.animate = function() {
             // update date/time display
             LIFE.ui.updateDateTime();
             LIFE.economy.passiveIncome(dt);
+            LIFE.physics.step(dt);  // physics before player so camera sees final position
             LIFE.updatePlayer(dt);
             LIFE.updateNPCs(dt);
             LIFE.updateNPCPhoneCalls(dt);
@@ -4103,7 +5184,13 @@ LIFE.animate = function() {
             LIFE.updatePolice(dt);
             LIFE.updateBullets(dt);
             LIFE.updateActionAnim(dt);
-            LIFE.updateCamera();
+            // Auto-fire for automatic weapons (hold mouse to shoot)
+            if (LIFE._mouseHeld && state.shootCooldown <= 0) {
+                var autoEq = LIFE.getEquipped();
+                var autoData = LIFE.ITEM_DATA[autoEq];
+                if (autoData && autoData.auto) LIFE.shootGun();
+            }
+            LIFE.updateCamera(dt);
 
             // Event, news, and quest systems
             LIFE.events.update(dt);
@@ -4210,11 +5297,12 @@ LIFE.animate = function() {
             }
 
             // allow movement in jail cell
+            LIFE.physics.step(dt);
             LIFE.updatePlayer(dt);
             LIFE.updateNPCs(dt);
             LIFE.pathfinding.updateCache(dt);
             LIFE.updateActionAnim(dt);
-            LIFE.updateCamera();
+            LIFE.updateCamera(dt);
             LIFE.dialogue.update(dt);
             LIFE.ui.updatePlayerHealth();
             LIFE.ui.updateAgeColor();
@@ -4409,7 +5497,200 @@ LIFE.animate = function() {
     if (state.actionCooldown > 0) state.actionCooldown -= dt;
     if (state.shootCooldown > 0) state.shootCooldown -= dt;
     LIFE.ui.updateTimers(dt);
+    LIFE.updateDebugView(dt);
     LIFE.renderer.render(LIFE.scene, LIFE.camera);
+};
+
+// ============================================================
+// PHYSICS DEBUG VIEW (toggle with Right Shift)
+// ============================================================
+LIFE._debugView = false;
+LIFE._debugMeshes = [];
+LIFE._debugPlayerSphere = null;
+LIFE._debugFPS = 0;
+LIFE._debugFrames = 0;
+LIFE._debugFPSTimer = 0;
+
+LIFE.toggleDebugView = function() {
+    LIFE._debugView = !LIFE._debugView;
+    var el = document.getElementById('debugOverlay');
+    if (el) el.style.display = LIFE._debugView ? 'block' : 'none';
+    // Clean up debug meshes when turning off
+    if (!LIFE._debugView) {
+        LIFE._clearDebugMeshes();
+    }
+};
+
+LIFE._clearDebugMeshes = function() {
+    for (var i = 0; i < LIFE._debugMeshes.length; i++) {
+        LIFE.scene.remove(LIFE._debugMeshes[i]);
+    }
+    LIFE._debugMeshes = [];
+    if (LIFE._debugPlayerSphere) {
+        LIFE.scene.remove(LIFE._debugPlayerSphere);
+        LIFE._debugPlayerSphere = null;
+    }
+};
+
+LIFE._ensureDebugPlayerSphere = function() {
+    var halfH = LIFE.physics._playerHalfH || 0.4;
+    if (LIFE._debugPlayerSphere && Math.abs(LIFE._debugPlayerSphere._dbgRadius - halfH) > 0.01) {
+        LIFE.scene.remove(LIFE._debugPlayerSphere);
+        LIFE._debugPlayerSphere = null;
+    }
+    if (!LIFE._debugPlayerSphere) {
+        var geo = new THREE.SphereGeometry(halfH, 16, 12);
+        var mat = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true, transparent: true, opacity: 0.5 });
+        LIFE._debugPlayerSphere = new THREE.Mesh(geo, mat);
+        LIFE._debugPlayerSphere._dbgRadius = halfH;
+        LIFE.scene.add(LIFE._debugPlayerSphere);
+    }
+};
+
+LIFE.updateDebugView = function(dt) {
+    if (!LIFE._debugView) return;
+
+    // FPS counter
+    LIFE._debugFrames++;
+    LIFE._debugFPSTimer += dt;
+    if (LIFE._debugFPSTimer >= 0.5) {
+        LIFE._debugFPS = Math.round(LIFE._debugFrames / LIFE._debugFPSTimer);
+        LIFE._debugFrames = 0;
+        LIFE._debugFPSTimer = 0;
+    }
+
+    var body = LIFE.physics._playerBody;
+    var halfH = LIFE.physics._playerHalfH || 0.4;
+
+    // Update wireframe sphere to show physics body position
+    LIFE._ensureDebugPlayerSphere();
+    if (LIFE._debugPlayerSphere && body) {
+        LIFE._debugPlayerSphere.position.set(body.position.x, body.position.y, body.position.z);
+    }
+
+    // Clear old debug meshes (static body wireframes)
+    for (var i = 0; i < LIFE._debugMeshes.length; i++) {
+        LIFE.scene.remove(LIFE._debugMeshes[i]);
+    }
+    LIFE._debugMeshes = [];
+
+    // Draw nearby static physics bodies as wireframe boxes
+    if (LIFE.physics.world && LIFE.player) {
+        var px = LIFE.player.group.position.x;
+        var pz = LIFE.player.group.position.z;
+        var bodies = LIFE.physics.world.bodies;
+        for (var b = 0; b < bodies.length; b++) {
+            var pb = bodies[b];
+            if (pb === LIFE.physics._groundPlane) continue;
+            if (pb === body) continue;
+            var bdx = pb.position.x - px;
+            var bdz = pb.position.z - pz;
+            if (bdx * bdx + bdz * bdz > 225) continue; // within 15 units
+            for (var s = 0; s < pb.shapes.length; s++) {
+                var shape = pb.shapes[s];
+                var offset = pb.shapeOffsets[s] || new CANNON.Vec3();
+                var dbgMesh = null;
+                if (shape instanceof CANNON.Box) {
+                    var he = shape.halfExtents;
+                    var geo = new THREE.BoxGeometry(he.x * 2, he.y * 2, he.z * 2);
+                    var mat = new THREE.MeshBasicMaterial({
+                        color: pb.mass === 0 ? 0xff4444 : 0x44aaff,
+                        wireframe: true, transparent: true, opacity: 0.35
+                    });
+                    dbgMesh = new THREE.Mesh(geo, mat);
+                } else if (shape instanceof CANNON.Sphere) {
+                    var geo2 = new THREE.SphereGeometry(shape.radius, 8, 6);
+                    var mat2 = new THREE.MeshBasicMaterial({
+                        color: pb.type === CANNON.Body.KINEMATIC ? 0xffaa00 : 0x44aaff,
+                        wireframe: true, transparent: true, opacity: 0.35
+                    });
+                    dbgMesh = new THREE.Mesh(geo2, mat2);
+                }
+                if (dbgMesh) {
+                    dbgMesh.position.set(
+                        pb.position.x + offset.x,
+                        pb.position.y + offset.y,
+                        pb.position.z + offset.z
+                    );
+                    LIFE.scene.add(dbgMesh);
+                    LIFE._debugMeshes.push(dbgMesh);
+                }
+            }
+        }
+    }
+
+    // Update text overlay
+    var el = document.getElementById('debugOverlay');
+    if (!el) return;
+
+    var lines = [];
+    lines.push('=== PHYSICS DEBUG [RShift] ===');
+    lines.push('FPS: ' + LIFE._debugFPS);
+
+    if (body) {
+        var bv = body.velocity;
+        var bp = body.position;
+        lines.push('');
+        lines.push('--- PLAYER BODY ---');
+        lines.push('Body pos:  ' + bp.x.toFixed(2) + ', ' + bp.y.toFixed(2) + ', ' + bp.z.toFixed(2));
+        lines.push('Body vel:  ' + bv.x.toFixed(2) + ', ' + bv.y.toFixed(2) + ', ' + bv.z.toFixed(2));
+        lines.push('Offset:    ' + halfH.toFixed(3) + '  radius: ' + (LIFE.physics._playerRadius || 0).toFixed(3) + '  height: ' + (LIFE.getHeightForAge(LIFE.state.age)).toFixed(2));
+        lines.push('Feet Y:    ' + (bp.y - halfH).toFixed(3));
+        lines.push('Mass:      ' + body.mass + '  type: ' + body.type);
+        lines.push('Material:  ' + (body.material ? body.material.name : 'none'));
+        lines.push('Sleep:     ' + (body.sleepState === 2 ? 'SLEEPING' : 'awake'));
+        lines.push('Group:     ' + body.collisionFilterGroup + '  mask: ' + body.collisionFilterMask);
+
+        // Contacts
+        var contacts = LIFE.physics.world.contacts;
+        var playerContacts = 0;
+        var contactBodies = [];
+        for (var ci = 0; ci < contacts.length; ci++) {
+            var c = contacts[ci];
+            if (c.bi === body || c.bj === body) {
+                playerContacts++;
+                var other = c.bi === body ? c.bj : c.bi;
+                var otherName = other === LIFE.physics._groundPlane ? 'GROUND' :
+                                other.material ? other.material.name : 'unknown';
+                if (contactBodies.indexOf(otherName) < 0) contactBodies.push(otherName);
+            }
+        }
+        lines.push('Contacts:  ' + playerContacts + ' [' + contactBodies.join(', ') + ']');
+    }
+
+    if (LIFE.player) {
+        var mp = LIFE.player.group.position;
+        lines.push('');
+        lines.push('--- MESH ---');
+        lines.push('Mesh pos:  ' + mp.x.toFixed(2) + ', ' + mp.y.toFixed(2) + ', ' + mp.z.toFixed(2));
+        if (body) {
+            var drift = Math.sqrt(
+                Math.pow(mp.x - body.position.x, 2) +
+                Math.pow(mp.y - (body.position.y - halfH), 2) +
+                Math.pow(mp.z - body.position.z, 2)
+            );
+            lines.push('Body→Mesh: ' + drift.toFixed(4) + ' drift');
+        }
+    }
+
+    var s = LIFE.state;
+    lines.push('');
+    lines.push('--- STATE ---');
+    lines.push('Grounded:  ' + (s.isGrounded ? 'YES' : 'NO'));
+    lines.push('Phase:     ' + s.gamePhase);
+    lines.push('HeldByP:   ' + s.heldByParent);
+    lines.push('Age:       ' + s.age + '  height: ' + LIFE.getHeightForAge(s.age).toFixed(2));
+    lines.push('Interior:  ' + (LIFE.world.insideInterior || 'none'));
+
+    lines.push('');
+    lines.push('--- WORLD ---');
+    lines.push('Bodies:    ' + (LIFE.physics.world ? LIFE.physics.world.bodies.length : 0));
+    lines.push('Static:    ' + LIFE.physics.staticBodies.length);
+    lines.push('Zone:      ' + LIFE.physics.zoneBodies.length);
+    lines.push('Dynamic:   ' + LIFE.physics.dynamicBodies.length);
+    lines.push('Kinematic: ' + LIFE.physics.kinematicBodies.length);
+
+    el.textContent = lines.join('\n');
 };
 
 // ============================================================

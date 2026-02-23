@@ -117,6 +117,7 @@ LIFE.createCharacter = function(height, skinColor, clothesColor, isPlayer, opts)
     if (isBaby) body.scale.y = 1.2;
     body.castShadow = true;
     ch.group.add(body);
+    ch.parts.body = body;
 
     // Legs - skin colored if naked (womb), otherwise pants
     var isNaked = (skinColor === clothesColor);

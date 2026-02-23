@@ -35,7 +35,7 @@ LIFE.QUEST_DEFS = [
             { type: 'wait', duration: 15, desc: 'Stay hidden!' }
         ],
         reward: { happiness: 8, charisma: 2 },
-        timeLimit: 300
+        timeLimitDays: 1
     },
     {
         id: 'lost_toy', title: 'Lost Toy',
@@ -47,7 +47,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Bring it back' }
         ],
         reward: { money: 2, rep: 3, happiness: 5, onComplete: function() { LIFE.state.livesHelped++; } },
-        timeLimit: 300
+        timeLimitDays: 1
     },
     {
         id: 'race_to_school', title: 'Race You!',
@@ -58,7 +58,7 @@ LIFE.QUEST_DEFS = [
             { type: 'go_to', zone: 'school', desc: 'Race to the school!', radius: 20 }
         ],
         reward: { happiness: 5, health: 2, charisma: 1 },
-        timeLimit: 120
+        timeLimitDays: 0.5
     },
     {
         id: 'mom_errand', title: 'Mom\'s Errand',
@@ -70,7 +70,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Bring it back to Mom' }
         ],
         reward: { money: 5, rep: 2, happiness: 3, intelligence: 1 },
-        timeLimit: 400
+        timeLimitDays: 1
     },
     {
         id: 'teacher_helper', title: 'Teacher\'s Helper',
@@ -81,7 +81,7 @@ LIFE.QUEST_DEFS = [
             { type: 'go_to', zone: 'school', desc: 'Carry the books to school', radius: 20 }
         ],
         reward: { rep: 5, intelligence: 2, happiness: 3 },
-        timeLimit: 300
+        timeLimitDays: 1
     },
     {
         id: 'dare_tag', title: 'Double Dare',
@@ -93,7 +93,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Run all the way back' }
         ],
         reward: { charisma: 3, happiness: 4, health: 1 },
-        timeLimit: 300
+        timeLimitDays: 1
     },
     {
         id: 'bully_lunch', title: 'Lunch Money',
@@ -105,7 +105,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Bring it back to the bully' }
         ],
         reward: { rep: -3, happiness: -2, charisma: 1 },
-        timeLimit: 300
+        timeLimitDays: 1
     },
 
     // ========== GOOD QUESTS ==========
@@ -115,11 +115,11 @@ LIFE.QUEST_DEFS = [
         type: 'good', giver: ['Neighbor', 'Stranger'],
         minAge: 10, maxAge: 80,
         objectives: [
-            { type: 'go_to', zone: 'home', desc: 'Walk the neighbor home', radius: 15 },
+            { type: 'escort', pos: { x: 20, z: -5 }, desc: 'Walk the neighbor home', radius: 10 },
             { type: 'return', desc: 'Report back' }
         ],
         reward: { money: 15, rep: 8, happiness: 5, onComplete: function() { LIFE.state.livesHelped++; } },
-        timeLimit: 300
+        timeLimitDays: 1
     },
     {
         id: 'find_lost_pet', title: 'Lost Pet',
@@ -131,7 +131,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Return the dog to the owner' }
         ],
         reward: { money: 30, rep: 12, happiness: 8, onComplete: function() { LIFE.state.livesHelped++; } },
-        timeLimit: 600
+        timeLimitDays: 2
     },
     {
         id: 'deliver_medicine', title: 'Medicine Delivery',
@@ -144,7 +144,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Let them know it\'s delivered' }
         ],
         reward: { money: 50, rep: 15, happiness: 5, health: 3, onComplete: function() { LIFE.state.livesHelped++; } },
-        timeLimit: 480
+        timeLimitDays: 1
     },
     {
         id: 'tutor_student', title: 'Tutoring Session',
@@ -157,7 +157,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Report back' }
         ],
         reward: { money: 40, rep: 10, intelligence: 3, happiness: 3, onComplete: function() { LIFE.state.peopleMentored++; } },
-        timeLimit: 600
+        timeLimitDays: 2
     },
     {
         id: 'charity_run', title: 'Charity Fun Run',
@@ -170,7 +170,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Cross the finish line' }
         ],
         reward: { money: 25, rep: 15, health: 5, happiness: 5, onComplete: function() { LIFE.state.volunteerHours++; } },
-        timeLimit: 900
+        timeLimitDays: 3
     },
     {
         id: 'escort_elder', title: 'Safe Escort',
@@ -178,11 +178,11 @@ LIFE.QUEST_DEFS = [
         type: 'good', giver: ['Stranger', 'Neighbor'],
         minAge: 14, maxAge: 60,
         objectives: [
-            { type: 'go_to', zone: 'retirement', desc: 'Walk them to the retirement community', radius: 25 },
+            { type: 'escort', zone: 'retirement', desc: 'Walk them to the retirement community', radius: 20 },
             { type: 'return', desc: 'Report back' }
         ],
         reward: { money: 20, rep: 12, charisma: 2, happiness: 4, onComplete: function() { LIFE.state.livesHelped++; } },
-        timeLimit: 480
+        timeLimitDays: 1
     },
     {
         id: 'volunteer_cleanup', title: 'Community Cleanup',
@@ -195,7 +195,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Let them know it\'s done' }
         ],
         reward: { money: 15, rep: 10, health: 2, happiness: 4, onComplete: function() { LIFE.state.volunteerHours++; } },
-        timeLimit: 600
+        timeLimitDays: 2
     },
     {
         id: 'donate_drive', title: 'Donation Drive',
@@ -207,7 +207,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Report back' }
         ],
         reward: { rep: 18, happiness: 6, charisma: 3, onComplete: function() { LIFE.state.charitableDonations += 50; LIFE.state.volunteerHours++; } },
-        timeLimit: 480
+        timeLimitDays: 1
     },
 
     // ========== BAD QUESTS ==========
@@ -221,7 +221,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Bring the goods back' }
         ],
         reward: { money: 200, rep: -8, charisma: 1, onComplete: function() { LIFE.state.totalThefts++; LIFE.logCrime('Shoplifting'); if (Math.random() < 0.25) LIFE.addWanted(1); } },
-        timeLimit: 480
+        timeLimitDays: 1
     },
     {
         id: 'drug_delivery', title: 'Special Delivery',
@@ -233,7 +233,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Return to the dealer' }
         ],
         reward: { money: 500, rep: -12, onComplete: function() { LIFE.logCrime('Drug trafficking'); if (Math.random() < 0.3) LIFE.addWanted(2); } },
-        timeLimit: 600
+        timeLimitDays: 2
     },
     {
         id: 'intimidate_vendor', title: 'Collection Day',
@@ -245,7 +245,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Report back' }
         ],
         reward: { money: 300, rep: -10, charisma: 2, onComplete: function() { LIFE.state.totalExtortions++; LIFE.logCrime('Extortion'); } },
-        timeLimit: 480
+        timeLimitDays: 1
     },
     {
         id: 'vandalize', title: 'Send a Message',
@@ -258,7 +258,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Report back' }
         ],
         reward: { money: 100, rep: -6, onComplete: function() { LIFE.logCrime('Vandalism'); if (Math.random() < 0.2) LIFE.addWanted(1); } },
-        timeLimit: 480
+        timeLimitDays: 1
     },
     {
         id: 'frame_someone', title: 'Planted Evidence',
@@ -271,7 +271,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Report back' }
         ],
         reward: { money: 400, rep: -15, onComplete: function() { LIFE.state.betrayals++; LIFE.logCrime('Framing'); } },
-        timeLimit: 600
+        timeLimitDays: 2
     },
     {
         id: 'lookout', title: 'Eyes Open',
@@ -284,7 +284,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Report back' }
         ],
         reward: { money: 250, rep: -5, onComplete: function() { LIFE.logCrime('Accessory to robbery'); if (Math.random() < 0.2) LIFE.addWanted(1); } },
-        timeLimit: 480
+        timeLimitDays: 1
     },
 
     // ========== NEUTRAL QUESTS ==========
@@ -298,7 +298,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Let them know it\'s delivered' }
         ],
         reward: { money: 40, rep: 3, happiness: 2 },
-        timeLimit: 480
+        timeLimitDays: 1
     },
     {
         id: 'buy_supplies', title: 'Supply Run',
@@ -310,7 +310,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Bring the supplies back' }
         ],
         reward: { money: 30, rep: 5, intelligence: 1 },
-        timeLimit: 480
+        timeLimitDays: 1
     },
     {
         id: 'find_person', title: 'Missing Person',
@@ -322,7 +322,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Report back what you found' }
         ],
         reward: { money: 25, rep: 8, happiness: 3, onComplete: function() { LIFE.state.livesHelped++; } },
-        timeLimit: 600
+        timeLimitDays: 2
     },
     {
         id: 'college_tour', title: 'Campus Tour',
@@ -334,7 +334,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Finish the tour' }
         ],
         reward: { money: 20, rep: 5, charisma: 2, happiness: 2 },
-        timeLimit: 480
+        timeLimitDays: 1
     },
 
     // ========== KILL QUESTS ==========
@@ -348,7 +348,7 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Report back' }
         ],
         reward: { money: 500, rep: -5, onComplete: function() { LIFE.logCrime('Contract killing'); if (Math.random() < 0.3) LIFE.addWanted(2); } },
-        timeLimit: 600
+        timeLimitDays: 2
     },
     {
         id: 'settling_scores', title: 'Settling Scores',
@@ -360,7 +360,90 @@ LIFE.QUEST_DEFS = [
             { type: 'return', desc: 'Report back' }
         ],
         reward: { money: 400, rep: -15, onComplete: function() { LIFE.logCrime('Contract killing'); LIFE.state.betrayals++; } },
-        timeLimit: 600
+        timeLimitDays: 2
+    },
+
+    // ========== GANG INITIATION QUESTS ==========
+    {
+        id: 'gang_init_serpents', title: 'Serpent Initiation',
+        desc: 'Prove yourself to The Serpents. Go to the store in the city and lift some goods. Bring them back.',
+        type: 'bad', giver: ['Stranger'],
+        gangInitiation: 'serpents',
+        minAge: 16, maxAge: 60,
+        objectives: [
+            { type: 'go_to', zone: 'city', desc: 'Go to the store area in the city', radius: 20 },
+            { type: 'wait', duration: 10, desc: 'Steal the goods' },
+            { type: 'return', desc: 'Bring the goods back' }
+        ],
+        reward: { money: 100, rep: -8, onComplete: function() { LIFE.logCrime('Shoplifting'); LIFE.gangs.joinGang('serpents'); } },
+        timeLimitDays: 1
+    },
+    {
+        id: 'gang_init_reapers', title: 'Reaper Initiation',
+        desc: 'The Reapers don\'t let just anyone in. Prove you\'re serious. Take someone out and come back.',
+        type: 'bad', giver: ['Stranger'],
+        gangInitiation: 'reapers',
+        minAge: 18, maxAge: 60,
+        objectives: [
+            { type: 'kill', npcType: 'Stranger', count: 1, desc: 'Eliminate a target' },
+            { type: 'return', desc: 'Report back' }
+        ],
+        reward: { money: 300, rep: -15, onComplete: function() { LIFE.logCrime('Murder'); LIFE.gangs.joinGang('reapers'); } },
+        timeLimitDays: 2
+    },
+    {
+        id: 'gang_init_shadows', title: 'Shadow Initiation',
+        desc: 'The Shadows need someone who can move quiet. Deliver this package to the high school and come back. Don\'t open it.',
+        type: 'bad', giver: ['Student'],
+        gangInitiation: 'shadows',
+        minAge: 14, maxAge: 60,
+        objectives: [
+            { type: 'go_to', zone: 'highschool', desc: 'Deliver the package to the high school', radius: 25 },
+            { type: 'return', desc: 'Return to confirm delivery' }
+        ],
+        reward: { money: 200, rep: -5, onComplete: function() { LIFE.logCrime('Drug trafficking'); LIFE.gangs.joinGang('shadows'); } },
+        timeLimitDays: 1
+    },
+
+    // ========== GANG MEMBER QUESTS (repeatable, same-gang only) ==========
+    {
+        id: 'gang_drug_run', title: 'Drug Run',
+        desc: 'We got a shipment that needs to get to the other side of town. Move fast, move quiet.',
+        type: 'bad', giver: ['Stranger', 'Dealer'],
+        gangQuest: true,
+        minAge: 16, maxAge: 60,
+        objectives: [
+            { type: 'go_to', zone: 'highschool', desc: 'Deliver the package', radius: 25 },
+            { type: 'return', desc: 'Report back' }
+        ],
+        reward: { money: 400, rep: -8, onComplete: function() { LIFE.logCrime('Drug trafficking'); LIFE.state.gangRep = Math.min(100, LIFE.state.gangRep + 8); if (Math.random() < 0.2) LIFE.addWanted(2); } },
+        timeLimitDays: 1
+    },
+    {
+        id: 'gang_turf_defense', title: 'Turf Defense',
+        desc: 'Rivals are creeping on our territory. Go show them this is our turf.',
+        type: 'bad', giver: ['Stranger'],
+        gangQuest: true,
+        minAge: 16, maxAge: 60,
+        objectives: [
+            { type: 'kill', npcType: 'Stranger', count: 1, desc: 'Handle the rival' },
+            { type: 'return', desc: 'Report back' }
+        ],
+        reward: { money: 500, rep: -12, onComplete: function() { LIFE.logCrime('Assault'); LIFE.state.gangRep = Math.min(100, LIFE.state.gangRep + 12); if (Math.random() < 0.3) LIFE.addWanted(3); } },
+        timeLimitDays: 2
+    },
+    {
+        id: 'gang_debt_collection', title: 'Debt Collection',
+        desc: 'Someone owes us money. Go collect. Use whatever methods necessary.',
+        type: 'bad', giver: ['Stranger', 'Dealer'],
+        gangQuest: true,
+        minAge: 16, maxAge: 60,
+        objectives: [
+            { type: 'talk_to', npcType: 'Food Vendor', desc: 'Collect the debt' },
+            { type: 'return', desc: 'Bring the money back' }
+        ],
+        reward: { money: 350, rep: -10, onComplete: function() { LIFE.logCrime('Extortion'); LIFE.state.totalExtortions++; LIFE.state.gangRep = Math.min(100, LIFE.state.gangRep + 10); } },
+        timeLimitDays: 1
     }
 ];
 
@@ -372,15 +455,73 @@ LIFE.QUEST_DEFS = [
 LIFE.quests._findLiveGiver = function(quest) {
     if (!quest.giver) return quest.giverPos;
     var allNPCs = LIFE.getAllNPCs ? LIFE.getAllNPCs() : LIFE.npcs;
+    // Match by unique ID first (exact NPC)
     for (var i = 0; i < allNPCs.length; i++) {
         var npc = allNPCs[i];
         if (!npc.alive) continue;
-        if (npc.name === quest.giver.name || npc.type === quest.giver.type) {
+        if (quest.giver.uid && npc.uid === quest.giver.uid) {
             return { x: npc.char.group.position.x, z: npc.char.group.position.z };
+        }
+    }
+    // Fallback: match by name (for older quests without uid)
+    for (var j = 0; j < allNPCs.length; j++) {
+        var npc2 = allNPCs[j];
+        if (!npc2.alive) continue;
+        if (npc2.name === quest.giver.name) {
+            return { x: npc2.char.group.position.x, z: npc2.char.group.position.z };
         }
     }
     // NPC dead or gone — fall back to static snapshot
     return quest.giverPos;
+};
+
+// Find the actual NPC object for the quest giver (not just position)
+LIFE.quests._findLiveGiverNPC = function(quest) {
+    if (!quest.giver) return null;
+    var allNPCs = LIFE.getAllNPCs ? LIFE.getAllNPCs() : LIFE.npcs;
+    for (var i = 0; i < allNPCs.length; i++) {
+        var npc = allNPCs[i];
+        if (!npc.alive) continue;
+        if (quest.giver.uid && npc.uid === quest.giver.uid) return npc;
+    }
+    // Fallback: match by name
+    for (var j = 0; j < allNPCs.length; j++) {
+        var npc2 = allNPCs[j];
+        if (!npc2.alive) continue;
+        if (npc2.name === quest.giver.name) return npc2;
+    }
+    return null;
+};
+
+// Start escorting: make the giver NPC follow the player
+LIFE.quests._startEscort = function(quest) {
+    var npc = LIFE.quests._findLiveGiverNPC(quest);
+    if (!npc) return;
+    npc._escorting = true;
+    npc._savedZoneCenter = npc._zoneCenter || null;
+    npc._savedZoneRadius = npc._zoneRadius || null;
+    npc._zoneCenter = null;
+    npc._wakeLock = 99999;
+    npc._sleeping = false;
+    if (npc._preSleepPos) {
+        npc.char.group.position.y = 0;
+        npc.char.group.rotation.x = 0;
+    }
+    quest._escortStarted = true;
+};
+
+// Stop escorting: restore NPC to normal behavior
+LIFE.quests._stopEscort = function(quest) {
+    var npc = LIFE.quests._findLiveGiverNPC(quest);
+    if (!npc) return;
+    npc._escorting = false;
+    if (npc._savedZoneCenter) npc._zoneCenter = npc._savedZoneCenter;
+    if (npc._savedZoneRadius) npc._zoneRadius = npc._savedZoneRadius;
+    npc._savedZoneCenter = null;
+    npc._savedZoneRadius = null;
+    npc._wakeLock = 0;
+    npc._escortPath = null;
+    npc._escortRepath = 0;
 };
 
 // Cycle active quest (called by V key)
@@ -417,10 +558,10 @@ LIFE.quests.start = function(questDef, giverNPC) {
         type: questDef.type,
         objectives: [],
         currentObj: 0,
-        giver: giverNPC ? { name: giverNPC.name, type: giverNPC.type } : null,
+        giver: giverNPC ? { uid: giverNPC.uid, name: giverNPC.name, type: giverNPC.type } : null,
         giverPos: giverNPC ? { x: giverNPC.char.group.position.x, z: giverNPC.char.group.position.z } : null,
         reward: questDef.reward,
-        timeLimit: questDef.timeLimit || 600,
+        timeLimit: (questDef.timeLimitDays || 1) * LIFE.DAY_DURATION,
         _elapsed: 0,
         _waitTimer: 0,
         _pendingReturn: false
@@ -431,6 +572,7 @@ LIFE.quests.start = function(questDef, giverNPC) {
         quest.objectives.push({
             type: obj.type,
             zone: obj.zone || null,
+            pos: obj.pos || null,
             npcType: obj.npcType || null,
             desc: obj.desc,
             radius: obj.radius || 15,
@@ -442,6 +584,9 @@ LIFE.quests.start = function(questDef, giverNPC) {
     }
 
     LIFE.quests.active.push(quest);
+
+    // Auto-select the new quest as the tracked quest
+    LIFE.quests._activeQuestIndex = LIFE.quests.active.length - 1;
 
     // Skyrim-style: show big quest started banner
     LIFE.quests._showBanner('QUEST STARTED', quest.title);
@@ -475,12 +620,19 @@ LIFE.quests.canOffer = function(def) {
 
 LIFE.quests.getOfferForNPC = function(npc) {
     if (!npc || !npc.type) return null;
-    if (LIFE.quests.active.length >= 3) return null;
-
     var eligible = [];
+    var state = LIFE.state;
     for (var i = 0; i < LIFE.QUEST_DEFS.length; i++) {
         var def = LIFE.QUEST_DEFS[i];
         if (!LIFE.quests.canOffer(def)) continue;
+
+        // Skip gang initiation quests (offered through recruitment dialogue only)
+        if (def.gangInitiation) continue;
+
+        // Skip gang member quests unless player is in same gang as NPC
+        if (def.gangQuest) {
+            if (!state.gang || !npc.isGangMember || state.gang !== npc.gangId) continue;
+        }
 
         var giverMatch = false;
         for (var g = 0; g < def.giver.length; g++) {
@@ -493,6 +645,16 @@ LIFE.quests.getOfferForNPC = function(npc) {
 
     if (eligible.length === 0) return null;
     return eligible[Math.floor(Math.random() * eligible.length)];
+};
+
+// Start a quest from dialogue (inline quest def, NPC is the current talker)
+LIFE.quests.startFromDialogue = function(questDef, npc) {
+    // Prevent duplicates
+    for (var i = 0; i < LIFE.quests.active.length; i++) {
+        if (LIFE.quests.active[i].defId === questDef.id) return;
+    }
+    if (LIFE.quests.completed.indexOf(questDef.id) >= 0) return;
+    LIFE.quests.start(questDef, npc);
 };
 
 // Complete a quest — shows reward dialogue with NPC
@@ -508,10 +670,20 @@ LIFE.quests.complete = function(quest) {
     if (reward.charisma) s.stats.charisma = Math.min(100, s.stats.charisma + reward.charisma);
     if (reward.onComplete) reward.onComplete();
 
+    if (quest._escortStarted) LIFE.quests._stopEscort(quest);
+
     LIFE.quests.completed.push(quest.defId);
 
     var idx = LIFE.quests.active.indexOf(quest);
-    if (idx >= 0) LIFE.quests.active.splice(idx, 1);
+    if (idx >= 0) {
+        LIFE.quests.active.splice(idx, 1);
+        // Keep active index valid after removal
+        if (LIFE.quests._activeQuestIndex >= LIFE.quests.active.length) {
+            LIFE.quests._activeQuestIndex = Math.max(0, LIFE.quests.active.length - 1);
+        } else if (idx < LIFE.quests._activeQuestIndex) {
+            LIFE.quests._activeQuestIndex--;
+        }
+    }
 
     // Skyrim-style: big QUEST COMPLETED banner
     LIFE.quests._showBanner('QUEST COMPLETED', quest.title);
@@ -536,9 +708,17 @@ LIFE.quests.complete = function(quest) {
 };
 
 LIFE.quests.fail = function(quest) {
+    if (quest._escortStarted) LIFE.quests._stopEscort(quest);
     LIFE.quests.failed.push(quest.defId);
     var idx = LIFE.quests.active.indexOf(quest);
-    if (idx >= 0) LIFE.quests.active.splice(idx, 1);
+    if (idx >= 0) {
+        LIFE.quests.active.splice(idx, 1);
+        if (LIFE.quests._activeQuestIndex >= LIFE.quests.active.length) {
+            LIFE.quests._activeQuestIndex = Math.max(0, LIFE.quests.active.length - 1);
+        } else if (idx < LIFE.quests._activeQuestIndex) {
+            LIFE.quests._activeQuestIndex--;
+        }
+    }
     LIFE.quests._showBanner('QUEST FAILED', quest.title);
 };
 
@@ -578,12 +758,17 @@ LIFE.quests.update = function(dt) {
     var px = LIFE.player.group.position.x;
     var pz = LIFE.player.group.position.z;
 
+    // Compute in-game time delta (only ticks when game time advances, not during dialogue/shop)
+    var state = LIFE.state;
+    var gamePaused = (LIFE.dialogue.active && LIFE.dialogue.blocking) || state.shopOpen || state.friendsOpen || state.timeSkipOpen;
+    var gameDt = gamePaused ? 0 : dt * (state.timeSpeed / 72);
+
     // Update compass target for first active quest
     LIFE.quests._compassTarget = null;
 
     for (var qi = LIFE.quests.active.length - 1; qi >= 0; qi--) {
         var quest = LIFE.quests.active[qi];
-        quest._elapsed += dt;
+        quest._elapsed += gameDt;
 
         if (quest._elapsed > quest.timeLimit) {
             LIFE.quests.fail(quest);
@@ -623,6 +808,13 @@ LIFE.quests.update = function(dt) {
                 // Point compass to nearest alive target NPC of the kill type
                 var killTarget = LIFE.quests._findNearestKillTarget(obj.npcType, px, pz);
                 if (killTarget) LIFE.quests._compassTarget = { x: killTarget.x, z: killTarget.z };
+            } else if (obj.type === 'talk_to') {
+                // Point compass to nearest alive target NPC of the talk_to type
+                var talkTarget = LIFE.quests._findNearestKillTarget(obj.npcType, px, pz);
+                if (talkTarget) LIFE.quests._compassTarget = { x: talkTarget.x, z: talkTarget.z };
+            } else if (obj.type === 'escort') {
+                var ep = obj.pos || LIFE.quests._getZonePos(obj.zone);
+                if (ep) LIFE.quests._compassTarget = { x: ep.x, z: ep.z };
             }
         }
 
@@ -716,6 +908,34 @@ LIFE.quests.update = function(dt) {
                 LIFE.quests._showObjectiveBanner('Target eliminated!');
                 LIFE.quests._advanceObjective(quest);
             }
+        } else if (obj.type === 'escort') {
+            // Start escort on first tick
+            if (!quest._escortStarted) {
+                LIFE.quests._startEscort(quest);
+            }
+            var escortDest = obj.pos || LIFE.quests._getZonePos(obj.zone);
+            if (escortDest) {
+                var edx = px - escortDest.x;
+                var edz = pz - escortDest.z;
+                var eDist = Math.sqrt(edx * edx + edz * edz);
+                // Check player is within radius
+                if (eDist < obj.radius) {
+                    // Check escort NPC is also within radius (or NPC gone)
+                    var escortNPC = LIFE.quests._findLiveGiverNPC(quest);
+                    var npcClose = true;
+                    if (escortNPC) {
+                        var endx = escortNPC.char.group.position.x - escortDest.x;
+                        var endz = escortNPC.char.group.position.z - escortDest.z;
+                        npcClose = Math.sqrt(endx * endx + endz * endz) < obj.radius + 5;
+                    }
+                    if (npcClose) {
+                        LIFE.quests._stopEscort(quest);
+                        obj.completed = true;
+                        quest.currentObj++;
+                        LIFE.quests._advanceObjective(quest);
+                    }
+                }
+            }
         }
     }
 
@@ -743,8 +963,8 @@ LIFE.quests.tryCompleteReturn = function(npc) {
         if (!quest._pendingReturn) continue;
         if (!quest.giver) continue;
 
-        // Match by name or type
-        if (npc.name === quest.giver.name || npc.type === quest.giver.type) {
+        // Match by unique ID (exact NPC), fallback to name
+        if ((quest.giver.uid && npc.uid === quest.giver.uid) || (!quest.giver.uid && npc.name === quest.giver.name)) {
             // Show reward dialogue
             var reward = quest.reward;
             var rewardParts = [];
@@ -814,7 +1034,6 @@ LIFE.quests._findNearestKillTarget = function(npcType, px, pz) {
 // ============================================================
 LIFE.quests.tryOfferQuest = function(npc) {
     if (!npc || LIFE.quests._offerTimer < LIFE.quests._offerCooldown) return false;
-    if (LIFE.quests.active.length >= 3) return false;
 
     // Check if this NPC has a pending return first
     if (LIFE.quests.tryCompleteReturn(npc)) return true;
@@ -872,6 +1091,9 @@ LIFE.quests.toggleLog = function() {
         document.exitPointerLock();
     } else {
         panel.style.display = 'none';
+        if (LIFE.state.gamePhase === 'playing') {
+            LIFE.lockCursor();
+        }
     }
 };
 
@@ -890,8 +1112,6 @@ LIFE.quests.refreshLogUI = function() {
         var typeClass = q.type === 'good' ? 'questGood' : q.type === 'bad' ? 'questBad' : 'questNeutral';
         var isActive = (i === LIFE.quests._activeQuestIndex);
         var timeLeft = Math.max(0, q.timeLimit - q._elapsed);
-        var timeMin = Math.floor(timeLeft / 60);
-        var timeSec = Math.floor(timeLeft % 60);
         var typeIcon = q.type === 'good' ? '&#9733; ' : q.type === 'bad' ? '&#9760; ' : '';
 
         html += '<div class="questEntry ' + typeClass + (isActive ? ' questActive' : '') + '" onclick="LIFE.quests.setActiveQuest(' + i + ')" style="cursor:pointer">';
@@ -931,7 +1151,7 @@ LIFE.quests.refreshLogUI = function() {
             html += '<div class="questObj objCurrent">&#9654; Talk to ' + (q.giver ? q.giver.name : 'quest giver') + ' (press T nearby)</div>';
         }
 
-        html += '<div class="questTime">Time left: ' + timeMin + ':' + (timeSec < 10 ? '0' : '') + timeSec + '</div>';
+        html += '<div class="questTime">Time left: ' + LIFE.quests._formatGameTime(timeLeft) + '</div>';
 
         var rewards = [];
         if (q.reward.money) rewards.push('$' + q.reward.money);
@@ -1007,10 +1227,9 @@ LIFE.quests.updateHUD = function() {
     }
 
     var timeLeft = Math.max(0, q.timeLimit - q._elapsed);
-    var timeMin = Math.floor(timeLeft / 60);
-    var timeSec = Math.floor(timeLeft % 60);
-    var timeStr = timeMin + ':' + (timeSec < 10 ? '0' : '') + timeSec;
-    var timeWarn = timeLeft < 60 ? ' style="color:#ef5350"' : '';
+    var timeStr = LIFE.quests._formatGameTime(timeLeft);
+    var hourUnit = LIFE.DAY_DURATION / 24;
+    var timeWarn = timeLeft < hourUnit * 3 ? ' style="color:#ef5350"' : '';
 
     var typeIcon = q.type === 'good' ? '&#9733;' : q.type === 'bad' ? '&#9760;' : '&#9679;';
 
@@ -1062,6 +1281,16 @@ LIFE.quests._create3DMarker = function() {
     LIFE.scene.add(group);
     LIFE.quests._marker3d = group;
     LIFE.quests._markerRing = ring;
+};
+
+LIFE.quests._formatGameTime = function(gameTimeUnits) {
+    var hourUnit = LIFE.DAY_DURATION / 24;
+    var totalHours = Math.floor(gameTimeUnits / hourUnit);
+    var days = Math.floor(totalHours / 24);
+    var hours = totalHours % 24;
+    if (days > 0) return days + 'd ' + hours + 'h';
+    if (hours > 0) return hours + 'h';
+    return '<1h';
 };
 
 LIFE.quests._updateCompassArrow = function() {
@@ -1143,6 +1372,10 @@ LIFE.quests._updateCompassArrow = function() {
 // RESET / YEAR ADVANCE
 // ============================================================
 LIFE.quests.reset = function() {
+    // Stop any active escorts before clearing
+    for (var ei = 0; ei < LIFE.quests.active.length; ei++) {
+        if (LIFE.quests.active[ei]._escortStarted) LIFE.quests._stopEscort(LIFE.quests.active[ei]);
+    }
     LIFE.quests.active = [];
     LIFE.quests.completed = [];
     LIFE.quests.failed = [];

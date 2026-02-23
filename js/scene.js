@@ -11,9 +11,9 @@ LIFE.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 LIFE.scene = new THREE.Scene();
 LIFE.scene.background = new THREE.Color(0x87ceeb);
-LIFE.scene.fog = new THREE.Fog(0x87ceeb, 50, 200);
+LIFE.scene.fog = new THREE.Fog(0x87ceeb, 80, 350);
 
-LIFE.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+LIFE.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 800);
 
 LIFE.ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 LIFE.scene.add(LIFE.ambientLight);
@@ -23,11 +23,11 @@ LIFE.dirLight.position.set(10, 20, 10);
 LIFE.dirLight.castShadow = true;
 LIFE.dirLight.shadow.mapSize.set(1024, 1024);
 LIFE.dirLight.shadow.camera.near = 0.5;
-LIFE.dirLight.shadow.camera.far = 120;
-LIFE.dirLight.shadow.camera.left = -50;
-LIFE.dirLight.shadow.camera.right = 50;
-LIFE.dirLight.shadow.camera.top = 50;
-LIFE.dirLight.shadow.camera.bottom = -50;
+LIFE.dirLight.shadow.camera.far = 180;
+LIFE.dirLight.shadow.camera.left = -60;
+LIFE.dirLight.shadow.camera.right = 60;
+LIFE.dirLight.shadow.camera.top = 60;
+LIFE.dirLight.shadow.camera.bottom = -60;
 LIFE.scene.add(LIFE.dirLight);
 LIFE.scene.add(LIFE.dirLight.target);
 
@@ -56,12 +56,14 @@ LIFE.addEnv = function(obj) {
     return obj;
 };
 
-LIFE.addCollider = function(x, z, w, d) {
+LIFE.addCollider = function(x, z, w, d, y, h) {
     LIFE.colliders.push({
         minX: x - w / 2,
         maxX: x + w / 2,
         minZ: z - d / 2,
-        maxZ: z + d / 2
+        maxZ: z + d / 2,
+        minY: (y !== undefined && h !== undefined) ? y - h / 2 : -999,
+        maxY: (y !== undefined && h !== undefined) ? y + h / 2 : 999
     });
 };
 
@@ -69,7 +71,11 @@ LIFE.addCollider = function(x, z, w, d) {
 LIFE.addSolid = function(w, h, d, color, x, y, z) {
     var box = LIFE.makeBox(w, h, d, color, x, y, z);
     LIFE.addEnv(box);
-    LIFE.addCollider(x, z, w, d);
+    LIFE.addCollider(x, z, w, d, y, h);
+    // Physics static body
+    if (LIFE.physics && LIFE.physics.addStaticBox) {
+        LIFE.physics.addStaticBox(w, h, d, x, y, z);
+    }
     return box;
 };
 
@@ -90,7 +96,11 @@ LIFE.makeTree = function(x, z, scale) {
     leaves.position.set(x, 2.2 * scale, z);
     leaves.castShadow = true;
     g.add(leaves);
-    LIFE.addCollider(x, z, 0.5 * scale, 0.5 * scale);
+    LIFE.addCollider(x, z, 0.5 * scale, 0.5 * scale, scale, 2 * scale);
+    // Physics static body for trunk
+    if (LIFE.physics && LIFE.physics.addStaticCylinder) {
+        LIFE.physics.addStaticCylinder(0.2 * scale, 2 * scale, x, scale, z);
+    }
     return LIFE.addEnv(g);
 };
 
@@ -113,7 +123,11 @@ LIFE.makeBuilding = function(x, z, w, h, d, color, roofColor) {
             g.add(win2);
         }
     }
-    LIFE.addCollider(x, z, w, d);
+    LIFE.addCollider(x, z, w, d, h / 2, h);
+    // Physics static body for building
+    if (LIFE.physics && LIFE.physics.addStaticBox) {
+        LIFE.physics.addStaticBox(w, h, d, x, h / 2, z);
+    }
     return LIFE.addEnv(g);
 };
 
@@ -141,4 +155,8 @@ LIFE.clearEnvironment = function() {
     // Clear dropped items and world items
     if (LIFE.clearDroppedItems) LIFE.clearDroppedItems();
     if (LIFE.clearWorldItems) LIFE.clearWorldItems();
+    // Clear containers (for interior stages)
+    if (LIFE.clearContainers) LIFE.clearContainers();
+    // Clear physics static bodies
+    if (LIFE.physics && LIFE.physics.clearStatic) LIFE.physics.clearStatic();
 };

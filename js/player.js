@@ -11,6 +11,8 @@ LIFE.createPlayer = function() {
     LIFE.player = LIFE.createCharacter(h, 0xffdbac, clothesColor, true, { female: isFemale });
     LIFE.player.group.position.set(0, 0, 0);
     LIFE.scene.add(LIFE.player.group);
+    // Create capsule physics body matching player height
+    LIFE.physics.createPlayerBody(h, 0, 0, 0);
 };
 
 LIFE.updatePlayerSize = function() {
@@ -30,6 +32,25 @@ LIFE.updatePlayerSize = function() {
         LIFE._weaponMesh = null;
         LIFE._currentWeaponType = null;
         if (LIFE.updateHeldWeapon) LIFE.updateHeldWeapon();
+        // Recreate capsule physics body with new height
+        LIFE.physics.createPlayerBody(h, pos.x, pos.y, pos.z);
+    }
+};
+
+// Teleport player to a new position (sets both mesh and physics body)
+LIFE.teleportPlayer = function(x, y, z) {
+    if (LIFE.player) LIFE.player.group.position.set(x, y, z);
+    if (LIFE.physics._playerBody) {
+        var halfH = LIFE.physics._playerHalfH || 0.4;
+        LIFE.physics._playerBody.position.set(x, y + halfH, z);
+        LIFE.physics._playerBody.velocity.set(0, 0, 0);
+        // Sync interpolation positions so there's no one-frame snap
+        LIFE.physics._prevPlayerPos.x = x;
+        LIFE.physics._prevPlayerPos.y = y + halfH;
+        LIFE.physics._prevPlayerPos.z = z;
+        LIFE.physics._currPlayerPos.x = x;
+        LIFE.physics._currPlayerPos.y = y + halfH;
+        LIFE.physics._currPlayerPos.z = z;
     }
 };
 
@@ -59,15 +80,22 @@ LIFE.damagePlayer = function(amount, source) {
 };
 
 // ============================================================
-// COLLISION RESOLUTION
+// COLLISION RESOLUTION (used by NPCs, cars — player uses physics)
 // ============================================================
-LIFE.resolveCollisions = function(pos) {
+LIFE.resolveCollisions = function(pos, bodyHeight) {
     var radius = 0.3;
+    var bh = bodyHeight || 1.5;
     var colliders = (LIFE.world.built && !LIFE.world.insideInterior)
         ? LIFE.world.getActiveColliders()
         : LIFE.colliders;
     for (var i = 0; i < colliders.length; i++) {
         var c = colliders[i];
+        // 3D Y-aware check: skip if no vertical overlap
+        var cMinY = (c.minY !== undefined) ? c.minY : -999;
+        var cMaxY = (c.maxY !== undefined) ? c.maxY : 999;
+        if (pos.y >= cMaxY - 0.05) continue;
+        if (pos.y + bh <= cMinY) continue;
+
         var closestX = Math.max(c.minX, Math.min(pos.x, c.maxX));
         var closestZ = Math.max(c.minZ, Math.min(pos.z, c.maxZ));
         var dx = pos.x - closestX;
@@ -93,19 +121,41 @@ LIFE.resolveCollisions = function(pos) {
 };
 
 // ============================================================
-// PLAYER UPDATE
+// PLAYER UPDATE (physics-based movement)
 // ============================================================
 LIFE.updatePlayer = function(dt) {
     var state = LIFE.state;
     var player = LIFE.player;
     if (!player || state.gamePhase === 'death' || state.gamePhase === 'womb') return;
-    if ((LIFE.dialogue.active && LIFE.dialogue.blocking) || state.shopOpen || state.friendsOpen) return;
+
+    // Freeze physics body during UI interactions (dialogue, shop, friends list, containers)
+    if ((LIFE.dialogue.active && LIFE.dialogue.blocking) || state.shopOpen || state.friendsOpen || LIFE._containerOpen) {
+        if (LIFE.physics._playerBody) {
+            LIFE.physics._playerBody.velocity.set(0, 0, 0);
+        }
+        return;
+    }
 
     // Driving mode - delegate to car update
     if (state.inCar) {
         LIFE.updateCarDriving(dt);
         return;
     }
+
+    var body = LIFE.physics._playerBody;
+    if (!body) return;
+    var halfH = LIFE.physics._playerHalfH || 0.4;
+
+    // Hard floor clamp: body center can never go below halfH (feet at y=0)
+    if (body.position.y < halfH) {
+        body.position.y = halfH;
+        if (body.velocity.y < 0) body.velocity.y = 0;
+    }
+
+    // Ground detection via raycast (start just below capsule bottom to avoid self-hit)
+    var feetY = body.position.y - halfH;
+    var groundY = LIFE.physics.raycastGround(body.position.x, feetY - 0.05, body.position.z);
+    state.isGrounded = (feetY - groundY) < 0.15;
 
     var speed = LIFE.getSpeedForAge(state.age, state.yearTimer);
 
@@ -126,12 +176,10 @@ LIFE.updatePlayer = function(dt) {
             var mp = mom.char.group.position;
             var mh = mom.char.height || 1.2;
             var mRot = mom.char.group.rotation.y;
-            // position baby in Mom's arms (offset to front-left of body)
             var offsetX = Math.sin(mRot) * 0.15 - Math.cos(mRot) * 0.2;
             var offsetZ = Math.cos(mRot) * 0.15 + Math.sin(mRot) * 0.2;
             player.group.position.set(mp.x + offsetX, mh * 0.45, mp.z + offsetZ);
             player.group.rotation.y = mRot;
-            // Mom cradle arms - fold inward like holding a baby
             if (mom.char.parts.leftArm) {
                 mom.char.parts.leftArm.rotation.x = -1.2;
                 mom.char.parts.leftArm.rotation.z = 0.5;
@@ -141,13 +189,13 @@ LIFE.updatePlayer = function(dt) {
                 mom.char.parts.rightArm.rotation.z = -0.5;
             }
         }
-        // stop being held once age advances past 0
         return;
     }
     if (state.heldByParent && state.age > 0) {
         state.heldByParent = false;
-        player.group.position.y = 0;
-        // reset Mom's arms
+        body.position.set(player.group.position.x, halfH, player.group.position.z);
+        body.velocity.set(0, 0, 0);
+        state.isGrounded = true;
         for (var ni2 = 0; ni2 < LIFE.npcs.length; ni2++) {
             if (LIFE.npcs[ni2].type === 'Mom' && LIFE.npcs[ni2].alive) {
                 LIFE.npcs[ni2].char.parts.leftArm.rotation.set(0, 0, 0);
@@ -185,35 +233,43 @@ LIFE.updatePlayer = function(dt) {
 
     if (isMoving) {
         var len = Math.sqrt(dx * dx + dz * dz);
-        player.group.position.x += (dx / len) * speed * dt;
-        player.group.position.z += (dz / len) * speed * dt;
+        body.velocity.x = (dx / len) * speed;
+        body.velocity.z = (dz / len) * speed;
         player.group.rotation.y = Math.atan2(dx, dz);
         LIFE.sounds.footstep();
+    } else {
+        // Stop horizontal movement immediately
+        body.velocity.x = 0;
+        body.velocity.z = 0;
     }
 
+    // Jump
     if (LIFE.keys['Space'] && state.isGrounded && state.age >= 3 && !isNewborn && !LIFE.dialogue.active) {
-        state.playerVelY = 7; state.isGrounded = false; LIFE.sounds.jump();
+        body.velocity.y = 7;
+        state.isGrounded = false;
+        LIFE.sounds.jump();
     }
 
-    if (!state.isGrounded) {
-        state.playerVelY += LIFE.GRAVITY * dt;
-        player.group.position.y += state.playerVelY * dt;
-        if (player.group.position.y <= 0) { player.group.position.y = 0; state.playerVelY = 0; state.isGrounded = true; }
-    }
-
-    // Only clamp to bounds when NOT in open world, or when inside an interior
+    // Bounds clamp for interiors
     if (!LIFE.world.built || LIFE.world.insideInterior) {
         var b = state.bounds;
-        // Clamp around the interior's world position (not always 0,0)
         var cx = 0, cz = 0;
         if (LIFE.world.built && LIFE.world.insideInterior && LIFE.world.INTERIOR_POSITIONS) {
             var ipos = LIFE.world.INTERIOR_POSITIONS[LIFE.world.insideInterior];
             if (ipos) { cx = ipos.x; cz = ipos.z; }
         }
-        player.group.position.x = Math.max(cx - b, Math.min(cx + b, player.group.position.x));
-        player.group.position.z = Math.max(cz - b, Math.min(cz + b, player.group.position.z));
+        body.position.x = Math.max(cx - b, Math.min(cx + b, body.position.x));
+        body.position.z = Math.max(cz - b, Math.min(cz + b, body.position.z));
     }
-    LIFE.resolveCollisions(player.group.position);
+
+    // Unity-style interpolation: lerp between previous and current physics positions
+    var prev = LIFE.physics._prevPlayerPos;
+    var curr = LIFE.physics._currPlayerPos;
+    var t = LIFE.physics._interpFactor;
+    var renderX = prev.x + (curr.x - prev.x) * t;
+    var renderY = prev.y + (curr.y - prev.y) * t - halfH; // subtract halfH for feet
+    var renderZ = prev.z + (curr.z - prev.z) * t;
+    player.group.position.set(renderX, renderY, renderZ);
 
     // walk animation
     var animSpeed = sprinting ? 2.2 : (isCrawling ? 2 : 1.5);
@@ -275,17 +331,9 @@ LIFE.updateCamera = function() {
     var camDist, camHeight, shoulderOffset, lerpSpeed;
 
     if (state.inCar && LIFE.car.model) {
-        // Driving camera - behind and above car
-        camDist = 8;
-        camHeight = 4;
-        shoulderOffset = 0;
-        lerpSpeed = 0.12;
+        camDist = 8; camHeight = 4; shoulderOffset = 0; lerpSpeed = 0.1;
     } else if (inCombatMode) {
-        // over-the-shoulder shooter view (above and behind)
-        camDist = 2.5;
-        camHeight = h + 0.4;
-        shoulderOffset = 0.6;
-        lerpSpeed = 0.18;
+        camDist = 2.5; camHeight = h + 0.4; shoulderOffset = 0.6; lerpSpeed = 0.15;
     } else if (state.age < 1) {
         camDist = 1.8; camHeight = 1.0; shoulderOffset = 0; lerpSpeed = 0.1;
     } else if (state.age < 2) {
@@ -298,8 +346,6 @@ LIFE.updateCamera = function() {
 
     var sinR = Math.sin(state.playerRotY);
     var cosR = Math.cos(state.playerRotY);
-
-    // perpendicular vector for shoulder offset
     var rightX = cosR;
     var rightZ = -sinR;
 
@@ -312,12 +358,13 @@ LIFE.updateCamera = function() {
         tY = player.group.position.y + camHeight * state.cameraPitch;
     }
 
+    // Per-frame lerp camera position
     LIFE.camera.position.x += (tX - LIFE.camera.position.x) * lerpSpeed;
     LIFE.camera.position.y += (tY - LIFE.camera.position.y) * lerpSpeed;
     LIFE.camera.position.z += (tZ - LIFE.camera.position.z) * lerpSpeed;
 
+    // Instant lookAt — no smoothing
     if (state.inCar && LIFE.car.model) {
-        // Look at the car, slightly ahead
         var carRot = LIFE.car.model.rotation.y;
         LIFE.camera.lookAt(
             LIFE.car.model.position.x + Math.sin(carRot) * 5,
@@ -325,18 +372,15 @@ LIFE.updateCamera = function() {
             LIFE.car.model.position.z + Math.cos(carRot) * 5
         );
     } else if (inCombatMode) {
-        // look ahead of the player, not at them
-        var lookAhead = 10;
         LIFE.camera.lookAt(
-            player.group.position.x + sinR * lookAhead + rightX * shoulderOffset * 0.3,
+            player.group.position.x + sinR * 10 + rightX * shoulderOffset * 0.3,
             player.group.position.y + h * 0.75,
-            player.group.position.z + cosR * lookAhead + rightZ * shoulderOffset * 0.3
+            player.group.position.z + cosR * 10 + rightZ * shoulderOffset * 0.3
         );
     } else {
-        var lookY = player.group.position.y + h * 0.6;
         LIFE.camera.lookAt(
             player.group.position.x + rightX * shoulderOffset * 0.3,
-            lookY,
+            player.group.position.y + h * 0.6,
             player.group.position.z + rightZ * shoulderOffset * 0.3
         );
     }

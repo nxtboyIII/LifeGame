@@ -16,7 +16,11 @@
       "Bash(node:*)",
       "WebSearch",
       "WebFetch(domain:elevenlabs.io)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "WebFetch(domain:www.jsdelivr.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:cdnjs.cloudflare.com)",
+      "WebFetch(domain:cdn.jsdelivr.net)"
     ]
   }
 }

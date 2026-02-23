@@ -2,6 +2,25 @@
 // NPC SYSTEM
 // ============================================================
 LIFE.npcs = [];
+LIFE._npcNextUid = 1;
+
+// Remove physics body for a single NPC
+LIFE.removeNPCPhysics = function(npc) {
+    if (!npc || !npc._physEntry) return;
+    var idx = LIFE.physics.kinematicBodies.indexOf(npc._physEntry);
+    if (idx >= 0) LIFE.physics.kinematicBodies.splice(idx, 1);
+    if (npc._physEntry.body) LIFE.physics.removeBody(npc._physEntry.body);
+    npc._physEntry = null;
+    npc._physBody = null;
+};
+
+// Remove physics bodies for all NPCs in the npcs array
+LIFE.clearNPCPhysics = function(npcList) {
+    if (!npcList) npcList = LIFE.npcs;
+    for (var i = 0; i < npcList.length; i++) {
+        LIFE.removeNPCPhysics(npcList[i]);
+    }
+};
 
 // Get all NPCs including persistent police (so police are interactable like any NPC)
 LIFE.getAllNPCs = function() {
@@ -59,6 +78,28 @@ LIFE.getNPCChatMessage = function(npc) {
     var state = LIFE.state;
     var rel = state.relationships[npc.name];
     var relLevel = rel ? rel.level : 0;
+
+    // Gang NPC chat messages
+    if (npc.isGangMember && npc.gangId) {
+        var gangDef = LIFE.GANGS[npc.gangId];
+        if (state.gang === npc.gangId) {
+            // Same gang: friendly
+            var friendlyGang = ["What's good, fam?", "We run these streets.", "Stay solid out here.",
+                "Heard you been putting in work.", "Respect.", "The family's got your back."];
+            return friendlyGang[Math.floor(Math.random() * friendlyGang.length)];
+        } else if (state.gang && state.gang !== npc.gangId) {
+            // Rival gang: hostile
+            var rivalGang = ["You don't belong here.", "Wrong colors, wrong turf.", "Better keep moving.",
+                "Your crew ain't welcome.", "Watch yourself."];
+            return rivalGang[Math.floor(Math.random() * rivalGang.length)];
+        } else {
+            // No gang: suspicious/recruiting
+            var suspGang = ["You look like you could use some direction.", "Interested in making money?",
+                "We're always looking for new blood.", "You got the look. Think about it.",
+                "Not everyone can run with us.", "...", "Move along."];
+            return suspGang[Math.floor(Math.random() * suspGang.length)];
+        }
+    }
 
     // contextual messages override
     if (state.wantedLevel > 0 && !npc.isPolice && npc.type !== 'Dealer') {
@@ -388,14 +429,20 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
     var gender = isFemale ? 'F' : 'M';
 
     var maxHp = isPolice ? 200 : 100;
-    return {
+
+    // Create kinematic physics body for NPC
+    var physRadius = Math.max(0.2, h * 0.25);
+    var physBody = LIFE.physics.createKinematicBody(physRadius, x, 0, z);
+
+    var npc = {
+        uid: LIFE._npcNextUid++,
         char: ch, type: type, name: individualName, gender: gender,
         fullName: fullName, lastName: lastName,
         displayName: displayName, _met: met, _labelColor: labelColor,
         npcAge: npcAge !== undefined ? npcAge : null,
         target: new THREE.Vector3(x + (Math.random()-0.5)*10, 0, z + (Math.random()-0.5)*10),
         waiting: false, waitTimer: Math.random()*3,
-        speed: isPolice ? 7 : (isHiring || isCarSalesman || isRealEstate || isVendor ? 0 : (isInmate ? 0.6
+        speed: isPolice ? 5.6 : (isHiring || isCarSalesman || isRealEstate || isVendor ? 0 : (isInmate ? 0.6
             : npcAge !== undefined ? (npcAge < 3 ? 0.5 : npcAge < 6 ? 1.0 : npcAge < 13 ? 1.5 : npcAge >= 70 ? 0.7 : 1.0 + Math.random() * 0.5)
             : isChild ? 1.5 : 1.0 + Math.random() * 0.5)),
         walkTime: Math.random()*10, reacting: 0,
@@ -411,8 +458,22 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
         isRealEstate: isRealEstate,
         isVendor: isVendor, vendorType: isVendor ? type : null,
         stayNear: (isHiring || isCarSalesman || isRealEstate || isVendor) ? new THREE.Vector3(x, 0, z) : null,
-        npcReputation: isPolice ? 80 : isDealer ? -60 : (Math.floor(Math.random() * 60) + 10) // 10-70 for normal NPCs
+        npcReputation: isPolice ? 80 : isDealer ? -60 : (Math.floor(Math.random() * 60) + 10), // 10-70 for normal NPCs
+        _physBody: physBody, _physRadius: physRadius
     };
+
+    // Register kinematic body with physics system
+    if (physBody) {
+        var physEntry = {
+            body: physBody,
+            radius: physRadius,
+            getPosition: function() { return npc.char.group.position; }
+        };
+        npc._physEntry = physEntry;
+        LIFE.physics.kinematicBodies.push(physEntry);
+    }
+
+    return npc;
 };
 
 // Mark an NPC as "met" and reveal their name on the nametag
@@ -422,6 +483,11 @@ LIFE.meetNPC = function(npc) {
     // Update display name to their real name
     npc.displayName = npc.name;
     LIFE.updateNPCNametag(npc);
+    // Sync to registry
+    if (npc._registryId) {
+        var reg = LIFE.findRegistryById(npc._registryId);
+        if (reg) reg.met = true;
+    }
 };
 
 // Redraw an NPC's nametag with current displayName
@@ -724,6 +790,8 @@ LIFE._createPhoneMesh = function() {
 // Start an NPC calling the police (with visible phone animation)
 LIFE.npcStartPhoneCall = function(npc, onComplete) {
     if (!npc || !npc.alive || npc._callingPolice) return;
+    // Can't call if recently attacked — need 15 seconds to recover
+    if (npc._lastAttackedTime && (Date.now() - npc._lastAttackedTime) < 15000) return;
     npc._callingPolice = true;
     npc._phoneCallTimer = 4 + Math.random() * 2; // 4-6 seconds to complete call
     npc._phoneCallCallback = onComplete || null;
@@ -825,6 +893,7 @@ LIFE.damageNPC = function(npc, amount) {
     npc.health = Math.max(0, npc.health - amount);
     LIFE.updateNPCHealthBar(npc);
     npc.reacting = 1.5;
+    npc._lastAttackedTime = Date.now();
     if (npc.health <= 0) LIFE.killNPC(npc);
 };
 
@@ -947,6 +1016,7 @@ LIFE.spawnNPCs = function(stage) {
     LIFE.npcs.forEach(function(n) {
         if (!n._isZoneNPC) {
             LIFE.scene.remove(n.char.group);
+            LIFE.removeNPCPhysics(n);
         }
     });
     LIFE.npcs = [];
@@ -1150,6 +1220,72 @@ LIFE.updateNPCs = function(dt) {
             npc.chatSprite.visible = false;
             return; // skip all movement/behavior
         }
+
+        // Escort behavior: follow player, skip normal movement
+        if (npc._escorting && player) {
+            var epos = npc.char.group.position;
+            var epdx = player.group.position.x - epos.x;
+            var epdz = player.group.position.z - epos.z;
+            var epDist = Math.sqrt(epdx * epdx + epdz * epdz);
+
+            if (epDist > 3) {
+                // Repath every ~1 second
+                npc._escortRepath = (npc._escortRepath || 0) - dt;
+                if (npc._escortRepath <= 0 || !npc._escortPath) {
+                    npc._escortPath = LIFE.pathfinding.findPath(epos.x, epos.z, player.group.position.x, player.group.position.z);
+                    npc._escortPathIdx = 0;
+                    npc._escortRepath = 1.0;
+                }
+
+                // Follow path waypoints
+                var espeed = Math.min(6, epDist * 1.2) * dt;
+                var emoved = false;
+                if (npc._escortPath && npc._escortPathIdx < npc._escortPath.length) {
+                    var ewp = npc._escortPath[npc._escortPathIdx];
+                    var ewdx = ewp.x - epos.x, ewdz = ewp.z - epos.z;
+                    var ewDist = Math.sqrt(ewdx * ewdx + ewdz * ewdz);
+                    if (ewDist < 1.5) {
+                        npc._escortPathIdx++;
+                    } else {
+                        epos.x += (ewdx / ewDist) * espeed;
+                        epos.z += (ewdz / ewDist) * espeed;
+                        npc.char.group.rotation.y = Math.atan2(ewdx, ewdz);
+                        emoved = true;
+                    }
+                } else {
+                    // Direct move toward player
+                    epos.x += (epdx / epDist) * espeed;
+                    epos.z += (epdz / epDist) * espeed;
+                    npc.char.group.rotation.y = Math.atan2(epdx, epdz);
+                    emoved = true;
+                }
+
+                if (emoved) {
+                    npc.walkTime += dt * 8;
+                    var eswing = Math.sin(npc.walkTime) * 0.5;
+                    npc.char.parts.leftLeg.rotation.x = eswing;
+                    npc.char.parts.rightLeg.rotation.x = -eswing;
+                    npc.char.parts.leftArm.rotation.x = -eswing * 0.5;
+                    npc.char.parts.rightArm.rotation.x = eswing * 0.5;
+                    LIFE.resolveCollisions(epos);
+                }
+            } else {
+                // Close to player: idle, face player
+                npc.char.group.rotation.y = Math.atan2(epdx, epdz);
+                npc.char.parts.leftLeg.rotation.x *= 0.9;
+                npc.char.parts.rightLeg.rotation.x *= 0.9;
+                npc.char.parts.leftArm.rotation.x *= 0.9;
+                npc.char.parts.rightArm.rotation.x *= 0.9;
+                npc._escortPath = null;
+            }
+
+            // Show ring
+            var isNearestE = (npc === nearestNPC);
+            npc.ringMat.opacity += ((isNearestE ? 0.6 : 0) - npc.ringMat.opacity) * 0.1;
+            if (isNearestE) npc.ring.rotation.z += dt * 2;
+            return; // skip all normal movement
+        }
+
         var isNearest = (npc === nearestNPC);
         npc.ringMat.opacity += ((isNearest ? 0.6 : 0) - npc.ringMat.opacity) * 0.1;
         if (isNearest) npc.ring.rotation.z += dt * 2;

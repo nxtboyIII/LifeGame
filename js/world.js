@@ -56,6 +56,8 @@ LIFE.world.beginZoneBuild = function(name) {
     LIFE.world._origAddEnv = LIFE.addEnv;
     LIFE.world._origAddCollider = LIFE.addCollider;
     LIFE.world._origClearEnv = LIFE.clearEnvironment;
+    LIFE.world._origAddStaticBox = LIFE.physics.addStaticBox;
+    LIFE.world._origAddStaticCylinder = LIFE.physics.addStaticCylinder;
 
     // Override addEnv -> add to zone group (NOT envObjects)
     LIFE.addEnv = function(obj) {
@@ -64,17 +66,30 @@ LIFE.world.beginZoneBuild = function(name) {
     };
 
     // Override addCollider -> offset to world space, store in zone
-    LIFE.addCollider = function(x, z, w, d) {
+    LIFE.addCollider = function(x, z, w, d, y, h) {
         zone.colliders.push({
             minX: (x + def.cx) - w / 2,
             maxX: (x + def.cx) + w / 2,
             minZ: (z + def.cz) - d / 2,
-            maxZ: (z + def.cz) + d / 2
+            maxZ: (z + def.cz) + d / 2,
+            minY: (y !== undefined && h !== undefined) ? y - h / 2 : -999,
+            maxY: (y !== undefined && h !== undefined) ? y + h / 2 : 999
         });
+    };
+
+    // Override physics body creation -> offset to world space
+    LIFE.physics.addStaticBox = function(w, h, d, x, y, z) {
+        return LIFE.world._origAddStaticBox.call(LIFE.physics, w, h, d, x + def.cx, y, z + def.cz);
+    };
+    LIFE.physics.addStaticCylinder = function(radius, height, x, y, z) {
+        return LIFE.world._origAddStaticCylinder.call(LIFE.physics, radius, height, x + def.cx, y, z + def.cz);
     };
 
     // Override clearEnvironment to no-op during zone build
     LIFE.clearEnvironment = function() {};
+
+    // Flag physics bodies as zone bodies (persistent)
+    LIFE.physics._buildingZone = true;
 
     LIFE.world._currentBuildZone = zone;
     LIFE.world._currentBuildName = name;
@@ -91,6 +106,9 @@ LIFE.world.endZoneBuild = function(name) {
     LIFE.addEnv = LIFE.world._origAddEnv;
     LIFE.addCollider = LIFE.world._origAddCollider;
     LIFE.clearEnvironment = LIFE.world._origClearEnv;
+    LIFE.physics.addStaticBox = LIFE.world._origAddStaticBox;
+    LIFE.physics.addStaticCylinder = LIFE.world._origAddStaticCylinder;
+    LIFE.physics._buildingZone = false;
 
     LIFE.world._currentBuildZone = null;
     LIFE.world._currentBuildName = null;
@@ -142,8 +160,8 @@ LIFE.world.buildWorld = function() {
     LIFE.world.built = true;
 
     // Set scene atmosphere for open world
-    LIFE.scene.fog.near = 50;
-    LIFE.scene.fog.far = 200;
+    LIFE.scene.fog.near = 80;
+    LIFE.scene.fog.far = 350;
 
     // Spawn parked car if player owns one
     if (LIFE.state.ownedCar) {
@@ -786,17 +804,28 @@ LIFE.world.enterInterior = function(name, door) {
     // Redirect addEnv/addCollider to use interior group with world offset
     var origAddEnv = LIFE.addEnv;
     var origAddCollider = LIFE.addCollider;
+    var origAddStaticBox = LIFE.physics.addStaticBox;
+    var origAddStaticCylinder = LIFE.physics.addStaticCylinder;
     LIFE.addEnv = function(obj) {
         interiorGroup.add(obj);
         return obj;
     };
-    LIFE.addCollider = function(x, z, w, d) {
+    LIFE.addCollider = function(x, z, w, d, y, h) {
         LIFE.colliders.push({
             minX: (x + pos.x) - w / 2,
             maxX: (x + pos.x) + w / 2,
             minZ: (z + pos.z) - d / 2,
-            maxZ: (z + pos.z) + d / 2
+            maxZ: (z + pos.z) + d / 2,
+            minY: (y !== undefined && h !== undefined) ? y - h / 2 : -999,
+            maxY: (y !== undefined && h !== undefined) ? y + h / 2 : 999
         });
+    };
+    // Override physics body creation -> offset to interior world position
+    LIFE.physics.addStaticBox = function(w, h, d, x, y, z) {
+        return origAddStaticBox.call(LIFE.physics, w, h, d, x + pos.x, y, z + pos.z);
+    };
+    LIFE.physics.addStaticCylinder = function(radius, height, x, y, z) {
+        return origAddStaticCylinder.call(LIFE.physics, radius, height, x + pos.x, y, z + pos.z);
     };
 
     var builders = {
@@ -816,6 +845,8 @@ LIFE.world.enterInterior = function(name, door) {
     // Restore original functions
     LIFE.addEnv = origAddEnv;
     LIFE.addCollider = origAddCollider;
+    LIFE.physics.addStaticBox = origAddStaticBox;
+    LIFE.physics.addStaticCylinder = origAddStaticCylinder;
 
     LIFE.world.insideInterior = name;
     LIFE.world._currentBuildingCareer = (name === 'workplace') ? LIFE.world._workplaceCareer : null;
@@ -828,9 +859,13 @@ LIFE.world.enterInterior = function(name, door) {
     LIFE.spawnNPCs(name);
     LIFE.world._interiorNPCOffset = null;
 
+    // Remove zone physics bodies from simulation so they don't block the interior
+    // (exterior building shells overlap with interior room space)
+    LIFE.physics.disableZoneBodies();
+
     LIFE.updatePlayerSize();
     // Position player at the interior's world position
-    LIFE.player.group.position.set(pos.x, 0, pos.z + 3);
+    LIFE.teleportPlayer(pos.x, 0, pos.z + 3);
 
     LIFE.ambientLight.intensity = 0.5;
     LIFE.dirLight.intensity = 0.8;
@@ -844,9 +879,13 @@ LIFE.world.exitInterior = function() {
     LIFE.npcs.forEach(function(n) {
         if (!n._isZoneNPC) {
             LIFE.scene.remove(n.char.group);
+            LIFE.removeNPCPhysics(n);
         }
     });
     LIFE.npcs = [];
+
+    // Clear interior physics static bodies
+    if (LIFE.physics) LIFE.physics.clearStatic();
 
     // Remove interior group (contains all interior meshes at world position)
     if (LIFE.world._interiorGroup) {
@@ -857,14 +896,17 @@ LIFE.world.exitInterior = function() {
     // Clear any remaining interior objects and colliders
     LIFE.clearEnvironment();
 
+    // Re-enable zone physics bodies
+    LIFE.physics.enableZoneBodies();
+
     // Restore world zones
     LIFE.world.showNearbyZones();
 
     // Restore open world atmosphere
     LIFE.scene.background.set(0x87ceeb);
     LIFE.scene.fog.color.set(0x87ceeb);
-    LIFE.scene.fog.near = 50;
-    LIFE.scene.fog.far = 200;
+    LIFE.scene.fog.near = 80;
+    LIFE.scene.fog.far = 350;
 
     LIFE.world.insideInterior = null;
     LIFE.world._currentBuildingCareer = null;
@@ -874,7 +916,7 @@ LIFE.world.exitInterior = function() {
 
     // Teleport player to saved position (door exit)
     if (LIFE.world._savedPlayerPos && LIFE.player) {
-        LIFE.player.group.position.set(
+        LIFE.teleportPlayer(
             LIFE.world._savedPlayerPos.x, 0,
             LIFE.world._savedPlayerPos.z
         );
@@ -961,11 +1003,11 @@ LIFE.world.updateCulling = function(dt) {
         var dz = pz - zone.center.z;
         var dist = Math.sqrt(dx * dx + dz * dz);
 
-        // Hysteresis: show < 120, hide > 140
+        // Hysteresis: show < 200, hide > 240
         if (zone.group.visible) {
-            if (dist > 140) zone.group.visible = false;
+            if (dist > 240) zone.group.visible = false;
         } else {
-            if (dist < 120) zone.group.visible = true;
+            if (dist < 200) zone.group.visible = true;
         }
 
         // Show/hide zone NPCs and handle sleep state
@@ -1015,7 +1057,12 @@ LIFE.world.updateCulling = function(dt) {
                     npc.char.group.rotation.x = 0;
                 }
 
-                npc.char.group.visible = zone.group.visible && npc.alive;
+                // Escorting NPCs always stay visible
+                if (npc._escorting) {
+                    npc.char.group.visible = npc.alive;
+                } else {
+                    npc.char.group.visible = zone.group.visible && npc.alive;
+                }
             }
         }
     }
@@ -1134,13 +1181,25 @@ LIFE.world.spawnZoneNPCs = function(zoneName) {
     var names = (LIFE.NPC_NAMES[zoneName] || []).slice();
     var state = LIFE.state;
 
-    // Dynamic family NPCs
+    // Dynamic family NPCs — skip dead family members via registry
     var familyZones = { city: true, retirement: true, home: true };
-    if (familyZones[zoneName] && state.married && state.age >= 20) names.push('Spouse');
+    if (familyZones[zoneName] && state.married && state.age >= 20) {
+        var spouseReg = LIFE.findRegistryByRole('Spouse');
+        if (!spouseReg || spouseReg.alive) names.push('Spouse');
+    }
     if (familyZones[zoneName] && state.hasKids) {
         var kidsToShow = Math.min(state.childCount || 1, 3);
         for (var ki = 0; ki < kidsToShow; ki++) {
             names.push('Your Child');
+        }
+    }
+
+    // Filter out dead family NPCs from the base names list
+    var familyRoles = { Mom: true, Dad: true, Sibling: true };
+    for (var fi = names.length - 1; fi >= 0; fi--) {
+        if (familyRoles[names[fi]]) {
+            var famReg = LIFE.findRegistryByRole(names[fi]);
+            if (famReg && !famReg.alive) names.splice(fi, 1);
         }
     }
 
@@ -1296,7 +1355,68 @@ LIFE.world.spawnZoneNPCs = function(zoneName) {
             npc._sleepPos = { x: x, z: z };
         }
 
+        // Register persistent NPC types in the NPC registry
+        var persistentTypes = { Kid: true, Student: true, Stranger: true, Neighbor: true };
+        if (persistentTypes[npcType]) {
+            // Check if there's a registry entry for this zone/name combo
+            var regEntry = null;
+            var zoneRegistry = LIFE.getRegistryForZone(zoneName);
+            for (var ri = 0; ri < zoneRegistry.length; ri++) {
+                if (zoneRegistry[ri].firstName === individualName && !zoneRegistry[ri]._spawned) {
+                    regEntry = zoneRegistry[ri];
+                    regEntry._spawned = true;
+                    break;
+                }
+            }
+            if (!regEntry) {
+                // Register this NPC
+                regEntry = LIFE.registerNPC({
+                    firstName: individualName,
+                    lastName: npc.lastName,
+                    gender: npcFemale ? 'F' : 'M',
+                    birthYear: state.age - (npcAge || 25),
+                    deathAge: 65 + Math.floor(Math.random() * 30),
+                    currentType: npcType,
+                    homeZone: zoneName,
+                    skinColor: (npc.char.parts && npc.char.parts.head) ? npc.char.parts.head.material.color.getHex() : 0xffdbac,
+                    clothesColor: (npc.char.parts && npc.char.parts.body) ? npc.char.parts.body.material.color.getHex() : 0x2196f3
+                });
+            }
+            npc._registryId = regEntry.rid;
+
+            // Gang affiliation for Strangers/Dealers in gang territory (~30% chance)
+            if ((npcType === 'Stranger' || npcType === 'Dealer') && !npc.isGangMember) {
+                for (var gid in LIFE.GANGS) {
+                    var gangDef = LIFE.GANGS[gid];
+                    if (gangDef.territory === zoneName && Math.random() < 0.3) {
+                        npc.gangId = gid;
+                        npc.isGangMember = true;
+                        regEntry.gang = gid;
+                        // Override clothes color to gang color
+                        if (npc.char.parts && npc.char.parts.body) {
+                            npc.char.parts.body.material.color.setHex(gangDef.clothesColor);
+                        }
+                        // Update nametag label color
+                        npc._labelColor = gangDef.labelColor;
+                        LIFE.updateNPCNametag(npc);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Family NPCs: store registry ID
+        if (LIFE.NPC_FAMILY_TITLE[npcType]) {
+            var famEntry = LIFE.findRegistryByRole(npcType);
+            if (famEntry) npc._registryId = famEntry.rid;
+        }
+
         zone.npcs.push(npc);
+    }
+
+    // Clear _spawned flags from registry
+    for (var si = 0; si < LIFE.npcRegistry.length; si++) {
+        LIFE.npcRegistry[si]._spawned = false;
     }
 
     // Spawn Hiring Manager NPCs near job buildings in city
@@ -1334,11 +1454,15 @@ LIFE.world.refreshNearbyNPCs = function() {
 
     for (var name in LIFE.world.zones) {
         var zone = LIFE.world.zones[name];
-        if (!zone.npcs || !zone.group.visible) continue;
-        // Include ALL NPCs from visible zones - zone culling already
-        // handles show/hide at 120/140 units, no extra distance check needed
+        if (!zone.npcs) continue;
         for (var i = 0; i < zone.npcs.length; i++) {
             var npc = zone.npcs[i];
+            // Always include escorting NPCs regardless of zone visibility
+            if (npc._escorting && npc.alive) {
+                result.push(npc);
+                continue;
+            }
+            if (!zone.group.visible) continue;
             // Only include visible NPCs (respects time-of-day hiding)
             if (npc.char && npc.char.group && npc.char.group.visible) {
                 result.push(npc);
@@ -1585,7 +1709,7 @@ LIFE.exitCar = function() {
     // Place player beside the car
     var exitOffsetX = Math.cos(carRot) * 2.5;
     var exitOffsetZ = -Math.sin(carRot) * 2.5;
-    LIFE.player.group.position.set(carPos.x + exitOffsetX, 0, carPos.z + exitOffsetZ);
+    LIFE.teleportPlayer(carPos.x + exitOffsetX, 0, carPos.z + exitOffsetZ);
     LIFE.player.group.visible = true;
     LIFE.player.group.rotation.y = carRot;
 
@@ -1724,7 +1848,7 @@ LIFE.updateCarDriving = function(dt) {
 
     // Update camera to follow car instead of player
     // The player position is synced to the car so the camera follows
-    LIFE.player.group.position.copy(carPos);
+    LIFE.teleportPlayer(carPos.x, carPos.y, carPos.z);
     LIFE.player.group.rotation.y = rot;
     // Player rot for camera (behind the car)
     state.playerRotY = rot;

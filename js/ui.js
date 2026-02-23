@@ -669,6 +669,8 @@ LIFE.ui.updateDateTime = function() {
 // ============================================================
 LIFE.ui.openTimeSkip = function() {
     if (LIFE.dialogue.active || LIFE.state.shopOpen || LIFE.state.friendsOpen || LIFE.state.timeSkipOpen) return;
+    // During baby phase, can only skip time once mom is holding you at home
+    if (LIFE.state.age < 1 && !LIFE.state.heldByParent) return;
     LIFE.state.timeSkipOpen = true;
     LIFE.unlockCursor();
 
@@ -1081,6 +1083,43 @@ LIFE.ui.openVendorShop = function(vendorType) {
         };
         items.appendChild(div);
     });
+
+    // Sell section — show inventory items with a value
+    var sellables = [];
+    for (var si = 0; si < LIFE.state.inventory.length; si++) {
+        var sName = LIFE.state.inventory[si];
+        var sData = LIFE.ITEM_DATA[sName];
+        if (sData && sData.value && sName !== 'Fists') sellables.push({ name: sName, idx: si, value: sData.value });
+    }
+    if (sellables.length > 0) {
+        var sellTitle = document.createElement('div');
+        sellTitle.className = 'shopItem';
+        sellTitle.style.textAlign = 'center';
+        sellTitle.style.color = '#ff9800';
+        sellTitle.style.borderColor = 'rgba(255,152,0,0.3)';
+        sellTitle.textContent = '--- SELL YOUR ITEMS ---';
+        items.appendChild(sellTitle);
+
+        sellables.forEach(function(s) {
+            var sdiv = document.createElement('div');
+            sdiv.className = 'shopItem';
+            sdiv.style.borderColor = 'rgba(255,152,0,0.2)';
+            sdiv.innerHTML = '<span class="shopName">' + s.name + '</span>' +
+                '<span class="shopStat" style="color:#ff9800">SELL</span>' +
+                '<span class="shopCost" style="color:#4caf50">+$' + s.value + '</span>';
+            sdiv.onclick = (function(sItem) {
+                return function() {
+                    if (LIFE.economy.sellItem(sItem.name)) {
+                        LIFE.sounds.money();
+                        LIFE.ui.showPopup('Sold ' + sItem.name + ' for $' + sItem.value, '#4caf50');
+                        LIFE.state.shopOpen = false;
+                        LIFE.ui.openVendorShop(vendorType); // refresh
+                    }
+                };
+            })(s);
+            items.appendChild(sdiv);
+        });
+    }
 
     var closeDiv = document.createElement('div');
     closeDiv.className = 'shopItem shopClose';
