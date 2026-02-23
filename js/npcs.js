@@ -373,13 +373,13 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
     if (isPolice) {
         var hat = new THREE.Mesh(
             new THREE.BoxGeometry(0.28, 0.08, 0.28),
-            new THREE.MeshPhongMaterial({ color: 0x0d47a1 })
+            LIFE.getMaterial({ color: 0x0d47a1 })
         );
         hat.position.y = h + 0.28;
         ch.group.add(hat);
         var brim = new THREE.Mesh(
             new THREE.BoxGeometry(0.35, 0.02, 0.35),
-            new THREE.MeshPhongMaterial({ color: 0x0d47a1 })
+            LIFE.getMaterial({ color: 0x0d47a1 })
         );
         brim.position.y = h + 0.24;
         ch.group.add(brim);
@@ -389,7 +389,7 @@ LIFE.createNPC = function(type, x, z, npcName, forceGender, opts) {
     if (isDealer) {
         var hood = new THREE.Mesh(
             new THREE.BoxGeometry(0.3, 0.18, 0.3),
-            new THREE.MeshPhongMaterial({ color: 0x212121 })
+            LIFE.getMaterial({ color: 0x212121 })
         );
         hood.position.y = h + 0.26;
         ch.group.add(hood);
@@ -827,7 +827,7 @@ LIFE._createPhoneMesh = function() {
     var phone = new THREE.Group();
     var body = new THREE.Mesh(
         new THREE.BoxGeometry(0.04, 0.08, 0.02),
-        new THREE.MeshPhongMaterial({ color: 0x111111 })
+        LIFE.getMaterial({ color: 0x111111 })
     );
     phone.add(body);
     // screen glow

@@ -60,10 +60,35 @@ LIFE.ui.$ = {
 
 LIFE.ui.repChangeTimer = 0;
 
+LIFE.ui._stageMessages = []; // { el, timer }
+
 LIFE.ui.showStageMessage = function(msg) {
-    LIFE.ui.$.stage.textContent = msg;
-    LIFE.ui.$.stage.classList.add('show');
-    LIFE.state.stageTextTimer = 3;
+    var container = LIFE.ui.$.stage;
+    var el = document.createElement('div');
+    el.className = 'stage-msg primary';
+    el.textContent = msg;
+
+    // Demote existing messages
+    for (var i = 0; i < LIFE.ui._stageMessages.length; i++) {
+        var m = LIFE.ui._stageMessages[i];
+        if (m.el.classList.contains('primary')) {
+            m.el.classList.remove('primary');
+            m.el.classList.add('secondary');
+        } else if (m.el.classList.contains('secondary')) {
+            m.el.classList.remove('secondary');
+            m.el.classList.add('fading');
+            m.timer = Math.min(m.timer, 0.5); // fade out fast
+        }
+    }
+
+    container.insertBefore(el, container.firstChild);
+    LIFE.ui._stageMessages.unshift({ el: el, timer: 3 });
+
+    // Cap at 3 messages max
+    while (LIFE.ui._stageMessages.length > 3) {
+        var old = LIFE.ui._stageMessages.pop();
+        if (old.el.parentNode) old.el.parentNode.removeChild(old.el);
+    }
 };
 
 LIFE.ui.showPopup = function(text, color) {
@@ -867,9 +892,19 @@ LIFE.ui.updateTimers = function(dt) {
         LIFE.state.popupTimer -= dt;
         if (LIFE.state.popupTimer <= 0) LIFE.ui.$.popup.classList.remove('show');
     }
-    if (LIFE.state.stageTextTimer > 0) {
-        LIFE.state.stageTextTimer -= dt;
-        if (LIFE.state.stageTextTimer <= 0) LIFE.ui.$.stage.classList.remove('show');
+    // Update stacking stage messages
+    for (var si = LIFE.ui._stageMessages.length - 1; si >= 0; si--) {
+        var sm = LIFE.ui._stageMessages[si];
+        sm.timer -= dt;
+        if (sm.timer <= 0) {
+            sm.el.classList.remove('primary', 'secondary');
+            sm.el.classList.add('fading');
+            // Remove from DOM after fade transition
+            if (sm.timer <= -0.5) {
+                if (sm.el.parentNode) sm.el.parentNode.removeChild(sm.el);
+                LIFE.ui._stageMessages.splice(si, 1);
+            }
+        }
     }
     if (LIFE.ui.repChangeTimer > 0) {
         LIFE.ui.repChangeTimer -= dt;

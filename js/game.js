@@ -477,13 +477,13 @@ LIFE.createPoliceCar = function() {
     group.add(barBase);
     var redLight = new THREE.Mesh(
         new THREE.BoxGeometry(0.25, 0.15, 0.25),
-        new THREE.MeshPhongMaterial({ color: 0xff1744, emissive: 0xff1744, emissiveIntensity: 0.8 })
+        LIFE.getMaterial({ color: 0xff1744, emissive: 0xff1744, emissiveIntensity: 0.8 })
     );
     redLight.position.set(-0.35, 1.38, -0.3);
     group.add(redLight);
     var blueLight = new THREE.Mesh(
         new THREE.BoxGeometry(0.25, 0.15, 0.25),
-        new THREE.MeshPhongMaterial({ color: 0x2979ff, emissive: 0x2979ff, emissiveIntensity: 0.8 })
+        LIFE.getMaterial({ color: 0x2979ff, emissive: 0x2979ff, emissiveIntensity: 0.8 })
     );
     blueLight.position.set(0.35, 1.38, -0.3);
     group.add(blueLight);
@@ -496,7 +496,7 @@ LIFE.createPoliceCar = function() {
 // Create a SWAT truck model (black armored, larger)
 LIFE.createSwatTruck = function() {
     var group = new THREE.Group();
-    var bodyMat = new THREE.MeshPhongMaterial({ color: 0x212121 });
+    var bodyMat = LIFE.getMaterial({ color: 0x212121 });
     // Larger armored body
     var body = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.4, 5.5), bodyMat);
     body.position.y = 0.8; body.castShadow = true; group.add(body);
@@ -504,11 +504,11 @@ LIFE.createSwatTruck = function() {
     var cabin = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.8, 2.5), bodyMat);
     cabin.position.set(0, 1.9, -0.8); cabin.castShadow = true; group.add(cabin);
     // Armored windshield (small slit)
-    var winMat = new THREE.MeshPhongMaterial({ color: 0x445566, emissive: 0x223344, emissiveIntensity: 0.3 });
+    var winMat = LIFE.getMaterial({ color: 0x445566, emissive: 0x223344, emissiveIntensity: 0.3 });
     var win = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.2, 0.05), winMat);
     win.position.set(0, 2.0, 0.46); group.add(win);
     // Wheels (6 wheels - 3 per side)
-    var wheelMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+    var wheelMat = LIFE.getMaterial({ color: 0x222222 });
     var wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 8);
     var positions = [[-1.2,0.4,1.8],[1.2,0.4,1.8],[-1.2,0.4,0],[1.2,0.4,0],[-1.2,0.4,-1.8],[1.2,0.4,-1.8]];
     for (var i = 0; i < 6; i++) {
@@ -531,10 +531,10 @@ LIFE.createSwatTruck = function() {
     group.add(label);
     // Red/blue lights
     var redLight = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.3),
-        new THREE.MeshPhongMaterial({ color: 0xff1744, emissive: 0xff1744, emissiveIntensity: 0.8 }));
+        LIFE.getMaterial({ color: 0xff1744, emissive: 0xff1744, emissiveIntensity: 0.8 }));
     redLight.position.set(-0.6, 2.35, -0.8); group.add(redLight);
     var blueLight = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.3),
-        new THREE.MeshPhongMaterial({ color: 0x2979ff, emissive: 0x2979ff, emissiveIntensity: 0.8 }));
+        LIFE.getMaterial({ color: 0x2979ff, emissive: 0x2979ff, emissiveIntensity: 0.8 }));
     blueLight.position.set(0.6, 2.35, -0.8); group.add(blueLight);
     group._redLight = redLight;
     group._blueLight = blueLight;
@@ -629,15 +629,15 @@ LIFE.dispatchSWAT = function() {
         npc.shootTimer = 0;
         npc.char.group.visible = false;
         // Darken SWAT gear color
-        if (npc.char.parts.body) npc.char.parts.body.material = new THREE.MeshPhongMaterial({ color: 0x111111 });
-        if (npc.char.parts.leftArm) npc.char.parts.leftArm.material = new THREE.MeshPhongMaterial({ color: 0x111111 });
-        if (npc.char.parts.rightArm) npc.char.parts.rightArm.material = new THREE.MeshPhongMaterial({ color: 0x111111 });
-        if (npc.char.parts.leftLeg) npc.char.parts.leftLeg.material = new THREE.MeshPhongMaterial({ color: 0x111111 });
-        if (npc.char.parts.rightLeg) npc.char.parts.rightLeg.material = new THREE.MeshPhongMaterial({ color: 0x111111 });
+        if (npc.char.parts.body) npc.char.parts.body.material = LIFE.getMaterial({ color: 0x111111 });
+        if (npc.char.parts.leftArm) npc.char.parts.leftArm.material = LIFE.getMaterial({ color: 0x111111 });
+        if (npc.char.parts.rightArm) npc.char.parts.rightArm.material = LIFE.getMaterial({ color: 0x111111 });
+        if (npc.char.parts.leftLeg) npc.char.parts.leftLeg.material = LIFE.getMaterial({ color: 0x111111 });
+        if (npc.char.parts.rightLeg) npc.char.parts.rightLeg.material = LIFE.getMaterial({ color: 0x111111 });
         // SWAT helmet
         var helmet = new THREE.Mesh(
             new THREE.BoxGeometry(0.3, 0.15, 0.3),
-            new THREE.MeshPhongMaterial({ color: 0x111111 })
+            LIFE.getMaterial({ color: 0x111111 })
         );
         helmet.position.y = (npc.char.height || 1.8) + 0.26;
         npc.char.group.add(helmet);
@@ -2034,25 +2034,25 @@ LIFE.createItemMesh = function(itemName) {
     switch (itemName) {
         case 'Apple':
             geo = new THREE.SphereGeometry(0.08, 8, 8);
-            mat = new THREE.MeshPhongMaterial({ color: 0xcc2222 });
+            mat = LIFE.getMaterial({ color: 0xcc2222 });
             var apple = new THREE.Mesh(geo, mat);
             group.add(apple);
             // Stem
             var stem = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.01, 0.01, 0.04, 4),
-                new THREE.MeshPhongMaterial({ color: 0x4a2f00 })
+                LIFE.getMaterial({ color: 0x4a2f00 })
             );
             stem.position.y = 0.09;
             group.add(stem);
             break;
         case 'Sandwich':
             // Two bread slices with filling
-            var bread = new THREE.MeshPhongMaterial({ color: 0xd4a054 });
+            var bread = LIFE.getMaterial({ color: 0xd4a054 });
             var top = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.12), bread);
             top.position.y = 0.035;
             group.add(top);
             var fill = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.10),
-                new THREE.MeshPhongMaterial({ color: 0x8bc34a }));
+                LIFE.getMaterial({ color: 0x8bc34a }));
             fill.position.y = 0.015;
             group.add(fill);
             var bot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.12), bread);
@@ -2063,29 +2063,29 @@ LIFE.createItemMesh = function(itemName) {
             // Cylinder can/cup
             var col = itemName === 'Energy Drink' ? 0x00e676 : 0x5d4037;
             geo = new THREE.CylinderGeometry(0.04, 0.04, 0.12, 8);
-            mat = new THREE.MeshPhongMaterial({ color: col });
+            mat = LIFE.getMaterial({ color: col });
             group.add(new THREE.Mesh(geo, mat));
             break;
         case 'Book':
         case 'Textbook':
             var bCol = itemName === 'Textbook' ? 0x1565c0 : 0x795548;
             geo = new THREE.BoxGeometry(0.12, 0.03, 0.16);
-            mat = new THREE.MeshPhongMaterial({ color: bCol });
+            mat = LIFE.getMaterial({ color: bCol });
             group.add(new THREE.Mesh(geo, mat));
             // Pages
             var pages = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.02, 0.14),
-                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+                LIFE.getMaterial({ color: 0xfafafa }));
             pages.position.y = -0.005;
             group.add(pages);
             break;
         case 'Laptop':
             // Base
             var base = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.015, 0.15),
-                new THREE.MeshPhongMaterial({ color: 0x424242 }));
+                LIFE.getMaterial({ color: 0x424242 }));
             group.add(base);
             // Screen half-open
             var screen = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.13, 0.008),
-                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+                LIFE.getMaterial({ color: 0x333333 }));
             screen.position.set(0, 0.065, -0.07);
             screen.rotation.x = -0.3;
             group.add(screen);
@@ -2098,7 +2098,7 @@ LIFE.createItemMesh = function(itemName) {
             break;
         case 'Phone':
             geo = new THREE.BoxGeometry(0.05, 0.01, 0.10);
-            mat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+            mat = LIFE.getMaterial({ color: 0x222222 });
             group.add(new THREE.Mesh(geo, mat));
             var scr = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.005, 0.08),
                 new THREE.MeshBasicMaterial({ color: 0x4fc3f7 }));
@@ -2107,34 +2107,34 @@ LIFE.createItemMesh = function(itemName) {
             break;
         case 'Wallet':
             geo = new THREE.BoxGeometry(0.10, 0.02, 0.08);
-            mat = new THREE.MeshPhongMaterial({ color: 0x5d4037 });
+            mat = LIFE.getMaterial({ color: 0x5d4037 });
             group.add(new THREE.Mesh(geo, mat));
             break;
         case 'Watch':
             // Band
             var band = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.01, 0.14),
-                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+                LIFE.getMaterial({ color: 0x333333 }));
             group.add(band);
             // Face
             var face = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.015, 12),
-                new THREE.MeshPhongMaterial({ color: 0xffd700, shininess: 100 }));
+                LIFE.getMaterial({ color: 0xffd700, shininess: 100 }));
             group.add(face);
             break;
         case 'Backpack':
             geo = new THREE.BoxGeometry(0.14, 0.18, 0.08);
-            mat = new THREE.MeshPhongMaterial({ color: 0x1976d2 });
+            mat = LIFE.getMaterial({ color: 0x1976d2 });
             var bp = new THREE.Mesh(geo, mat);
             bp.position.y = 0.09;
             group.add(bp);
             // Pocket
             var pocket = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.06, 0.03),
-                new THREE.MeshPhongMaterial({ color: 0x1565c0 }));
+                LIFE.getMaterial({ color: 0x1565c0 }));
             pocket.position.set(0, 0.03, 0.05);
             group.add(pocket);
             break;
         case 'Medkit':
             geo = new THREE.BoxGeometry(0.14, 0.06, 0.10);
-            mat = new THREE.MeshPhongMaterial({ color: 0xfafafa });
+            mat = LIFE.getMaterial({ color: 0xfafafa });
             group.add(new THREE.Mesh(geo, mat));
             // Red cross
             var crossH = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.005, 0.025),
@@ -2149,58 +2149,58 @@ LIFE.createItemMesh = function(itemName) {
         case 'Baseball Bat':
             // Long cylinder
             var bat = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.03, 0.5, 8),
-                new THREE.MeshPhongMaterial({ color: 0x8d6e43 }));
+                LIFE.getMaterial({ color: 0x8d6e43 }));
             bat.rotation.z = Math.PI / 2;
             group.add(bat);
             // Grip tape
             var grip = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.12, 8),
-                new THREE.MeshPhongMaterial({ color: 0x222222 }));
+                LIFE.getMaterial({ color: 0x222222 }));
             grip.rotation.z = Math.PI / 2;
             grip.position.x = -0.19;
             group.add(grip);
             break;
         case 'Crowbar':
             var bar = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.025, 0.025),
-                new THREE.MeshPhongMaterial({ color: 0x555555, shininess: 60 }));
+                LIFE.getMaterial({ color: 0x555555, shininess: 60 }));
             group.add(bar);
             // Hook end
             var hook = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.025, 0.025),
-                new THREE.MeshPhongMaterial({ color: 0x555555, shininess: 60 }));
+                LIFE.getMaterial({ color: 0x555555, shininess: 60 }));
             hook.position.set(0.22, 0.025, 0);
             group.add(hook);
             break;
         case 'Gold Ring':
             geo = new THREE.TorusGeometry(0.03, 0.008, 8, 16);
-            mat = new THREE.MeshPhongMaterial({ color: 0xffd700, shininess: 120 });
+            mat = LIFE.getMaterial({ color: 0xffd700, shininess: 120 });
             group.add(new THREE.Mesh(geo, mat));
             // Gem
             var gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.012, 0),
-                new THREE.MeshPhongMaterial({ color: 0x00e5ff, shininess: 100 }));
+                LIFE.getMaterial({ color: 0x00e5ff, shininess: 100 }));
             gem.position.y = 0.035;
             group.add(gem);
             break;
         case 'Sunglasses':
             // Frame
             var frame = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.01, 0.04),
-                new THREE.MeshPhongMaterial({ color: 0x222222 }));
+                LIFE.getMaterial({ color: 0x222222 }));
             group.add(frame);
             // Lenses
             var lensL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.005, 0.03),
-                new THREE.MeshPhongMaterial({ color: 0x111111, transparent: true, opacity: 0.7 }));
+                LIFE.getMaterial({ color: 0x111111, transparent: true, opacity: 0.7 }));
             lensL.position.set(-0.03, 0, 0);
             group.add(lensL);
             var lensR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.005, 0.03),
-                new THREE.MeshPhongMaterial({ color: 0x111111, transparent: true, opacity: 0.7 }));
+                LIFE.getMaterial({ color: 0x111111, transparent: true, opacity: 0.7 }));
             lensR.position.set(0.03, 0, 0);
             group.add(lensR);
             break;
         case 'Keys':
             // Key ring + key
             var ring = new THREE.Mesh(new THREE.TorusGeometry(0.025, 0.004, 8, 12),
-                new THREE.MeshPhongMaterial({ color: 0xaaaaaa, shininess: 80 }));
+                LIFE.getMaterial({ color: 0xaaaaaa, shininess: 80 }));
             group.add(ring);
             var key = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 0.005),
-                new THREE.MeshPhongMaterial({ color: 0xffc107 }));
+                LIFE.getMaterial({ color: 0xffc107 }));
             key.position.set(0.04, 0, 0);
             group.add(key);
             break;
@@ -2209,45 +2209,45 @@ LIFE.createItemMesh = function(itemName) {
             var shape = new THREE.Shape();
             shape.moveTo(0, 0); shape.lineTo(-0.06, -0.14); shape.lineTo(0.06, -0.14); shape.closePath();
             var extGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.015, bevelEnabled: false });
-            var pizza = new THREE.Mesh(extGeo, new THREE.MeshPhongMaterial({ color: 0xf4a830 }));
+            var pizza = new THREE.Mesh(extGeo, LIFE.getMaterial({ color: 0xf4a830 }));
             pizza.rotation.x = -Math.PI / 2;
             group.add(pizza);
             break;
         case 'Guitar':
             // Simple body + neck
             var body = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6),
-                new THREE.MeshPhongMaterial({ color: 0x8d6e43 }));
+                LIFE.getMaterial({ color: 0x8d6e43 }));
             body.scale.set(1, 0.3, 1.3);
             group.add(body);
             var neck = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.015, 0.25),
-                new THREE.MeshPhongMaterial({ color: 0x5d4037 }));
+                LIFE.getMaterial({ color: 0x5d4037 }));
             neck.position.z = -0.2;
             group.add(neck);
             break;
         case 'Headphones':
             // Band
             var hBand = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.01, 0.03),
-                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+                LIFE.getMaterial({ color: 0x333333 }));
             hBand.position.y = 0.04;
             group.add(hBand);
             // Ear cups
             var cupL = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 8),
-                new THREE.MeshPhongMaterial({ color: 0x444444 }));
+                LIFE.getMaterial({ color: 0x444444 }));
             cupL.position.set(-0.05, 0.02, 0);
             group.add(cupL);
             var cupR = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 8),
-                new THREE.MeshPhongMaterial({ color: 0x444444 }));
+                LIFE.getMaterial({ color: 0x444444 }));
             cupR.position.set(0.05, 0.02, 0);
             group.add(cupR);
             break;
         case 'Medicine':
             // Pill bottle
             geo = new THREE.CylinderGeometry(0.03, 0.03, 0.08, 8);
-            mat = new THREE.MeshPhongMaterial({ color: 0xff9800 });
+            mat = LIFE.getMaterial({ color: 0xff9800 });
             group.add(new THREE.Mesh(geo, mat));
             // Cap
             var cap = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.015, 8),
-                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+                LIFE.getMaterial({ color: 0xfafafa }));
             cap.position.y = 0.045;
             group.add(cap);
             break;
@@ -2255,75 +2255,75 @@ LIFE.createItemMesh = function(itemName) {
         case 'Hot Dog':
             // Bun
             var bun = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 0.05),
-                new THREE.MeshPhongMaterial({ color: 0xd4a054 }));
+                LIFE.getMaterial({ color: 0xd4a054 }));
             group.add(bun);
             // Sausage
             var sausage = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.15, 8),
-                new THREE.MeshPhongMaterial({ color: 0xc0392b }));
+                LIFE.getMaterial({ color: 0xc0392b }));
             sausage.rotation.z = Math.PI / 2;
             sausage.position.y = 0.015;
             group.add(sausage);
             // Mustard line
             var mustard = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.005, 0.008),
-                new THREE.MeshPhongMaterial({ color: 0xf1c40f }));
+                LIFE.getMaterial({ color: 0xf1c40f }));
             mustard.position.y = 0.03;
             group.add(mustard);
             break;
         case 'Smoothie':
             // Tall cup
             var sCup = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.14, 8),
-                new THREE.MeshPhongMaterial({ color: 0xfafafa, transparent: true, opacity: 0.6 }));
+                LIFE.getMaterial({ color: 0xfafafa, transparent: true, opacity: 0.6 }));
             group.add(sCup);
             // Liquid inside
             var sLiq = new THREE.Mesh(new THREE.CylinderGeometry(0.027, 0.032, 0.12, 8),
-                new THREE.MeshPhongMaterial({ color: 0xe91e63 }));
+                LIFE.getMaterial({ color: 0xe91e63 }));
             group.add(sLiq);
             // Straw
             var straw = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.18, 4),
-                new THREE.MeshPhongMaterial({ color: 0xffffff }));
+                LIFE.getMaterial({ color: 0xffffff }));
             straw.position.set(0.01, 0.02, 0);
             group.add(straw);
             break;
         case 'Full Meal':
             // Plate
             var plate = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.01, 12),
-                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+                LIFE.getMaterial({ color: 0xfafafa }));
             group.add(plate);
             // Meat
             var meat = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.025, 0.05),
-                new THREE.MeshPhongMaterial({ color: 0x8d6e43 }));
+                LIFE.getMaterial({ color: 0x8d6e43 }));
             meat.position.set(-0.02, 0.02, 0);
             group.add(meat);
             // Veggies
             var veg = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 6),
-                new THREE.MeshPhongMaterial({ color: 0x4caf50 }));
+                LIFE.getMaterial({ color: 0x4caf50 }));
             veg.position.set(0.04, 0.015, 0.02);
             group.add(veg);
             break;
         case 'Protein Shake':
             // Shaker bottle
             var shaker = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.13, 8),
-                new THREE.MeshPhongMaterial({ color: 0x222222 }));
+                LIFE.getMaterial({ color: 0x222222 }));
             group.add(shaker);
             // Lid
             var sLid = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.036, 0.02, 8),
-                new THREE.MeshPhongMaterial({ color: 0x4caf50 }));
+                LIFE.getMaterial({ color: 0x4caf50 }));
             sLid.position.y = 0.075;
             group.add(sLid);
             break;
         case 'Fancy Dinner':
             // Fancy plate with dome
             var fPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.012, 16),
-                new THREE.MeshPhongMaterial({ color: 0xfafafa, shininess: 80 }));
+                LIFE.getMaterial({ color: 0xfafafa, shininess: 80 }));
             group.add(fPlate);
             // Silver dome cloche
             var dome = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-                new THREE.MeshPhongMaterial({ color: 0xc0c0c0, shininess: 120 }));
+                LIFE.getMaterial({ color: 0xc0c0c0, shininess: 120 }));
             dome.position.y = 0.01;
             group.add(dome);
             // Handle on top
             var dHandle = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6),
-                new THREE.MeshPhongMaterial({ color: 0xc0c0c0, shininess: 120 }));
+                LIFE.getMaterial({ color: 0xc0c0c0, shininess: 120 }));
             dHandle.position.y = 0.09;
             group.add(dHandle);
             break;
@@ -2333,33 +2333,33 @@ LIFE.createItemMesh = function(itemName) {
         case 'Supplements':
             // Pill bottle (orange)
             var vBottle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.07, 8),
-                new THREE.MeshPhongMaterial({ color: 0xff9800 }));
+                LIFE.getMaterial({ color: 0xff9800 }));
             group.add(vBottle);
             var vCap = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.015, 8),
-                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+                LIFE.getMaterial({ color: 0xfafafa }));
             vCap.position.y = 0.04;
             group.add(vCap);
             break;
         case 'Cold Medicine':
             // Box
             var cmBox = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.10, 0.03),
-                new THREE.MeshPhongMaterial({ color: 0x2196f3 }));
+                LIFE.getMaterial({ color: 0x2196f3 }));
             group.add(cmBox);
             // Label stripe
             var cmLabel = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.005),
-                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+                LIFE.getMaterial({ color: 0xfafafa }));
             cmLabel.position.set(0, 0.01, 0.017);
             group.add(cmLabel);
             break;
         case 'Pain Killers':
             // Blister pack
             var pkPack = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.01, 0.05),
-                new THREE.MeshPhongMaterial({ color: 0xeeeeee }));
+                LIFE.getMaterial({ color: 0xeeeeee }));
             group.add(pkPack);
             // Pill bumps
             for (var pi = 0; pi < 6; pi++) {
                 var pill = new THREE.Mesh(new THREE.SphereGeometry(0.008, 6, 6),
-                    new THREE.MeshPhongMaterial({ color: 0xcccccc }));
+                    LIFE.getMaterial({ color: 0xcccccc }));
                 pill.position.set(-0.025 + (pi % 3) * 0.025, 0.008, -0.01 + Math.floor(pi / 3) * 0.02);
                 group.add(pill);
             }
@@ -2367,22 +2367,22 @@ LIFE.createItemMesh = function(itemName) {
         case 'Prescription':
             // Prescription bottle (amber)
             var rxBottle = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.09, 8),
-                new THREE.MeshPhongMaterial({ color: 0xd4770b, transparent: true, opacity: 0.8 }));
+                LIFE.getMaterial({ color: 0xd4770b, transparent: true, opacity: 0.8 }));
             group.add(rxBottle);
             var rxCap = new THREE.Mesh(new THREE.CylinderGeometry(0.027, 0.027, 0.015, 8),
-                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+                LIFE.getMaterial({ color: 0xfafafa }));
             rxCap.position.y = 0.05;
             group.add(rxCap);
             // Rx label
             var rxLabel = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.04, 0.03),
-                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+                LIFE.getMaterial({ color: 0xfafafa }));
             rxLabel.position.set(0.026, 0, 0);
             group.add(rxLabel);
             break;
         case 'First Aid Kit':
             // Same as Medkit
             var fak = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 0.10),
-                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+                LIFE.getMaterial({ color: 0xfafafa }));
             group.add(fak);
             var fakH = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.005, 0.025),
                 new THREE.MeshBasicMaterial({ color: 0xf44336 }));
@@ -2400,16 +2400,16 @@ LIFE.createItemMesh = function(itemName) {
             var shirtCol = itemName === 'Event T-Shirt' ? 0x9c27b0 : 0x2196f3;
             // Body
             var shirtBody = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.15, 0.02),
-                new THREE.MeshPhongMaterial({ color: shirtCol }));
+                LIFE.getMaterial({ color: shirtCol }));
             group.add(shirtBody);
             // Sleeves
             var sleeveL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.02),
-                new THREE.MeshPhongMaterial({ color: shirtCol }));
+                LIFE.getMaterial({ color: shirtCol }));
             sleeveL.position.set(-0.09, 0.04, 0);
             sleeveL.rotation.z = 0.3;
             group.add(sleeveL);
             var sleeveR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.02),
-                new THREE.MeshPhongMaterial({ color: shirtCol }));
+                LIFE.getMaterial({ color: shirtCol }));
             sleeveR.position.set(0.09, 0.04, 0);
             sleeveR.rotation.z = -0.3;
             group.add(sleeveR);
@@ -2419,74 +2419,74 @@ LIFE.createItemMesh = function(itemName) {
             var outfitCol = itemName === 'Designer Clothes' ? 0x1a1a2e : 0x5c6bc0;
             // Jacket shape
             var jacket = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 0.025),
-                new THREE.MeshPhongMaterial({ color: outfitCol }));
+                LIFE.getMaterial({ color: outfitCol }));
             group.add(jacket);
             // Collar
             var collar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.025, 0.03),
-                new THREE.MeshPhongMaterial({ color: outfitCol }));
+                LIFE.getMaterial({ color: outfitCol }));
             collar.position.y = 0.10;
             group.add(collar);
             // Button
             var btn = new THREE.Mesh(new THREE.SphereGeometry(0.006, 6, 6),
-                new THREE.MeshPhongMaterial({ color: 0xffd700 }));
+                LIFE.getMaterial({ color: 0xffd700 }));
             btn.position.set(0, 0.02, 0.014);
             group.add(btn);
             break;
         case 'Formal Suit':
             // Suit jacket
             var suitBody = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.20, 0.025),
-                new THREE.MeshPhongMaterial({ color: 0x1a1a2e }));
+                LIFE.getMaterial({ color: 0x1a1a2e }));
             group.add(suitBody);
             // Lapels
             var lapelL = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.10, 0.005),
-                new THREE.MeshPhongMaterial({ color: 0x111122 }));
+                LIFE.getMaterial({ color: 0x111122 }));
             lapelL.position.set(-0.04, 0.04, 0.014);
             lapelL.rotation.z = 0.15;
             group.add(lapelL);
             var lapelR = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.10, 0.005),
-                new THREE.MeshPhongMaterial({ color: 0x111122 }));
+                LIFE.getMaterial({ color: 0x111122 }));
             lapelR.position.set(0.04, 0.04, 0.014);
             lapelR.rotation.z = -0.15;
             group.add(lapelR);
             // Tie
             var tie = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.12, 0.005),
-                new THREE.MeshPhongMaterial({ color: 0xc62828 }));
+                LIFE.getMaterial({ color: 0xc62828 }));
             tie.position.set(0, -0.01, 0.014);
             group.add(tie);
             break;
         case 'Luxury Watch':
             // Fancy watch band
             var lwBand = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.01, 0.14),
-                new THREE.MeshPhongMaterial({ color: 0xffd700, shininess: 120 }));
+                LIFE.getMaterial({ color: 0xffd700, shininess: 120 }));
             group.add(lwBand);
             // Watch face
             var lwFace = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.018, 16),
-                new THREE.MeshPhongMaterial({ color: 0xffd700, shininess: 120 }));
+                LIFE.getMaterial({ color: 0xffd700, shininess: 120 }));
             group.add(lwFace);
             // Crystal face
             var lwCrystal = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.005, 16),
-                new THREE.MeshPhongMaterial({ color: 0x111133, shininess: 100 }));
+                LIFE.getMaterial({ color: 0x111133, shininess: 100 }));
             lwCrystal.position.y = 0.01;
             group.add(lwCrystal);
             break;
         case 'Designer Shoes':
             // Left shoe
             var shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.12),
-                new THREE.MeshPhongMaterial({ color: 0x222222 }));
+                LIFE.getMaterial({ color: 0x222222 }));
             shoeL.position.set(-0.035, 0, 0);
             group.add(shoeL);
             // Right shoe
             var shoeR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.12),
-                new THREE.MeshPhongMaterial({ color: 0x222222 }));
+                LIFE.getMaterial({ color: 0x222222 }));
             shoeR.position.set(0.035, 0, 0);
             group.add(shoeR);
             // Sole
             var soleL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.008, 0.12),
-                new THREE.MeshPhongMaterial({ color: 0xc62828 }));
+                LIFE.getMaterial({ color: 0xc62828 }));
             soleL.position.set(-0.035, -0.019, 0);
             group.add(soleL);
             var soleR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.008, 0.12),
-                new THREE.MeshPhongMaterial({ color: 0xc62828 }));
+                LIFE.getMaterial({ color: 0xc62828 }));
             soleR.position.set(0.035, -0.019, 0);
             group.add(soleR);
             break;
@@ -2495,30 +2495,30 @@ LIFE.createItemMesh = function(itemName) {
         case 'Comic Book':
             // Thin colorful booklet
             var comic = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.008, 0.14),
-                new THREE.MeshPhongMaterial({ color: 0xf44336 }));
+                LIFE.getMaterial({ color: 0xf44336 }));
             group.add(comic);
             // Cover art panel
             var comicArt = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.003, 0.09),
-                new THREE.MeshPhongMaterial({ color: 0xffeb3b }));
+                LIFE.getMaterial({ color: 0xffeb3b }));
             comicArt.position.y = 0.005;
             group.add(comicArt);
             break;
         case 'Novel':
             // Paperback
             var novel = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.025, 0.15),
-                new THREE.MeshPhongMaterial({ color: 0x6d4c41 }));
+                LIFE.getMaterial({ color: 0x6d4c41 }));
             group.add(novel);
             var nPages = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 0.13),
-                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+                LIFE.getMaterial({ color: 0xfafafa }));
             nPages.position.y = -0.003;
             group.add(nPages);
             break;
         case 'Self-Help Book':
             var shBook = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.025, 0.15),
-                new THREE.MeshPhongMaterial({ color: 0xff9800 }));
+                LIFE.getMaterial({ color: 0xff9800 }));
             group.add(shBook);
             var shPages = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.02, 0.13),
-                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+                LIFE.getMaterial({ color: 0xfafafa }));
             shPages.position.y = -0.003;
             group.add(shPages);
             break;
@@ -2527,7 +2527,7 @@ LIFE.createItemMesh = function(itemName) {
             for (var ei = 0; ei < 4; ei++) {
                 var encCol = [0x1565c0, 0xc62828, 0x2e7d32, 0x6a1b9a][ei];
                 var enc = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.025, 0.14),
-                    new THREE.MeshPhongMaterial({ color: encCol }));
+                    LIFE.getMaterial({ color: encCol }));
                 enc.position.y = ei * 0.028;
                 group.add(enc);
             }
@@ -2537,16 +2537,16 @@ LIFE.createItemMesh = function(itemName) {
         case 'Sports Equipment':
             // Dumbbell
             var dbBar = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.16, 6),
-                new THREE.MeshPhongMaterial({ color: 0x888888, shininess: 60 }));
+                LIFE.getMaterial({ color: 0x888888, shininess: 60 }));
             dbBar.rotation.z = Math.PI / 2;
             group.add(dbBar);
             var dbL = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.025, 8),
-                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+                LIFE.getMaterial({ color: 0x333333 }));
             dbL.rotation.z = Math.PI / 2;
             dbL.position.x = -0.07;
             group.add(dbL);
             var dbR = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.025, 8),
-                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+                LIFE.getMaterial({ color: 0x333333 }));
             dbR.rotation.z = Math.PI / 2;
             dbR.position.x = 0.07;
             group.add(dbR);
@@ -2556,23 +2556,23 @@ LIFE.createItemMesh = function(itemName) {
         case 'Concert Poster':
             // Rolled poster
             var poster = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.20, 8),
-                new THREE.MeshPhongMaterial({ color: 0xfafafa }));
+                LIFE.getMaterial({ color: 0xfafafa }));
             poster.rotation.z = Math.PI / 2;
             group.add(poster);
             // Colorful band
             var pBand = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.04, 8),
-                new THREE.MeshPhongMaterial({ color: 0xe91e63 }));
+                LIFE.getMaterial({ color: 0xe91e63 }));
             pBand.rotation.z = Math.PI / 2;
             group.add(pBand);
             break;
         case 'Signed Merch':
             // Box with star
             var mBox = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.10),
-                new THREE.MeshPhongMaterial({ color: 0x1a1a2e }));
+                LIFE.getMaterial({ color: 0x1a1a2e }));
             group.add(mBox);
             // Gold star
             var star = new THREE.Mesh(new THREE.OctahedronGeometry(0.025, 0),
-                new THREE.MeshPhongMaterial({ color: 0xffd700, shininess: 100 }));
+                LIFE.getMaterial({ color: 0xffd700, shininess: 100 }));
             star.position.set(0, 0.04, 0.052);
             group.add(star);
             break;
@@ -2581,11 +2581,11 @@ LIFE.createItemMesh = function(itemName) {
         case 'Phone Case':
             // Phone-shaped case
             var pcCase = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.012, 0.11),
-                new THREE.MeshPhongMaterial({ color: 0x00bcd4 }));
+                LIFE.getMaterial({ color: 0x00bcd4 }));
             group.add(pcCase);
             // Camera cutout
             var camHole = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.005, 8),
-                new THREE.MeshPhongMaterial({ color: 0x111111 }));
+                LIFE.getMaterial({ color: 0x111111 }));
             camHole.rotation.x = Math.PI / 2;
             camHole.position.set(0, 0.005, -0.04);
             group.add(camHole);
@@ -2593,7 +2593,7 @@ LIFE.createItemMesh = function(itemName) {
         case 'Tablet':
             // Flat rectangle screen
             var tabBody = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.008, 0.19),
-                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+                LIFE.getMaterial({ color: 0x333333 }));
             group.add(tabBody);
             var tabScr = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.003, 0.16),
                 new THREE.MeshBasicMaterial({ color: 0x42a5f5 }));
@@ -2603,11 +2603,11 @@ LIFE.createItemMesh = function(itemName) {
         case 'Gaming Console':
             // Console body
             var conBody = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.04, 0.12),
-                new THREE.MeshPhongMaterial({ color: 0x111111 }));
+                LIFE.getMaterial({ color: 0x111111 }));
             group.add(conBody);
             // Disk slot line
             var conSlot = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.003, 0.002),
-                new THREE.MeshPhongMaterial({ color: 0x444444 }));
+                LIFE.getMaterial({ color: 0x444444 }));
             conSlot.position.set(0, 0.021, 0.04);
             group.add(conSlot);
             // Power light
@@ -2619,7 +2619,7 @@ LIFE.createItemMesh = function(itemName) {
         case 'Smartphone':
             // Like Phone but slightly bigger/nicer
             var spBody = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.008, 0.11),
-                new THREE.MeshPhongMaterial({ color: 0x1a1a2e }));
+                LIFE.getMaterial({ color: 0x1a1a2e }));
             group.add(spBody);
             var spScr = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.003, 0.095),
                 new THREE.MeshBasicMaterial({ color: 0x64b5f6 }));
@@ -2627,7 +2627,7 @@ LIFE.createItemMesh = function(itemName) {
             group.add(spScr);
             // Camera bump
             var spCam = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.004, 8),
-                new THREE.MeshPhongMaterial({ color: 0x333333 }));
+                LIFE.getMaterial({ color: 0x333333 }));
             spCam.rotation.x = Math.PI / 2;
             spCam.position.set(0.01, -0.005, -0.04);
             group.add(spCam);
@@ -2636,7 +2636,7 @@ LIFE.createItemMesh = function(itemName) {
         default:
             // Generic box for unknown items
             geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-            mat = new THREE.MeshPhongMaterial({ color: 0x888888 });
+            mat = LIFE.getMaterial({ color: 0x888888 });
             group.add(new THREE.Mesh(geo, mat));
             break;
     }
@@ -3149,7 +3149,7 @@ LIFE._invSetPreviewItem = function(itemName) {
     if (!itemName || itemName === 'Fists') {
         // Show a fist (simple sphere)
         var fistGeo = new THREE.SphereGeometry(0.15, 12, 12);
-        var fistMat = new THREE.MeshPhongMaterial({ color: 0xd4a574 });
+        var fistMat = LIFE.getMaterial({ color: 0xd4a574 });
         var fist = new THREE.Mesh(fistGeo, fistMat);
         LIFE._invPreviewMesh = fist;
         LIFE._invPreviewScene.add(fist);
@@ -3222,14 +3222,14 @@ LIFE.createWeaponMesh = function(type, playerHeight) {
         // Blade: thin flat rectangle
         var blade = new THREE.Mesh(
             new THREE.BoxGeometry(0.02, h * 0.12, 0.04),
-            new THREE.MeshPhongMaterial({ color: 0xcccccc, shininess: 80 })
+            LIFE.getMaterial({ color: 0xcccccc, shininess: 80 })
         );
         blade.position.y = -h * 0.06;
         group.add(blade);
         // Handle: small dark rectangle
         var handle = new THREE.Mesh(
             new THREE.BoxGeometry(0.03, h * 0.05, 0.05),
-            new THREE.MeshPhongMaterial({ color: 0x333333 })
+            LIFE.getMaterial({ color: 0x333333 })
         );
         handle.position.y = h * 0.025;
         group.add(handle);
@@ -3240,21 +3240,21 @@ LIFE.createWeaponMesh = function(type, playerHeight) {
         // Gun body: blocky rectangle
         var body = new THREE.Mesh(
             new THREE.BoxGeometry(0.035, 0.04, h * 0.1),
-            new THREE.MeshPhongMaterial({ color: 0x222222 })
+            LIFE.getMaterial({ color: 0x222222 })
         );
         body.position.z = h * 0.04;
         group.add(body);
         // Barrel: thin cylinder-ish box
         var barrel = new THREE.Mesh(
             new THREE.BoxGeometry(0.025, 0.025, h * 0.06),
-            new THREE.MeshPhongMaterial({ color: 0x111111 })
+            LIFE.getMaterial({ color: 0x111111 })
         );
         barrel.position.set(0, 0.01, h * 0.1);
         group.add(barrel);
         // Grip: angled handle
         var grip = new THREE.Mesh(
             new THREE.BoxGeometry(0.03, h * 0.05, 0.035),
-            new THREE.MeshPhongMaterial({ color: 0x333333 })
+            LIFE.getMaterial({ color: 0x333333 })
         );
         grip.position.set(0, -h * 0.02, h * 0.01);
         grip.rotation.x = 0.2;
@@ -3266,14 +3266,14 @@ LIFE.createWeaponMesh = function(type, playerHeight) {
         // Long wooden bat held in hand
         var bat = new THREE.Mesh(
             new THREE.CylinderGeometry(0.015, 0.03, h * 0.35, 8),
-            new THREE.MeshPhongMaterial({ color: 0x8d6e43 })
+            LIFE.getMaterial({ color: 0x8d6e43 })
         );
         bat.position.y = -h * 0.15;
         group.add(bat);
         // Grip tape
         var grip = new THREE.Mesh(
             new THREE.CylinderGeometry(0.018, 0.018, h * 0.08, 8),
-            new THREE.MeshPhongMaterial({ color: 0x222222 })
+            LIFE.getMaterial({ color: 0x222222 })
         );
         grip.position.y = h * 0.05;
         group.add(grip);
@@ -3282,14 +3282,14 @@ LIFE.createWeaponMesh = function(type, playerHeight) {
     } else if (type === 'Crowbar') {
         var bar = new THREE.Mesh(
             new THREE.BoxGeometry(0.025, h * 0.3, 0.025),
-            new THREE.MeshPhongMaterial({ color: 0x555555, shininess: 60 })
+            LIFE.getMaterial({ color: 0x555555, shininess: 60 })
         );
         bar.position.y = -h * 0.12;
         group.add(bar);
         // Hook end
         var hook = new THREE.Mesh(
             new THREE.BoxGeometry(0.025, 0.04, 0.025),
-            new THREE.MeshPhongMaterial({ color: 0x555555, shininess: 60 })
+            LIFE.getMaterial({ color: 0x555555, shininess: 60 })
         );
         hook.position.set(0, -h * 0.27, 0.02);
         group.add(hook);
@@ -3299,14 +3299,14 @@ LIFE.createWeaponMesh = function(type, playerHeight) {
         // Receiver body
         var akBody = new THREE.Mesh(
             new THREE.BoxGeometry(0.04, 0.05, h * 0.22),
-            new THREE.MeshPhongMaterial({ color: 0x333333 })
+            LIFE.getMaterial({ color: 0x333333 })
         );
         akBody.position.z = h * 0.06;
         group.add(akBody);
         // Barrel: long thin
         var akBarrel = new THREE.Mesh(
             new THREE.CylinderGeometry(0.012, 0.012, h * 0.18, 6),
-            new THREE.MeshPhongMaterial({ color: 0x222222 })
+            LIFE.getMaterial({ color: 0x222222 })
         );
         akBarrel.rotation.x = Math.PI / 2;
         akBarrel.position.set(0, 0.015, h * 0.26);
@@ -3314,21 +3314,21 @@ LIFE.createWeaponMesh = function(type, playerHeight) {
         // Wooden handguard
         var akGuard = new THREE.Mesh(
             new THREE.BoxGeometry(0.035, 0.04, h * 0.08),
-            new THREE.MeshPhongMaterial({ color: 0x8d6e43 })
+            LIFE.getMaterial({ color: 0x8d6e43 })
         );
         akGuard.position.set(0, -0.005, h * 0.14);
         group.add(akGuard);
         // Stock
         var akStock = new THREE.Mesh(
             new THREE.BoxGeometry(0.03, 0.04, h * 0.1),
-            new THREE.MeshPhongMaterial({ color: 0x8d6e43 })
+            LIFE.getMaterial({ color: 0x8d6e43 })
         );
         akStock.position.set(0, -0.01, -h * 0.04);
         group.add(akStock);
         // Magazine (curved)
         var akMag = new THREE.Mesh(
             new THREE.BoxGeometry(0.025, h * 0.08, 0.03),
-            new THREE.MeshPhongMaterial({ color: 0x2a2a2a })
+            LIFE.getMaterial({ color: 0x2a2a2a })
         );
         akMag.position.set(0, -h * 0.06, h * 0.04);
         akMag.rotation.x = 0.15;

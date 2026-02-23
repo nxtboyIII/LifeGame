@@ -102,6 +102,9 @@ LIFE.world.endZoneBuild = function(name) {
     LIFE.world.zones[name] = zone;
     LIFE.scene.add(zone.group);
 
+    // Merge static geometry in this zone to reduce draw calls
+    if (LIFE.mergeStaticGroup) LIFE.mergeStaticGroup(zone.group);
+
     // Restore originals
     LIFE.addEnv = LIFE.world._origAddEnv;
     LIFE.addCollider = LIFE.world._origAddCollider;
@@ -119,10 +122,7 @@ LIFE.world.endZoneBuild = function(name) {
 // ============================================================
 LIFE.world.buildWorld = function() {
     // Large world ground plane (polygonOffset pushes it back in depth to avoid z-fighting with zone grounds)
-    var worldGroundMat = new THREE.MeshPhongMaterial({ color: 0x4a7c3f });
-    worldGroundMat.polygonOffset = true;
-    worldGroundMat.polygonOffsetFactor = 1;
-    worldGroundMat.polygonOffsetUnits = 1;
+    var worldGroundMat = LIFE.getMaterial({ color: 0x4a7c3f, polygonOffset: true });
     var worldGround = new THREE.Mesh(
         new THREE.PlaneGeometry(800, 800),
         worldGroundMat
@@ -224,7 +224,7 @@ LIFE.world.buildHospitalExterior = function() {
     // Ground patch
     var ground = new THREE.Mesh(
         new THREE.PlaneGeometry(40, 40),
-        new THREE.MeshPhongMaterial({ color: 0xe0e0e0 })
+        LIFE.getMaterial({ color: 0xe0e0e0 })
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = 0.01;
@@ -238,7 +238,7 @@ LIFE.world.buildHospitalExterior = function() {
     group.add(LIFE.makeBox(13, 0.3, 11, 0xeceff1, 0, 8.15, 0));
 
     // Windows
-    var winMat = new THREE.MeshPhongMaterial({ color: 0xbbdefb, emissive: 0x445566, emissiveIntensity: 0.3 });
+    var winMat = LIFE.getMaterial({ color: 0xbbdefb, emissive: 0x445566, emissiveIntensity: 0.3 });
     for (var wy = 3; wy < 7; wy += 2) {
         for (var wx = -4; wx <= 4; wx += 2) {
             var w1 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.1), winMat);
@@ -302,6 +302,7 @@ LIFE.world.buildHospitalExterior = function() {
         center: new THREE.Vector3(cx, 0, cz),
         radius: 15
     };
+    if (LIFE.mergeStaticGroup) LIFE.mergeStaticGroup(group);
 };
 
 // ============================================================
@@ -316,7 +317,7 @@ LIFE.world.buildPoliceStation = function() {
     // Ground patch
     var ground = new THREE.Mesh(
         new THREE.PlaneGeometry(30, 30),
-        new THREE.MeshPhongMaterial({ color: 0x9e9e9e })
+        LIFE.getMaterial({ color: 0x9e9e9e })
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = 0.01;
@@ -330,14 +331,15 @@ LIFE.world.buildPoliceStation = function() {
     group.add(LIFE.makeBox(11, 0.3, 9, 0x37474f, 0, 6.15, 0));
 
     // Windows (barred look)
-    var winMat = new THREE.MeshPhongMaterial({ color: 0x90a4ae, emissive: 0x334455, emissiveIntensity: 0.2 });
+    var winMat = LIFE.getMaterial({ color: 0x90a4ae, emissive: 0x334455, emissiveIntensity: 0.2 });
+    var barMat = LIFE.getMaterial({ color: 0x333333 });
     for (var wx = -3; wx <= 3; wx += 3) {
         var w = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.1), winMat);
         w.position.set(wx, 3.5, 4.06);
         group.add(w);
         // bars
         for (var bx = -0.3; bx <= 0.3; bx += 0.15) {
-            var bar = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.8, 0.12), new THREE.MeshPhongMaterial({ color: 0x333333 }));
+            var bar = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.8, 0.12), barMat);
             bar.position.set(wx + bx, 3.5, 4.08);
             group.add(bar);
         }
@@ -391,6 +393,7 @@ LIFE.world.buildPoliceStation = function() {
         center: new THREE.Vector3(cx, 0, cz),
         radius: 15
     };
+    if (LIFE.mergeStaticGroup) LIFE.mergeStaticGroup(group);
 };
 
 // ============================================================
@@ -487,10 +490,10 @@ LIFE.world._buildSplineLine = function(curve, yHeight, dashLen, gapLen, lineWidt
 };
 
 LIFE.world.buildRoads = function() {
-    var roadMat = new THREE.MeshPhongMaterial({ color: 0x333333, side: THREE.DoubleSide });
-    var pathMat = new THREE.MeshPhongMaterial({ color: 0xbdbdbd, side: THREE.DoubleSide });
-    var lineMat = new THREE.MeshPhongMaterial({ color: 0xffeb3b });
-    var sideLineMat = new THREE.MeshPhongMaterial({ color: 0xeeeeee });
+    var roadMat = LIFE.getMaterial({ color: 0x333333, side: THREE.DoubleSide });
+    var pathMat = LIFE.getMaterial({ color: 0xbdbdbd, side: THREE.DoubleSide });
+    var lineMat = LIFE.getMaterial({ color: 0xffeb3b });
+    var sideLineMat = LIFE.getMaterial({ color: 0xeeeeee });
 
     var roads = new THREE.Group();
 
@@ -653,6 +656,7 @@ LIFE.world.buildRoads = function() {
 
     LIFE.scene.add(roads);
     LIFE.world._roadsGroup = roads;
+    if (LIFE.mergeStaticGroup) LIFE.mergeStaticGroup(roads);
 };
 
 // ============================================================
@@ -1543,7 +1547,7 @@ LIFE.createCarModel = function(color, scale) {
     var group = new THREE.Group();
 
     // Body
-    var bodyMat = new THREE.MeshPhongMaterial({ color: color });
+    var bodyMat = LIFE.getMaterial({ color: color });
     var body = new THREE.Mesh(new THREE.BoxGeometry(2 * scale, 0.7 * scale, 4 * scale), bodyMat);
     body.position.y = 0.4 * scale;
     body.castShadow = true;
@@ -1556,7 +1560,7 @@ LIFE.createCarModel = function(color, scale) {
     group.add(cabin);
 
     // Windows
-    var winMat = new THREE.MeshPhongMaterial({ color: 0xbbdefb, emissive: 0x445566, emissiveIntensity: 0.3, transparent: true, opacity: 0.6 });
+    var winMat = LIFE.getMaterial({ color: 0xbbdefb, emissive: 0x445566, emissiveIntensity: 0.3, transparent: true, opacity: 0.6 });
     // Side windows
     var sideWin1 = new THREE.Mesh(new THREE.BoxGeometry(0.05 * scale, 0.4 * scale, 1.8 * scale), winMat);
     sideWin1.position.set(0.81 * scale, 0.95 * scale, -0.3 * scale);
@@ -1574,7 +1578,7 @@ LIFE.createCarModel = function(color, scale) {
     group.add(rearWin);
 
     // Wheels
-    var wheelMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+    var wheelMat = LIFE.getMaterial({ color: 0x222222 });
     var wheelGeo = new THREE.CylinderGeometry(0.3 * scale, 0.3 * scale, 0.2 * scale, 8);
     var wheelPositions = [
         [-0.9 * scale, 0.3 * scale, 1.2 * scale],
@@ -1591,7 +1595,7 @@ LIFE.createCarModel = function(color, scale) {
     }
 
     // Headlights
-    var lightMat = new THREE.MeshPhongMaterial({ color: 0xfff9c4, emissive: 0xfff9c4, emissiveIntensity: 0.5 });
+    var lightMat = LIFE.getMaterial({ color: 0xfff9c4, emissive: 0xfff9c4, emissiveIntensity: 0.5 });
     var hl1 = new THREE.Mesh(new THREE.BoxGeometry(0.3 * scale, 0.2 * scale, 0.1 * scale), lightMat);
     hl1.position.set(-0.6 * scale, 0.45 * scale, 2.01 * scale);
     group.add(hl1);
@@ -1600,7 +1604,7 @@ LIFE.createCarModel = function(color, scale) {
     group.add(hl2);
 
     // Tail lights
-    var tailMat = new THREE.MeshPhongMaterial({ color: 0xef5350, emissive: 0xef5350, emissiveIntensity: 0.3 });
+    var tailMat = LIFE.getMaterial({ color: 0xef5350, emissive: 0xef5350, emissiveIntensity: 0.3 });
     var tl1 = new THREE.Mesh(new THREE.BoxGeometry(0.3 * scale, 0.2 * scale, 0.1 * scale), tailMat);
     tl1.position.set(-0.6 * scale, 0.45 * scale, -2.01 * scale);
     group.add(tl1);

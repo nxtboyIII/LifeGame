@@ -37,12 +37,22 @@ LIFE.buildEnvironment = function(stage) {
         death: LIFE.buildDeath
     };
     if (builders[stage]) builders[stage]();
+
+    // Merge static interior geometry to reduce draw calls
+    if (LIFE.mergeStaticGroup) {
+        for (var ei = 0; ei < LIFE.envObjects.length; ei++) {
+            var obj = LIFE.envObjects[ei];
+            if (obj.isGroup && obj.children.length > 1) {
+                LIFE.mergeStaticGroup(obj);
+            }
+        }
+    }
 };
 
 // ---------- WOMB ----------
 LIFE.buildWomb = function() {
     const geo = new THREE.SphereGeometry(5, 16, 12);
-    const mat = new THREE.MeshPhongMaterial({
+    const mat = LIFE.getMaterial({
         color: 0x8b0000, side: THREE.BackSide,
         emissive: 0x330000, emissiveIntensity: 0.5
     });
@@ -58,7 +68,7 @@ LIFE.buildWomb = function() {
 
     const floor = new THREE.Mesh(
         new THREE.SphereGeometry(4, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
-        new THREE.MeshPhongMaterial({ color: 0x660000 })
+        LIFE.getMaterial({ color: 0x660000 })
     );
     floor.position.y = -0.5;
     LIFE.addEnv(floor);
@@ -80,7 +90,7 @@ LIFE.buildNursery = function() {
     for (var i = 0; i < 4; i++) {
         var toy = new THREE.Mesh(
             new THREE.SphereGeometry(0.15, 8, 6),
-            new THREE.MeshPhongMaterial({ color: toyColors[i] })
+            LIFE.getMaterial({ color: toyColors[i] })
         );
         toy.position.set(1 + Math.random() * 2, 0.15, -1 + Math.random() * 3);
         toy.castShadow = true;
@@ -93,7 +103,7 @@ LIFE.buildNursery = function() {
     LIFE.addEnv(LIFE.makeBox(0.1, 1, 0.1, 0x757575, 4, 0.5, -4));
     var lamp = new THREE.Mesh(
         new THREE.ConeGeometry(0.4, 0.3, 8),
-        new THREE.MeshPhongMaterial({ color: 0xfff176, emissive: 0xfff176, emissiveIntensity: 0.4 })
+        LIFE.getMaterial({ color: 0xfff176, emissive: 0xfff176, emissiveIntensity: 0.4 })
     );
     lamp.position.set(4, 1.15, -4);
     LIFE.addEnv(lamp);
@@ -172,7 +182,7 @@ LIFE.buildHome = function() {
     LIFE.addEnv(LIFE.makeBox(2.2, 1.4, 0.1, 0x1a1a1a, -4.5, 1.3, 6.4));
     var tvScreen = new THREE.Mesh(
         new THREE.BoxGeometry(2.0, 1.2, 0.05),
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7, emissive: 0x225577, emissiveIntensity: 0.5 })
+        LIFE.getMaterial({ color: 0x4fc3f7, emissive: 0x225577, emissiveIntensity: 0.5 })
     );
     tvScreen.position.set(-4.5, 1.3, 6.47);
     LIFE.addEnv(tvScreen);
@@ -189,7 +199,7 @@ LIFE.buildHome = function() {
     // Rug
     var rug = new THREE.Mesh(
         new THREE.CircleGeometry(1.8, 16),
-        new THREE.MeshPhongMaterial({ color: 0xc62828 })
+        LIFE.getMaterial({ color: 0xc62828 })
     );
     rug.rotation.x = -Math.PI / 2;
     rug.position.set(-5.5, 0.12, 4);
@@ -239,7 +249,7 @@ LIFE.buildHome = function() {
     // Bathtub
     var tub = new THREE.Mesh(
         new THREE.BoxGeometry(2.5, 0.7, 1.2),
-        new THREE.MeshPhongMaterial({ color: 0xfafafa })
+        LIFE.getMaterial({ color: 0xfafafa })
     );
     tub.position.set(5, 0.35, -2);
     LIFE.addEnv(tub);
@@ -247,7 +257,7 @@ LIFE.buildHome = function() {
     LIFE.physics.addStaticBox(2.5, 0.7, 1.2, 5, 0.35, -2);
     var bathWater = new THREE.Mesh(
         new THREE.BoxGeometry(2.2, 0.05, 0.9),
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.5 })
+        LIFE.getMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.5 })
     );
     bathWater.position.set(5, 0.6, -2);
     LIFE.addEnv(bathWater);
@@ -321,7 +331,7 @@ LIFE.buildHome = function() {
     LIFE.addEnv(LIFE.makeBox(0.1, 0.4, 0.1, 0x757575, -6, floor2Y + 0.7, 4.5));
     var parentLamp = new THREE.Mesh(
         new THREE.ConeGeometry(0.25, 0.2, 8),
-        new THREE.MeshPhongMaterial({ color: 0xfff176, emissive: 0xfff176, emissiveIntensity: 0.3 })
+        LIFE.getMaterial({ color: 0xfff176, emissive: 0xfff176, emissiveIntensity: 0.3 })
     );
     parentLamp.position.set(-6, floor2Y + 1.0, 4.5);
     LIFE.addEnv(parentLamp);
@@ -382,7 +392,7 @@ LIFE.buildHome = function() {
     for (var ti = 0; ti < 4; ti++) {
         var toy = new THREE.Mesh(
             new THREE.SphereGeometry(0.12, 6, 4),
-            new THREE.MeshPhongMaterial({ color: toyColors[ti] })
+            LIFE.getMaterial({ color: toyColors[ti] })
         );
         toy.position.set(6 + Math.random() * 2, floor2Y + 0.2, 1 + Math.random() * 2);
         LIFE.addEnv(toy);
@@ -414,7 +424,7 @@ LIFE.buildHome = function() {
     LIFE.addEnv(LIFE.makeBox(0.3, 0.08, 0.3, 0xffeb3b, 5, 3.4, 4));
 
     // ===================== WINDOWS =====================
-    var winMat = new THREE.MeshPhongMaterial({ color: 0xbbdefb, emissive: 0x445566, emissiveIntensity: 0.3 });
+    var winMat = LIFE.getMaterial({ color: 0xbbdefb, emissive: 0x445566, emissiveIntensity: 0.3 });
     // Ground floor windows
     LIFE.addEnv(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 0.1), winMat)).position.set(-6, 2, -7.05);
     LIFE.addEnv(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1, 0.1), winMat)).position.set(6, 2, -7.05);
@@ -533,7 +543,7 @@ LIFE.buildCollege = function() {
     // fountain (solid)
     var fountain = new THREE.Mesh(
         new THREE.CylinderGeometry(1.5, 2, 0.8, 12),
-        new THREE.MeshPhongMaterial({ color: 0x90a4ae })
+        LIFE.getMaterial({ color: 0x90a4ae })
     );
     fountain.position.set(0, 0.4, 5);
     fountain.castShadow = true;
@@ -542,7 +552,7 @@ LIFE.buildCollege = function() {
     LIFE.physics.addStaticCylinder(2, 0.8, 0, 0.4, 5);
     var water = new THREE.Mesh(
         new THREE.CylinderGeometry(1.3, 1.3, 0.1, 12),
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.7 })
+        LIFE.getMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.7 })
     );
     water.position.set(0, 0.8, 5);
     LIFE.addEnv(water);
@@ -802,7 +812,7 @@ LIFE.buildPlayerHome = function() {
     // TV screen glow
     var tvScreen = new THREE.Mesh(
         new THREE.BoxGeometry(2.3, 1.3, 0.05),
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7, emissive: 0x225577, emissiveIntensity: 0.5 })
+        LIFE.getMaterial({ color: 0x4fc3f7, emissive: 0x225577, emissiveIntensity: 0.5 })
     );
     tvScreen.position.set(roomW / 2 - 1, 1.8, -roomD / 2 + 1.56);
     LIFE.addEnv(tvScreen);
@@ -847,7 +857,7 @@ LIFE.buildPlayerHome = function() {
         // bathtub
         var tub = new THREE.Mesh(
             new THREE.BoxGeometry(2.5, 0.7, 1.2),
-            new THREE.MeshPhongMaterial({ color: 0xfafafa })
+            LIFE.getMaterial({ color: 0xfafafa })
         );
         tub.position.set(roomW / 2 - 2, 0.35, -roomD / 2 + 5);
         LIFE.addEnv(tub);
@@ -856,7 +866,7 @@ LIFE.buildPlayerHome = function() {
         // water
         var bathWater = new THREE.Mesh(
             new THREE.BoxGeometry(2.2, 0.05, 0.9),
-            new THREE.MeshPhongMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.5 })
+            LIFE.getMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.5 })
         );
         bathWater.position.set(roomW / 2 - 2, 0.6, -roomD / 2 + 5);
         LIFE.addEnv(bathWater);
@@ -876,7 +886,7 @@ LIFE.buildPlayerHome = function() {
     // rug
     var rug = new THREE.Mesh(
         new THREE.CircleGeometry(2, 16),
-        new THREE.MeshPhongMaterial({ color: isLuxury ? 0x8e24aa : 0xc62828 })
+        LIFE.getMaterial({ color: isLuxury ? 0x8e24aa : 0xc62828 })
     );
     rug.rotation.x = -Math.PI / 2;
     rug.position.set(-1, 0.12, 0);
@@ -888,7 +898,7 @@ LIFE.buildPlayerHome = function() {
         for (var ti = 0; ti < 3; ti++) {
             var toy = new THREE.Mesh(
                 new THREE.SphereGeometry(0.12, 6, 4),
-                new THREE.MeshPhongMaterial({ color: toyColors[ti] })
+                LIFE.getMaterial({ color: toyColors[ti] })
             );
             toy.position.set(-3 + Math.random() * 2, 0.12, 1 + Math.random() * 2);
             LIFE.addEnv(toy);
@@ -976,7 +986,7 @@ LIFE.buildClassroom = function() {
     // clock
     var clock = new THREE.Mesh(
         new THREE.CircleGeometry(0.25, 12),
-        new THREE.MeshPhongMaterial({ color: 0xffffff })
+        LIFE.getMaterial({ color: 0xffffff })
     );
     clock.position.set(5, 2.8, -4.78);
     LIFE.addEnv(clock);
@@ -1074,7 +1084,7 @@ LIFE.buildHSClassroom = function() {
     // clock
     var hsClock = new THREE.Mesh(
         new THREE.CircleGeometry(0.3, 12),
-        new THREE.MeshPhongMaterial({ color: 0xffffff })
+        LIFE.getMaterial({ color: 0xffffff })
     );
     hsClock.position.set(6, 3.2, -5.78);
     LIFE.addEnv(hsClock);
@@ -1251,7 +1261,7 @@ LIFE.buildExecution = function() {
     var ropeLen = 2.2;
     var rope = new THREE.Mesh(
         new THREE.CylinderGeometry(0.025, 0.025, ropeLen, 6),
-        new THREE.MeshPhongMaterial({ color: 0xbcaaa4 })
+        LIFE.getMaterial({ color: 0xbcaaa4 })
     );
     rope.position.set(0, beamY - ropeLen / 2, 0);
     LIFE.addEnv(rope);
@@ -1259,7 +1269,7 @@ LIFE.buildExecution = function() {
     // NOOSE LOOP (torus at bottom of rope)
     var noose = new THREE.Mesh(
         new THREE.TorusGeometry(0.15, 0.03, 8, 12),
-        new THREE.MeshPhongMaterial({ color: 0xbcaaa4 })
+        LIFE.getMaterial({ color: 0xbcaaa4 })
     );
     noose.position.set(0, beamY - ropeLen - 0.05, 0);
     noose.rotation.x = Math.PI / 2;
@@ -1337,7 +1347,7 @@ LIFE.buildRetirement = function() {
     // pond
     var pond = new THREE.Mesh(
         new THREE.CircleGeometry(4, 16),
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.6 })
+        LIFE.getMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.6 })
     );
     pond.rotation.x = -Math.PI / 2;
     pond.position.set(8, 0.02, 8);
@@ -1356,7 +1366,7 @@ LIFE.buildRetirement = function() {
     // gazebo
     var roof = new THREE.Mesh(
         new THREE.ConeGeometry(3, 2, 6),
-        new THREE.MeshPhongMaterial({ color: 0x8d6e63 })
+        LIFE.getMaterial({ color: 0x8d6e63 })
     );
     roof.position.set(-8, 4, 8);
     LIFE.addEnv(roof);
@@ -1370,7 +1380,7 @@ LIFE.buildRetirement = function() {
     for (var f = 0; f < 20; f++) {
         var flower = new THREE.Mesh(
             new THREE.SphereGeometry(0.15, 6, 4),
-            new THREE.MeshPhongMaterial({ color: flowerColors[f % flowerColors.length] })
+            LIFE.getMaterial({ color: flowerColors[f % flowerColors.length] })
         );
         flower.position.set(-20 + Math.random() * 40, 0.15, -20 + Math.random() * 40);
         LIFE.addEnv(flower);
@@ -1533,7 +1543,7 @@ LIFE.buildHospital = function() {
     // WHEELCHAIR in corner
     var wheelBase = new THREE.Mesh(
         new THREE.CylinderGeometry(0.4, 0.4, 0.05, 8),
-        new THREE.MeshPhongMaterial({ color: 0x424242 })
+        LIFE.getMaterial({ color: 0x424242 })
     );
     wheelBase.position.set(-5.5, 0.3, 4.5);
     LIFE.addEnv(wheelBase);
@@ -1554,7 +1564,7 @@ LIFE.buildDealership = function() {
     // Main showroom building
     LIFE.makeBuilding(0, -8, 16, 6, 10, 0x263238);
     // Glass front
-    var glassMat = new THREE.MeshPhongMaterial({ color: 0xbbdefb, emissive: 0x335577, emissiveIntensity: 0.4, transparent: true, opacity: 0.5 });
+    var glassMat = LIFE.getMaterial({ color: 0xbbdefb, emissive: 0x335577, emissiveIntensity: 0.4, transparent: true, opacity: 0.5 });
     var glassFront = new THREE.Mesh(new THREE.BoxGeometry(14, 5, 0.1), glassMat);
     glassFront.position.set(0, 3, -3.06);
     LIFE.addEnv(glassFront);
@@ -1591,7 +1601,7 @@ LIFE.buildDealership = function() {
         // Car cabin (top part)
         LIFE.addEnv(LIFE.makeBox(1.5, 0.5, 1.8, car.color, cx, 0.95, cz - 0.2));
         // Windows
-        var winM = new THREE.MeshPhongMaterial({ color: 0xbbdefb, emissive: 0x445566, emissiveIntensity: 0.3, transparent: true, opacity: 0.6 });
+        var winM = LIFE.getMaterial({ color: 0xbbdefb, emissive: 0x445566, emissiveIntensity: 0.3, transparent: true, opacity: 0.6 });
         var win1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 1.6), winM);
         win1.position.set(cx + 0.76, 0.95, cz - 0.2);
         LIFE.addEnv(win1);
@@ -1599,7 +1609,7 @@ LIFE.buildDealership = function() {
         win2.position.set(cx - 0.76, 0.95, cz - 0.2);
         LIFE.addEnv(win2);
         // Wheels (dark cylinders)
-        var wheelMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+        var wheelMat = LIFE.getMaterial({ color: 0x222222 });
         var wheelGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.15, 8);
         var positions = [
             [cx - 0.85, 0.25, cz + 1], [cx + 0.85, 0.25, cz + 1],
@@ -1678,12 +1688,12 @@ LIFE.buildEventCenter = function() {
         var lx = -4 + li * 1.6;
         LIFE.addEnv(LIFE.makeBox(0.08, 3, 0.08, 0x424242, lx, 5, 15.1));
         var bulb = LIFE.makeBox(0.3, 0.3, 0.3, lightColors[li], lx, 6.3, 15.1);
-        bulb.material = new THREE.MeshPhongMaterial({ color: lightColors[li], emissive: lightColors[li], emissiveIntensity: 0.5 });
+        bulb.material = LIFE.getMaterial({ color: lightColors[li], emissive: lightColors[li], emissiveIntensity: 0.5 });
         LIFE.addEnv(bulb);
     }
 
     // Big event screen behind stage
-    var screenMat = new THREE.MeshPhongMaterial({ color: 0x111111, emissive: 0x222244, emissiveIntensity: 0.3 });
+    var screenMat = LIFE.getMaterial({ color: 0x111111, emissive: 0x222244, emissiveIntensity: 0.3 });
     var screen = new THREE.Mesh(new THREE.BoxGeometry(8, 4, 0.2), screenMat);
     screen.position.set(0, 5.5, 15.15);
     LIFE.addEnv(screen);
@@ -1721,7 +1731,7 @@ LIFE.buildEventCenter = function() {
         var lpx = -15 + lp * 6;
         LIFE.addEnv(LIFE.makeBox(0.12, 4, 0.12, 0x424242, lpx, 2, -6));
         var lamp = LIFE.makeBox(0.5, 0.3, 0.5, 0xffeb3b, lpx, 4.2, -6);
-        lamp.material = new THREE.MeshPhongMaterial({ color: 0xffeb3b, emissive: 0xffeb3b, emissiveIntensity: 0.3 });
+        lamp.material = LIFE.getMaterial({ color: 0xffeb3b, emissive: 0xffeb3b, emissiveIntensity: 0.3 });
         LIFE.addEnv(lamp);
     }
 
@@ -1888,7 +1898,7 @@ LIFE.buildWorkplace = function(careerType) {
         var beakerColors = [0x4fc3f7, 0x81c784, 0xffb74d, 0xce93d8];
         for (var bi = 0; bi < 4; bi++) {
             var bk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.4, 8),
-                new THREE.MeshPhongMaterial({ color: beakerColors[bi], transparent: true, opacity: 0.7 }));
+                LIFE.getMaterial({ color: beakerColors[bi], transparent: true, opacity: 0.7 }));
             bk.position.set(-4 + bi * 0.6, 1.1, -3);
             LIFE.addEnv(bk);
         }
@@ -1913,7 +1923,7 @@ LIFE.buildWorkplace = function(careerType) {
         // Drum set
         LIFE.addEnv(LIFE.makeBox(1, 0.8, 1, 0x8d6e63, 3, 0.4, -3));
         var cymbal = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.03, 12),
-            new THREE.MeshPhongMaterial({ color: 0xffd54f }));
+            LIFE.getMaterial({ color: 0xffd54f }));
         cymbal.position.set(3.8, 1.2, -3);
         LIFE.addEnv(cymbal);
         // Mic stand
@@ -1933,7 +1943,7 @@ LIFE.buildWorkplace = function(careerType) {
         LIFE.addSolid(1, 1.2, 2.5, 0x37474f, 3, 0.6, -2);
         // Punching bag
         var bag = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 1.2, 8),
-            new THREE.MeshPhongMaterial({ color: 0xc62828 }));
+            LIFE.getMaterial({ color: 0xc62828 }));
         bag.position.set(0, 2, -4);
         LIFE.addEnv(bag);
         LIFE.addEnv(LIFE.makeBox(0.04, 0.8, 0.04, 0x757575, 0, 2.8, -4));
