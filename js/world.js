@@ -1694,7 +1694,7 @@ LIFE.enterCar = function() {
     LIFE.car.model.rotation.y = LIFE.player.group.rotation.y;
     LIFE.scene.add(LIFE.car.model);
 
-    LIFE.ui.showPopup('Driving ' + state.ownedCar.name, '#2196f3');
+    LIFE.ui.showPopup('Driving ' + state.ownedCar.name, '#2196f3', 'driving');
     LIFE.sounds.carStart && LIFE.sounds.carStart();
 };
 

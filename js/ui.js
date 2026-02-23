@@ -7,7 +7,7 @@ LIFE.ui.$ = {
     age:       document.getElementById('ageNum'),
     timer:     document.getElementById('timerFill'),
     stage:     document.getElementById('stageText'),
-    popup:     document.getElementById('actionPopup'),
+    popupStack: document.getElementById('popupStack'),
     actions:   document.getElementById('actions'),
     start:     document.getElementById('clickStart'),
     death:     document.getElementById('deathScreen'),
@@ -91,11 +91,64 @@ LIFE.ui.showStageMessage = function(msg) {
     }
 };
 
-LIFE.ui.showPopup = function(text, color) {
-    LIFE.ui.$.popup.textContent = text;
-    LIFE.ui.$.popup.style.color = color || '#fff';
-    LIFE.ui.$.popup.classList.add('show');
-    LIFE.state.popupTimer = 1.5;
+LIFE.ui._popups = []; // { el, timer, type }
+
+LIFE.ui._updatePopupOpacities = function() {
+    for (var i = 0; i < LIFE.ui._popups.length; i++) {
+        var p = LIFE.ui._popups[i];
+        if (i === 0) {
+            p.el.style.opacity = '';
+        } else {
+            // Gentle fade: 0.85, 0.7, 0.55, 0.4
+            var opacity = Math.max(0.35, 1.0 - i * 0.15);
+            p.el.style.opacity = opacity;
+        }
+    }
+};
+
+// Popup types that only allow one at a time (newest replaces oldest of same type)
+LIFE.ui._uniquePopupTypes = { 'equip': true, 'earn': true, 'driving': true };
+
+// showPopup(text, color, type)
+// If type is in _uniquePopupTypes, the oldest popup of that type gets removed
+LIFE.ui.showPopup = function(text, color, type) {
+    var stack = LIFE.ui.$.popupStack;
+    if (!stack) return;
+    // For unique types, remove oldest duplicate
+    if (type && LIFE.ui._uniquePopupTypes[type]) {
+        for (var t = LIFE.ui._popups.length - 1; t >= 0; t--) {
+            if (LIFE.ui._popups[t].type === type) {
+                var dup = LIFE.ui._popups[t];
+                if (dup.el.parentNode) dup.el.parentNode.removeChild(dup.el);
+                LIFE.ui._popups.splice(t, 1);
+                break;
+            }
+        }
+    }
+    // Demote existing popups to "older" style instantly
+    for (var i = 0; i < LIFE.ui._popups.length; i++) {
+        var p = LIFE.ui._popups[i];
+        p.el.classList.remove('latest');
+        p.el.classList.add('older');
+    }
+    // Create new popup element
+    var el = document.createElement('div');
+    el.className = 'popup-item latest show';
+    el.textContent = text;
+    el.style.color = color || '#fff';
+    // Insert at top of stack (newest first)
+    if (stack.firstChild) {
+        stack.insertBefore(el, stack.firstChild);
+    } else {
+        stack.appendChild(el);
+    }
+    LIFE.ui._popups.unshift({ el: el, timer: 2.5, type: type || null });
+    // Limit stack to 5 popups max
+    while (LIFE.ui._popups.length > 5) {
+        var old = LIFE.ui._popups.pop();
+        if (old.el.parentNode) old.el.parentNode.removeChild(old.el);
+    }
+    LIFE.ui._updatePopupOpacities();
 };
 
 LIFE.ui.showRepChange = function(amount) {
@@ -352,13 +405,46 @@ LIFE.ui.updateWanted = function() {
             if (i < starCount) stars += '\u2605';
             else stars += '\u2606';
         }
-        el.innerHTML = stars + (bounty > 0 ? '<br><span style="font-size:13px;letter-spacing:0">Bounty: $' + bounty + '</span>' : '');
+        var html = stars;
+        if (bounty > 0) html += '<br><span style="font-size:13px;letter-spacing:0">Bounty: $' + bounty + '</span>';
+        // Chase status line
+        var chaseStatus = LIFE.ui._getChaseStatus();
+        if (chaseStatus) {
+            html += '<br><span id="chaseStatus" class="chase-status ' + chaseStatus.cls + '" style="letter-spacing:0">' + chaseStatus.text + '</span>';
+        }
+        el.innerHTML = html;
         el.style.color = level >= 7 ? '#ff1744' : (level >= 4 ? '#ff9800' : '#ffeb3b');
     } else {
         // no active chase but have bounty
         el.innerHTML = '<span style="font-size:13px;letter-spacing:0">Bounty: $' + bounty + '</span>';
         el.style.color = '#ff9800';
     }
+};
+
+LIFE.ui._getChaseStatus = function() {
+    var state = LIFE.state;
+    if (state.wantedLevel <= 0) return null;
+    // Check cop states
+    var anyPursuing = false;
+    var anyDriving = false;
+    var anyInvestigating = false;
+    if (LIFE.world && LIFE.world.policeCops) {
+        for (var i = 0; i < LIFE.world.policeCops.length; i++) {
+            var cs = LIFE.world.policeCops[i].aiState;
+            if (cs === 'pursuing') anyPursuing = true;
+            if (cs === 'driving') anyDriving = true;
+            if (cs === 'investigating') anyInvestigating = true;
+        }
+    }
+    if (LIFE.police && LIFE.police.length > 0) anyPursuing = true;
+    for (var s = 0; s < LIFE.swat.length; s++) {
+        if (LIFE.swat[s].state === 'driving') anyDriving = true;
+    }
+    if (anyPursuing) return { text: 'IN PURSUIT', cls: 'chase-pursuit' };
+    if (anyDriving) return { text: 'RESPONDING', cls: 'chase-responding' };
+    if (anyInvestigating) return { text: 'SEARCHING', cls: 'chase-searching' };
+    if (state.policeDispatching) return { text: 'DISPATCHING', cls: 'chase-responding' };
+    return { text: 'ESCAPING', cls: 'chase-escaping' };
 };
 
 // ============================================================
@@ -888,10 +974,22 @@ LIFE.ui.showSentencePopup = function(years, fine, crimes) {
 // TIMERS
 // ============================================================
 LIFE.ui.updateTimers = function(dt) {
-    if (LIFE.state.popupTimer > 0) {
-        LIFE.state.popupTimer -= dt;
-        if (LIFE.state.popupTimer <= 0) LIFE.ui.$.popup.classList.remove('show');
+    // Update stacking popups
+    var popupsChanged = false;
+    for (var pi = LIFE.ui._popups.length - 1; pi >= 0; pi--) {
+        var pp = LIFE.ui._popups[pi];
+        pp.timer -= dt;
+        if (pp.timer <= 0) {
+            pp.el.style.opacity = '0';
+            // Remove from DOM after fade
+            if (pp.timer < -0.3) {
+                if (pp.el.parentNode) pp.el.parentNode.removeChild(pp.el);
+                LIFE.ui._popups.splice(pi, 1);
+                popupsChanged = true;
+            }
+        }
     }
+    if (popupsChanged) LIFE.ui._updatePopupOpacities();
     // Update stacking stage messages
     for (var si = LIFE.ui._stageMessages.length - 1; si >= 0; si--) {
         var sm = LIFE.ui._stageMessages[si];

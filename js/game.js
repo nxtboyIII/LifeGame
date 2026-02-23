@@ -394,12 +394,17 @@ LIFE.addWanted = function(amount, reason, witness) {
     state.bounty += amount * 500;
     state.wantedTimer = 0;
     state.wantedCooldown = 0;
+    // Record last known position (where witnesses saw the player)
+    if (LIFE.player) {
+        state.lastKnownPos = { x: LIFE.player.group.position.x, z: LIFE.player.group.position.z };
+    }
     // Start dispatch timer (someone calling the police)
     if (state.wantedLevel > 0 && !state.policeDispatching) {
         var alreadyPursuing = 0;
         if (LIFE.world.policeCops) {
             for (var i = 0; i < LIFE.world.policeCops.length; i++) {
-                if (LIFE.world.policeCops[i].aiState === 'pursuing' || LIFE.world.policeCops[i].aiState === 'driving') alreadyPursuing++;
+                var ais = LIFE.world.policeCops[i].aiState;
+                if (ais === 'pursuing' || ais === 'driving' || ais === 'investigating') alreadyPursuing++;
             }
         }
         // Scale cops dispatched: 1-2 for minor, 3-4 for moderate, 5-6 for serious
@@ -546,46 +551,49 @@ LIFE.createSwatTruck = function() {
 LIFE.dispatchPolice = function() {
     var state = LIFE.state;
     if (!LIFE.world.policeCops || !LIFE.player) return;
-    var px = LIFE.player.group.position.x;
-    var pz = LIFE.player.group.position.z;
+    // Target last known position instead of real-time player pos
+    var targetX = state.lastKnownPos ? state.lastKnownPos.x : LIFE.player.group.position.x;
+    var targetZ = state.lastKnownPos ? state.lastKnownPos.z : LIFE.player.group.position.z;
 
-    // Count how many are already pursuing
-    var pursuing = 0;
+    // Count how many are already pursuing/driving/investigating
+    var active = 0;
     for (var i = 0; i < LIFE.world.policeCops.length; i++) {
-        if (LIFE.world.policeCops[i].aiState === 'pursuing' || LIFE.world.policeCops[i].aiState === 'driving') pursuing++;
+        var as = LIFE.world.policeCops[i].aiState;
+        if (as === 'pursuing' || as === 'driving' || as === 'investigating') active++;
     }
     var copsNeeded = Math.min(LIFE.POLICE_MAX, Math.ceil(state.wantedLevel / 2));
-    var needed = copsNeeded - pursuing;
+    var needed = copsNeeded - active;
 
-    // Sort idle cops by distance to player (nearest first)
+    // Sort idle cops by distance to target (nearest first)
     var idle = [];
     for (var j = 0; j < LIFE.world.policeCops.length; j++) {
         var cop = LIFE.world.policeCops[j];
         if (cop.aiState === 'idle' || cop.aiState === 'patrolling' || cop.aiState === 'returning') {
             if (!cop.npc.alive) continue;
-            var cdx = cop.npc.char.group.position.x - px;
-            var cdz = cop.npc.char.group.position.z - pz;
-            cop._distToPlayer = Math.sqrt(cdx * cdx + cdz * cdz);
+            var cdx = cop.npc.char.group.position.x - targetX;
+            var cdz = cop.npc.char.group.position.z - targetZ;
+            cop._distToTarget = Math.sqrt(cdx * cdx + cdz * cdz);
             idle.push(cop);
         }
     }
-    idle.sort(function(a, b) { return a._distToPlayer - b._distToPlayer; });
+    idle.sort(function(a, b) { return a._distToTarget - b._distToTarget; });
 
     for (var k = 0; k < Math.min(needed, idle.length); k++) {
         var c = idle[k];
-        if (c._distToPlayer < 30) {
-            // Close enough to chase on foot
-            c.aiState = 'pursuing';
-            c.npc.speed = LIFE.getSpeedForAge(state.age) * 1.2;
-            if (LIFE.police.indexOf(c.npc) < 0) LIFE.police.push(c.npc);
+        if (c._distToTarget < 30) {
+            // Close enough to go on foot — investigate the area (not direct pursuit)
+            c.aiState = 'investigating';
+            c._investigateTimer = 0;
+            c._investigateCenter = { x: targetX, z: targetZ };
+            c.npc.speed = LIFE.getSpeedForAge(state.age) * 1.0;
         } else {
-            // Far away - get in police car and drive
+            // Far away - get in police car and drive to last known pos
             c.aiState = 'driving';
-            c.npc.char.group.visible = false; // hide cop (they're in the car)
+            c.npc.char.group.visible = false;
             var car = LIFE.createPoliceCar();
             car.position.copy(c.npc.char.group.position);
             car.position.y = 0;
-            car.rotation.y = Math.atan2(px - car.position.x, pz - car.position.z);
+            car.rotation.y = Math.atan2(targetX - car.position.x, targetZ - car.position.z);
             LIFE.scene.add(car);
             c.car = car;
             c.carSpeed = 0;
@@ -663,6 +671,16 @@ LIFE.despawnPolice = function() {
                 cop.npc._frozen = false;
                 cop.npc._hostile = false;
             }
+            // Clear investigation state
+            cop._investigateTimer = 0;
+            cop._investigateCenter = null;
+            cop._investigateTarget = null;
+            cop._investigatePath = null;
+            cop._losCheckTimer = 0;
+            // Clear LOS state on the npc too
+            cop.npc._losLostTime = 0;
+            cop.npc._hasLOS = false;
+            cop.npc._losTimer = 0;
         }
     }
     // Remove SWAT completely (they leave the area)
@@ -678,6 +696,7 @@ LIFE.despawnPolice = function() {
     LIFE.state.policeConfronting = false;
     LIFE.state.swatDispatching = false;
     LIFE.state.swatDispatched = false;
+    LIFE.state.lastKnownPos = null;
     LIFE.sounds.stopSiren();
 };
 
@@ -842,6 +861,91 @@ LIFE.updatePolice = function(dt) {
                     }
                 }
             }
+
+            // Investigating state — cop wanders near last known pos, checks LOS for player
+            if (pcop.aiState === 'investigating') {
+                pcop._investigateTimer = (pcop._investigateTimer || 0) + dt;
+                var invPos = pcop.npc.char.group.position;
+
+                // Check LOS to player every 0.5s (performance)
+                pcop._losCheckTimer = (pcop._losCheckTimer || 0) + dt;
+                if (pcop._losCheckTimer > 0.5) {
+                    pcop._losCheckTimer = 0;
+                    var invPx = player.group.position.x, invPz = player.group.position.z;
+                    var invDistToPlayer = Math.sqrt((invPx - invPos.x) * (invPx - invPos.x) + (invPz - invPos.z) * (invPz - invPos.z));
+                    if (invDistToPlayer < 80 && LIFE.hasLineOfSight(invPos.x, invPos.z, invPx, invPz)) {
+                        // SPOTTED — switch to pursuing
+                        pcop.aiState = 'pursuing';
+                        pcop.npc.speed = LIFE.getSpeedForAge(state.age) * 1.2;
+                        if (LIFE.police.indexOf(pcop.npc) < 0) LIFE.police.push(pcop.npc);
+                        // Update last known pos to current player pos
+                        state.lastKnownPos = { x: invPx, z: invPz };
+                        pcop._investigateTimer = 0;
+                        pcop._investigateCenter = null;
+                        pcop._investigateTarget = null;
+                        pcop._investigatePath = null;
+                        continue;
+                    }
+                }
+
+                // Wander around the investigate area (last known pos)
+                var investCenter = pcop._investigateCenter || state.lastKnownPos || { x: invPos.x, z: invPos.z };
+                if (!pcop._investigateCenter) pcop._investigateCenter = { x: investCenter.x, z: investCenter.z };
+
+                if (!pcop._investigateTarget || pcop._investigateWanderTimer <= 0) {
+                    pcop._investigateTarget = {
+                        x: investCenter.x + (Math.random() - 0.5) * 30,
+                        z: investCenter.z + (Math.random() - 0.5) * 30
+                    };
+                    pcop._investigateWanderTimer = 3 + Math.random() * 3;
+                    pcop._investigatePath = null;
+                }
+                pcop._investigateWanderTimer -= dt;
+
+                // Walk toward investigate target using pathfinding
+                if (!pcop._investigatePath) {
+                    pcop._investigatePath = LIFE.pathfinding.findPath(invPos.x, invPos.z, pcop._investigateTarget.x, pcop._investigateTarget.z);
+                    pcop._investigatePathIdx = 0;
+                }
+                var invWp = null;
+                if (pcop._investigatePath && pcop._investigatePathIdx < pcop._investigatePath.length) {
+                    invWp = pcop._investigatePath[pcop._investigatePathIdx];
+                    var invwdx = invWp.x - invPos.x, invwdz = invWp.z - invPos.z;
+                    if (Math.sqrt(invwdx * invwdx + invwdz * invwdz) < 1.5) {
+                        pcop._investigatePathIdx++;
+                        invWp = pcop._investigatePathIdx < pcop._investigatePath.length ? pcop._investigatePath[pcop._investigatePathIdx] : null;
+                    }
+                }
+                var invdx, invdz;
+                if (invWp) { invdx = invWp.x - invPos.x; invdz = invWp.z - invPos.z; }
+                else { invdx = pcop._investigateTarget.x - invPos.x; invdz = pcop._investigateTarget.z - invPos.z; }
+                var invDist = Math.sqrt(invdx * invdx + invdz * invdz);
+                if (invDist > 1) {
+                    var invSpd = 3 * dt;
+                    invPos.x += (invdx / invDist) * invSpd;
+                    invPos.z += (invdz / invDist) * invSpd;
+                    LIFE.resolveCollisions(invPos);
+                    pcop.npc.char.group.rotation.y = Math.atan2(invdx, invdz);
+                    pcop.npc.walkTime += dt * 5;
+                    var invsw = Math.sin(pcop.npc.walkTime) * 0.4;
+                    pcop.npc.char.parts.leftLeg.rotation.x = invsw;
+                    pcop.npc.char.parts.rightLeg.rotation.x = -invsw;
+                    pcop.npc.char.parts.leftArm.rotation.x = -invsw * 0.3;
+                    pcop.npc.char.parts.rightArm.rotation.x = invsw * 0.3;
+                }
+
+                // Give up after 45-60 seconds
+                if (pcop._investigateTimer > 45 + Math.random() * 15) {
+                    pcop.aiState = 'returning';
+                    pcop._investigateTimer = 0;
+                    pcop._investigateCenter = null;
+                    pcop._investigateTarget = null;
+                    pcop._investigatePath = null;
+                    // Remove from LIFE.police array if present
+                    var invPidx = LIFE.police.indexOf(pcop.npc);
+                    if (invPidx >= 0) LIFE.police.splice(invPidx, 1);
+                }
+            }
         }
     }
 
@@ -854,7 +958,8 @@ LIFE.updatePolice = function(dt) {
     var hasActiveCops = LIFE.police.length > 0 || LIFE.swat.length > 0;
     if (!hasActiveCops && LIFE.world.policeCops) {
         for (var pci = 0; pci < LIFE.world.policeCops.length; pci++) {
-            if (LIFE.world.policeCops[pci].aiState === 'driving' || LIFE.world.policeCops[pci].aiState === 'pursuing') {
+            var pciState = LIFE.world.policeCops[pci].aiState;
+            if (pciState === 'driving' || pciState === 'pursuing' || pciState === 'investigating') {
                 hasActiveCops = true; break;
             }
         }
@@ -937,15 +1042,17 @@ LIFE.updatePolice = function(dt) {
         state.carStallTimer = 0;
     }
 
-    // Update driving cops (persistent cops in cars approaching player)
+    // Update driving cops (persistent cops in cars approaching last known pos)
     var px = player.group.position.x, pz = player.group.position.z;
+    var driveTargetX = state.lastKnownPos ? state.lastKnownPos.x : px;
+    var driveTargetZ = state.lastKnownPos ? state.lastKnownPos.z : pz;
     if (LIFE.world.policeCops) {
         for (var di = 0; di < LIFE.world.policeCops.length; di++) {
             var dcop = LIFE.world.policeCops[di];
             if (dcop.aiState !== 'driving' || !dcop.car) continue;
-            // Drive car toward player
-            var cdx = px - dcop.car.position.x;
-            var cdz = pz - dcop.car.position.z;
+            // Drive car toward last known position
+            var cdx = driveTargetX - dcop.car.position.x;
+            var cdz = driveTargetZ - dcop.car.position.z;
             var cDist = Math.sqrt(cdx * cdx + cdz * cdz);
             // Accelerate
             dcop.carSpeed = Math.min(18, dcop.carSpeed + 12 * dt);
@@ -959,19 +1066,21 @@ LIFE.updatePolice = function(dt) {
             if (dcop.car._redLight) dcop.car._redLight.visible = flash;
             if (dcop.car._blueLight) dcop.car._blueLight.visible = !flash;
 
-            // Close enough - cop exits car
+            // Close enough to target - cop exits car and investigates
             if (cDist < 20) {
                 dcop.npc.char.group.position.copy(dcop.car.position);
                 dcop.npc.char.group.position.y = 0;
                 dcop.npc.char.group.visible = true;
-                dcop.npc.speed = LIFE.getSpeedForAge(state.age) * 1.2;
+                dcop.npc.speed = LIFE.getSpeedForAge(state.age) * 1.0;
                 // Leave car parked (stays in scene as static prop)
                 dcop.car._redLight.visible = true;
                 dcop.car._blueLight.visible = true;
-                dcop._parkedCar = dcop.car; // remember to clean up later
+                dcop._parkedCar = dcop.car;
                 dcop.car = null;
-                dcop.aiState = 'pursuing';
-                if (LIFE.police.indexOf(dcop.npc) < 0) LIFE.police.push(dcop.npc);
+                // Exit into investigating state (not direct pursuit)
+                dcop.aiState = 'investigating';
+                dcop._investigateTimer = 0;
+                dcop._investigateCenter = { x: driveTargetX, z: driveTargetZ };
             }
         }
     }
@@ -1033,7 +1142,32 @@ LIFE.updatePolice = function(dt) {
         return;
     }
 
-    // check escape by distance
+    // Check if all cops have given up — investigation-based escape
+    var anyPursuingOrDriving = false;
+    var anyInvestigating = false;
+    var anyActive = false;
+    if (LIFE.world.policeCops) {
+        for (var ci = 0; ci < LIFE.world.policeCops.length; ci++) {
+            var cs = LIFE.world.policeCops[ci].aiState;
+            if (cs === 'pursuing' || cs === 'driving') { anyPursuingOrDriving = true; anyActive = true; }
+            if (cs === 'investigating') { anyInvestigating = true; anyActive = true; }
+        }
+    }
+    for (var swi = 0; swi < LIFE.swat.length; swi++) {
+        if (LIFE.swat[swi].state === 'driving') { anyPursuingOrDriving = true; anyActive = true; }
+    }
+
+    // All cops gave up investigating or returned — fully escaped
+    if (LIFE.police.length === 0 && !anyActive && !state.policeDispatching && !state.swatDispatching) {
+        state.policeDispatching = false;
+        state.lastKnownPos = null;
+        LIFE.despawnPolice();
+        LIFE.ui.showPopup('Escaped! Bounty: $' + state.bounty, '#ff9800');
+        state.wantedLevel = 0;
+        return;
+    }
+
+    // Distance-based escape timer (secondary — faster decay when all pursuing cops are far)
     var allFar = true;
     LIFE.police.forEach(function(c) {
         if (!c.alive) return;
@@ -1042,16 +1176,17 @@ LIFE.updatePolice = function(dt) {
         if (Math.sqrt(edx * edx + edz * edz) < 30) allFar = false;
     });
 
-    // wanted decay - faster if outrunning cops
-    state.wantedTimer += dt * (allFar ? 3 : 1);
-    if (allFar && state.wantedTimer > 5) {
-        LIFE.ui.showPopup('Escaping...', '#ffeb3b');
-    }
+    // wanted decay - faster if outrunning cops, fastest if only investigating (no pursuers)
+    var decayMult = allFar ? 3 : 1;
+    if (!anyPursuingOrDriving && anyInvestigating) decayMult = 5;
+    state.wantedTimer += dt * decayMult;
+    // Chase status is now shown persistently in the wanted level UI
     if (state.wantedTimer >= 30) {
         state.wantedTimer = 0;
         state.wantedLevel = Math.max(0, state.wantedLevel - 1);
         if (state.wantedLevel <= 0) {
             state.policeDispatching = false;
+            state.lastKnownPos = null;
             LIFE.despawnPolice();
             LIFE.ui.showPopup('Escaped! Bounty: $' + state.bounty, '#ff9800');
             return;
@@ -1070,12 +1205,51 @@ LIFE.updatePolice = function(dt) {
         var dz = player.group.position.z - copPos.z;
         var dist = Math.sqrt(dx * dx + dz * dz);
 
+        // LOS tracking — check if cop can see player
+        cop._losTimer = (cop._losTimer || 0) + dt;
+        if (cop._losTimer > 0.3) {
+            cop._losTimer = 0;
+            cop._hasLOS = LIFE.hasLineOfSight(copPos.x, copPos.z, px, pz);
+            if (cop._hasLOS) {
+                cop._losLostTime = 0;
+                // Update last known pos while cop can see player
+                state.lastKnownPos = { x: px, z: pz };
+            }
+        }
+        if (!cop._hasLOS) {
+            cop._losLostTime = (cop._losLostTime || 0) + dt;
+            if (cop._losLostTime > 6) {
+                // Lost visual for 6+ seconds — switch to investigating at last seen pos
+                for (var fci = 0; fci < LIFE.world.policeCops.length; fci++) {
+                    if (LIFE.world.policeCops[fci].npc === cop) {
+                        LIFE.world.policeCops[fci].aiState = 'investigating';
+                        LIFE.world.policeCops[fci]._investigateTimer = 0;
+                        LIFE.world.policeCops[fci]._investigateCenter = state.lastKnownPos ?
+                            { x: state.lastKnownPos.x, z: state.lastKnownPos.z } : null;
+                        LIFE.world.policeCops[fci]._investigateTarget = null;
+                        LIFE.world.policeCops[fci]._investigatePath = null;
+                        break;
+                    }
+                }
+                // Remove from LIFE.police
+                var ridx = LIFE.police.indexOf(cop);
+                if (ridx >= 0) LIFE.police.splice(ridx, 1);
+                cop._losLostTime = 0;
+                cop._hasLOS = false;
+                return; // skip chase this frame
+            }
+        }
+
+        // Determine chase target — if no LOS, pathfind to last known pos instead
+        var chaseTargetX = (cop._hasLOS || !state.lastKnownPos) ? player.group.position.x : state.lastKnownPos.x;
+        var chaseTargetZ = (cop._hasLOS || !state.lastKnownPos) ? player.group.position.z : state.lastKnownPos.z;
+
         if (dist > 1.8) {
-            // Recompute A* path periodically (player is moving)
+            // Recompute A* path periodically
             cop._chasePathTimer = (cop._chasePathTimer || 0) + dt;
             if (!cop._chasePath || cop._chasePathTimer > 1.0) {
                 cop._chasePathTimer = 0;
-                cop._chasePath = LIFE.pathfinding.findPath(copPos.x, copPos.z, player.group.position.x, player.group.position.z);
+                cop._chasePath = LIFE.pathfinding.findPath(copPos.x, copPos.z, chaseTargetX, chaseTargetZ);
                 cop._chasePathIdx = 0;
             }
             // Follow A* waypoints
@@ -1525,7 +1699,7 @@ LIFE.cycleInventory = function() {
     var inv = LIFE.state.inventory;
     if (inv.length <= 1) return;
     LIFE.state.equippedIndex = (LIFE.state.equippedIndex + 1) % inv.length;
-    LIFE.ui.showPopup('Equipped: ' + inv[LIFE.state.equippedIndex], '#4fc3f7');
+    LIFE.ui.showPopup('Equipped: ' + inv[LIFE.state.equippedIndex], '#4fc3f7', 'equip');
     LIFE.updateHeldWeapon();
 };
 

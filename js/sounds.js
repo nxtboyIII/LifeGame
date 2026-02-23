@@ -16,7 +16,7 @@ LIFE.sounds._files = {
     heartbeat: 'audio/heartbeat.mp3',
     cry: 'audio/cry.mp3',
     footstep: 'audio/footstep.mp3',
-    punch: 'audio/punch.mp3',
+    punch: 'audio/punch.wav',
     blip: 'audio/blip.mp3',
     money: 'audio/money.mp3',
     work: 'audio/work.mp3',

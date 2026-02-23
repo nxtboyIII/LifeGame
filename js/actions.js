@@ -24,14 +24,6 @@ LIFE.performAction = function(idx) {
             var dz = npc.char.group.position.z - LIFE.player.group.position.z;
             var dist = Math.sqrt(dx * dx + dz * dz);
             if (dist < 2.5) {
-                var pushDir = new THREE.Vector3(dx, 0, dz).normalize();
-                npc.char.group.position.x += pushDir.x * 1.5;
-                npc.char.group.position.z += pushDir.z * 1.5;
-                // clamp to bounds and resolve wall collisions
-                var jb = state.bounds;
-                npc.char.group.position.x = Math.max(-jb, Math.min(jb, npc.char.group.position.x));
-                npc.char.group.position.z = Math.max(-jb, Math.min(jb, npc.char.group.position.z));
-                LIFE.resolveCollisions(npc.char.group.position);
                 if (jailDmg > 0) LIFE.damageNPC(npc, jailDmg);
                 npc.reacting = 1.5;
                 setTimeout(function() {
@@ -153,14 +145,6 @@ LIFE.performAction = function(idx) {
         if (dist < 6) {
             npc.reacting = 1.5;
             if (actName === 'punch' && dist < 2.5) {
-                var pushDir = new THREE.Vector3(dx, 0, dz).normalize();
-                npc.char.group.position.x += pushDir.x * 2;
-                npc.char.group.position.z += pushDir.z * 2;
-                // clamp to bounds and resolve wall collisions
-                var kb = state.bounds;
-                npc.char.group.position.x = Math.max(-kb, Math.min(kb, npc.char.group.position.x));
-                npc.char.group.position.z = Math.max(-kb, Math.min(kb, npc.char.group.position.z));
-                LIFE.resolveCollisions(npc.char.group.position);
                 LIFE.sounds.punch();
 
                 // damage: weapons have flat damage, only fists scale with age
