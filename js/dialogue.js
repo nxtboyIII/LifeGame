@@ -1376,6 +1376,8 @@ LIFE.dialogue.close = function() {
                 LIFE.teleportPlayer(0, 0, 5);
                 LIFE.state.heldByParent = true;
                 LIFE.ui.showStageMessage('Home sweet home');
+                // Show skip year hint
+                LIFE.ui.showSkipHint();
                 // Seed initial news
                 LIFE.news.add('New baby born at local hospital - family overjoyed!', 'social');
                 LIFE.news.add(LIFE.NEWS_RANDOM[Math.floor(Math.random() * LIFE.NEWS_RANDOM.length)], 'world');
@@ -1415,7 +1417,7 @@ LIFE.dialogue.selectOption = function(idx) {
     }
 
     if (opt.rep) {
-        LIFE.state.reputation = Math.max(-100, Math.min(100, LIFE.state.reputation + opt.rep));
+        LIFE.state.reputation += opt.rep;
         LIFE.ui.showRepChange(opt.rep);
     }
 

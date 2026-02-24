@@ -616,8 +616,11 @@ LIFE.updateNPCNametag = function(npc) {
 
 // Check if a position is inside any collider
 LIFE.isInsideCollider = function(x, z) {
-    for (var i = 0; i < LIFE.colliders.length; i++) {
-        var c = LIFE.colliders[i];
+    var colliders = (LIFE.world.built && !LIFE.world.insideInterior && LIFE.world.getCollidersNear)
+        ? LIFE.world.getCollidersNear(x, z)
+        : LIFE.colliders;
+    for (var i = 0; i < colliders.length; i++) {
+        var c = colliders[i];
         if (x > c.minX - 0.5 && x < c.maxX + 0.5 && z > c.minZ - 0.5 && z < c.maxZ + 0.5) return true;
     }
     return false;
@@ -636,8 +639,11 @@ LIFE.pathfinding = {
 // Check if a world position is walkable (not inside a collider, with margin)
 LIFE.pathfinding.isWalkable = function(wx, wz) {
     var margin = 0.8; // NPC body radius margin
-    for (var i = 0; i < LIFE.colliders.length; i++) {
-        var c = LIFE.colliders[i];
+    var colliders = (LIFE.world.built && !LIFE.world.insideInterior && LIFE.world.getCollidersNear)
+        ? LIFE.world.getCollidersNear(wx, wz)
+        : LIFE.colliders;
+    for (var i = 0; i < colliders.length; i++) {
+        var c = colliders[i];
         if (wx > c.minX - margin && wx < c.maxX + margin && wz > c.minZ - margin && wz < c.maxZ + margin) return false;
     }
     return true;
@@ -897,12 +903,12 @@ LIFE._createPhoneMesh = function() {
 };
 
 // Start an NPC calling the police (with visible phone animation)
-LIFE.npcStartPhoneCall = function(npc, onComplete) {
+LIFE.npcStartPhoneCall = function(npc, onComplete, isRetry) {
     if (!npc || !npc.alive || npc._callingPolice) return;
-    // Can't call if recently attacked — need 15 seconds to recover
-    if (npc._lastAttackedTime && (Date.now() - npc._lastAttackedTime) < 15000) return;
+    // Can't call if recently attacked — need 15 seconds to recover (unless retrying)
+    if (!isRetry && npc._lastAttackedTime && (Date.now() - npc._lastAttackedTime) < 15000) return;
     npc._callingPolice = true;
-    npc._phoneCallTimer = 4 + Math.random() * 2; // 4-6 seconds to complete call
+    npc._phoneCallTimer = 5; // 5 seconds to complete call
     npc._phoneCallCallback = onComplete || null;
 
     // Create phone mesh and attach to right hand
@@ -918,6 +924,11 @@ LIFE.npcStartPhoneCall = function(npc, onComplete) {
     npc.waiting = true;
     npc.waitTimer = 99;
     npc.fleeing = false;
+
+    // Announce the call
+    if (!isRetry) {
+        LIFE.ui.showPopup(npc.name + ' is calling the police!', '#f44336');
+    }
 };
 
 // Update phone call animation (called every frame for NPCs that are calling)
@@ -925,9 +936,20 @@ LIFE.updateNPCPhoneCalls = function(dt) {
     var allNPCs = LIFE.getAllNPCs ? LIFE.getAllNPCs() : LIFE.npcs;
     for (var i = 0; i < allNPCs.length; i++) {
         var npc = allNPCs[i];
+
+        // Retry logic: interrupted NPC tries to call again as soon as they stop fleeing
+        if (npc._wantsToCallPolice && !npc._callingPolice && npc.alive) {
+            if (!npc.fleeing) {
+                npc._wantsToCallPolice = false;
+                var retryCb = npc._retryCallbackFn;
+                npc._retryCallbackFn = null;
+                LIFE.npcStartPhoneCall(npc, retryCb, true);
+            }
+        }
+
         if (!npc._callingPolice) continue;
 
-        // NPC died during call — cancel
+        // NPC died during call — cancel permanently
         if (!npc.alive) {
             LIFE.npcCancelPhoneCall(npc);
             continue;
@@ -953,9 +975,11 @@ LIFE.updateNPCPhoneCalls = function(dt) {
             npc.chatTimer = 99;
         }
 
-        // Call completed
+        // Call completed — police are notified, nothing can stop dispatch now
         if (npc._phoneCallTimer <= 0) {
             if (npc._phoneCallCallback) npc._phoneCallCallback();
+            npc._wantsToCallPolice = false;
+            npc._retryCallbackFn = null;
             LIFE.npcCancelPhoneCall(npc);
             LIFE.ui.showPopup(npc.name + ' called the police!', '#f44336');
             // After calling, flee
@@ -965,9 +989,10 @@ LIFE.updateNPCPhoneCalls = function(dt) {
     }
 };
 
-// Cancel / interrupt a phone call (e.g. NPC killed)
+// Cancel / interrupt a phone call (e.g. NPC killed or attacked)
 LIFE.npcCancelPhoneCall = function(npc) {
     if (!npc._callingPolice) return;
+    var hadCallback = npc._phoneCallCallback;
     npc._callingPolice = false;
     npc._phoneCallTimer = 0;
     npc._phoneCallCallback = null;
@@ -983,6 +1008,14 @@ LIFE.npcCancelPhoneCall = function(npc) {
     if (npc.chatSprite) npc.chatSprite.visible = false;
     // Restore movement
     npc.waitTimer = 0;
+    // If NPC survived, they'll try to call again after fleeing and recovering
+    if (npc.alive && hadCallback) {
+        npc._wantsToCallPolice = true;
+        npc._retryCallbackFn = hadCallback;
+        // NPC flees after being interrupted
+        npc.fleeing = true;
+        npc.fleeTimer = 6 + Math.random() * 4;
+    }
 };
 
 LIFE.damageNPC = function(npc, amount) {
@@ -1008,6 +1041,9 @@ LIFE.damageNPC = function(npc, amount) {
 
 LIFE.killNPC = function(npc) {
     npc.alive = false;
+    // Dead NPCs can't retry calling police
+    npc._wantsToCallPolice = false;
+    npc._retryCallbackFn = null;
     // Notify quest system of kill
     if (LIFE.quests && LIFE.quests._onNPCKilled) {
         LIFE.quests._onNPCKilled(npc.type, npc.name);
@@ -1048,7 +1084,7 @@ LIFE.killNPC = function(npc) {
         state.stats.happiness = Math.max(0, state.stats.happiness - 35);
         state.stats.charisma = Math.max(0, state.stats.charisma - 10);
         LIFE.logCrime('Murder of ' + npc.type);
-        if (killSeen) LIFE.addWanted(5, 'Family murder (witnessed)');
+        if (killSeen) LIFE.addWanted(5, 'Family murder (witnessed)', killWitness.callerName);
         state.familyKiller = true;
         state.familyAbuser = true;
         if (!state.killedFamily) state.killedFamily = [];
@@ -1060,28 +1096,30 @@ LIFE.killNPC = function(npc) {
         } else if (npc.type === 'Your Child') {
             state.friends = 0; state.enemies += 5; state.stats.happiness = 0;
         }
-        // Unwitnessed family murder — body discovered later
+        // Unwitnessed family murder — body discovered later, police investigate but don't know who did it
         if (!killSeen) {
             repLoss = Math.ceil(repLoss * 0.4);
+            var famBodyX = npc.char.group.position.x, famBodyZ = npc.char.group.position.z;
             setTimeout(function() {
                 if (state.gamePhase === 'playing') {
                     LIFE.ui.showPopup(npc.type + '\'s body has been discovered!', '#ff1744');
-                    LIFE.addWanted(3, 'Family murder (discovered)');
+                    LIFE.dispatchBodyInvestigation(famBodyX, famBodyZ);
                     if (LIFE.news) LIFE.news.add('Missing ' + npc.type.toLowerCase() + ' found dead. Police launch investigation.', 'crime');
                 }
-            }, 15000 + Math.random() * 20000); // discovered 15-35 seconds later
+            }, 15000 + Math.random() * 20000);
         }
     } else if (npc.type === 'Kid' || npc.type === 'Grandchild') {
         repLoss = -50;
         state.stats.happiness = Math.max(0, state.stats.happiness - 20);
         LIFE.logCrime('Murder of a child');
-        if (killSeen) LIFE.addWanted(5, 'Child murder (witnessed)');
+        if (killSeen) LIFE.addWanted(5, 'Child murder (witnessed)', killWitness.callerName);
         if (!killSeen) {
             repLoss = Math.ceil(repLoss * 0.4);
+            var kidBodyX = npc.char.group.position.x, kidBodyZ = npc.char.group.position.z;
             setTimeout(function() {
                 if (state.gamePhase === 'playing') {
                     LIFE.ui.showPopup('A child\'s body has been discovered!', '#ff1744');
-                    LIFE.addWanted(4, 'Child murder (discovered)');
+                    LIFE.dispatchBodyInvestigation(kidBodyX, kidBodyZ);
                     if (LIFE.news) LIFE.news.add('Child found dead. Community in shock. Police investigating.', 'crime');
                 }
             }, 10000 + Math.random() * 15000);
@@ -1089,27 +1127,78 @@ LIFE.killNPC = function(npc) {
     } else {
         LIFE.logCrime('Murder');
         if (killSeen) {
-            LIFE.addWanted(3, 'Murder (witnessed)');
+            LIFE.addWanted(3, 'Murder (witnessed)', killWitness.callerName);
         } else {
-            // Unwitnessed murder — body found later
+            // Unwitnessed murder — body found later, police investigate area but don't know who did it
             repLoss = Math.ceil(repLoss * 0.3);
+            var bodyX = npc.char.group.position.x, bodyZ = npc.char.group.position.z;
             setTimeout(function() {
                 if (state.gamePhase === 'playing') {
                     LIFE.ui.showPopup('A body has been discovered nearby...', '#ff9800');
-                    LIFE.addWanted(2, 'Murder (discovered)');
+                    LIFE.dispatchBodyInvestigation(bodyX, bodyZ);
                     if (LIFE.news) LIFE.news.add('Body found in ' + (LIFE.world._currentZone || 'local area') + '. Police investigating.', 'crime');
                 }
-            }, 20000 + Math.random() * 30000); // discovered 20-50 seconds later
+            }, 20000 + Math.random() * 30000);
         }
     }
-    state.reputation = Math.max(-100, state.reputation + repLoss);
+    state.reputation += repLoss;
     LIFE.ui.showRepChange(repLoss);
     state.enemies++;
     LIFE.sounds.npcDeath();
-    LIFE.ui.showPopup(npc.name + ' has died!', '#ff1744');
     if (killSeen && LIFE.news) LIFE.news.add('Tragedy strikes - ' + npc.type + ' found dead in ' + (LIFE.world._currentZone || 'local area') + '.', 'crime');
     LIFE.updateRelationship(npc.name, -100);
     if (state.nearestNPC === npc) state.nearestNPC = null;
+};
+
+// Dispatch police to investigate a body location (no wanted level, no pursuit)
+LIFE.dispatchBodyInvestigation = function(x, z) {
+    if (!LIFE.world.policeCops) return;
+    for (var i = 0; i < LIFE.world.policeCops.length; i++) {
+        var pcop = LIFE.world.policeCops[i];
+        if (pcop.aiState === 'patrolling' || pcop.aiState === 'idle') {
+            pcop.aiState = 'investigating';
+            pcop._investigateTimer = 0;
+            pcop._investigateCenter = { x: x, z: z };
+            pcop._bodyInvestigation = true;
+            pcop.npc.speed = LIFE.getSpeedForAge(25) * 1.0;
+            return;
+        }
+    }
+};
+
+// NPC dead body discovery — called from NPC update loop
+LIFE.checkNPCBodyDiscovery = function(npc, dt) {
+    if (!npc.alive || npc.isPolice || npc._discoveredBody) return;
+    npc._bodyCheckTimer = (npc._bodyCheckTimer || 0) + dt;
+    if (npc._bodyCheckTimer < 1.0) return; // check once per second
+    npc._bodyCheckTimer = 0;
+    var nx = npc.char.group.position.x, nz = npc.char.group.position.z;
+    var allNPCs = LIFE.getAllNPCs();
+    for (var i = 0; i < allNPCs.length; i++) {
+        var other = allNPCs[i];
+        if (other.alive || other === npc || other._bodyDiscovered) continue;
+        var bx = other.char.group.position.x, bz = other.char.group.position.z;
+        var dx = bx - nx, dz = bz - nz;
+        var dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < 8) {
+            // NPC found a dead body — react
+            other._bodyDiscovered = true;
+            npc._discoveredBody = true;
+            npc.fleeing = true;
+            npc.fleeTimer = 8 + Math.random() * 4;
+            LIFE.drawChatBubble(npc, 'Oh my god! Someone\'s dead!');
+            npc.chatSprite.visible = true;
+            npc.chatTimer = 3;
+            // Call police to investigate the body (not the player)
+            var npcAge = npc.npcAge !== null ? npc.npcAge : 25;
+            if (npcAge >= 12 && !npc._callingPolice && LIFE.npcStartPhoneCall) {
+                LIFE.npcStartPhoneCall(npc, function() {
+                    LIFE.dispatchBodyInvestigation(bx, bz);
+                });
+            }
+            return;
+        }
+    }
 };
 
 LIFE.spawnNPCs = function(stage) {
@@ -1321,6 +1410,8 @@ LIFE.updateNPCs = function(dt) {
 
     LIFE.npcs.forEach(function(npc) {
         if (!npc.alive) return;
+        // Check if NPC discovers a dead body nearby
+        if (LIFE.checkNPCBodyDiscovery) LIFE.checkNPCBodyDiscovery(npc, dt);
         // Sleeping NPCs: skip movement/AI, just show ring if nearest
         if (npc._sleeping) {
             var isNearest2 = (npc === nearestNPC);

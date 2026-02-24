@@ -378,15 +378,21 @@ LIFE.getBoundsForStage = function(s) {
 
 // Reputation title thresholds
 LIFE.getRepTitle = function(rep) {
-    if (rep <= -80) return { title: 'VILLAIN', color: '#b71c1c' };
-    if (rep <= -50) return { title: 'FEARED', color: '#e53935' };
-    if (rep <= -25) return { title: 'TROUBLEMAKER', color: '#ef5350' };
-    if (rep <= -10) return { title: 'DISLIKED', color: '#ef9a9a' };
-    if (rep < 10)   return { title: '', color: '#999' };
-    if (rep < 25)   return { title: 'LIKED', color: '#a5d6a7' };
-    if (rep < 50)   return { title: 'RESPECTED', color: '#66bb6a' };
-    if (rep < 80)   return { title: 'BELOVED', color: '#43a047' };
-    return { title: 'HERO', color: '#1b5e20' };
+    if (rep <= -500) return { title: 'PURE EVIL', color: '#4a0000' };
+    if (rep <= -300) return { title: 'MONSTER', color: '#6d0000' };
+    if (rep <= -150) return { title: 'INFAMOUS', color: '#8b0000' };
+    if (rep <= -80)  return { title: 'VILLAIN', color: '#b71c1c' };
+    if (rep <= -50)  return { title: 'FEARED', color: '#e53935' };
+    if (rep <= -25)  return { title: 'TROUBLEMAKER', color: '#ef5350' };
+    if (rep <= -10)  return { title: 'DISLIKED', color: '#ef9a9a' };
+    if (rep < 10)    return { title: '', color: '#999' };
+    if (rep < 25)    return { title: 'LIKED', color: '#a5d6a7' };
+    if (rep < 50)    return { title: 'RESPECTED', color: '#66bb6a' };
+    if (rep < 80)    return { title: 'BELOVED', color: '#43a047' };
+    if (rep < 150)   return { title: 'HERO', color: '#1b5e20' };
+    if (rep < 300)   return { title: 'LEGEND', color: '#0d4f0d' };
+    if (rep < 500)   return { title: 'ICON', color: '#ffd700' };
+    return { title: 'SAINT', color: '#ffd700' };
 };
 
 // ============================================================

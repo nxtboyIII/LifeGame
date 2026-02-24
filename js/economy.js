@@ -500,7 +500,7 @@ LIFE.economy.buyItem = function(index) {
 
     LIFE.state.stats[item.stat] = Math.min(100, LIFE.state.stats[item.stat] + item.amount);
     if (item.rep) {
-        LIFE.state.reputation = Math.max(-100, Math.min(100, LIFE.state.reputation + item.rep));
+        LIFE.state.reputation += item.rep;
         LIFE.ui.showRepChange(item.rep);
     }
     if (item.type === 'gun') {
@@ -545,7 +545,7 @@ LIFE.economy.buyVendorItem = function(vendorType, index) {
     }
 
     if (item.rep) {
-        LIFE.state.reputation = Math.max(-100, Math.min(100, LIFE.state.reputation + item.rep));
+        LIFE.state.reputation += item.rep;
         LIFE.ui.showRepChange(item.rep);
     }
     // track purchase for restocking
@@ -565,7 +565,7 @@ LIFE.economy.buyDealerItem = function(index) {
 
     LIFE.state.stats[item.stat] = Math.min(100, LIFE.state.stats[item.stat] + item.amount);
     if (item.rep) {
-        LIFE.state.reputation = Math.max(-100, Math.min(100, LIFE.state.reputation + item.rep));
+        LIFE.state.reputation += item.rep;
         LIFE.ui.showRepChange(item.rep);
     }
     if (item.type === 'gun') {
@@ -798,8 +798,16 @@ LIFE.economy.getLifeSummary = function() {
 
     // === CLOSING EPITAPH ===
     var epitaph = '';
-    if (alignment > 100 && s.reputation >= 70 && (s.livesHelped || 0) >= 5) {
+    if (s.reputation <= -500 && s.kills >= 10) {
+        epitaph = 'The name ' + name + ' will echo through history as a reminder of the depths of human cruelty. Nations trembled, and the scars they carved into the world will never fully heal. May such darkness never walk among us again.';
+    } else if (s.reputation <= -300 && s.kills >= 5) {
+        epitaph = 'A monster has left this world. ' + name + '\'s reign of terror is over, but the nightmares they created will haunt survivors for a lifetime. The world breathes easier today.';
+    } else if (alignment > 100 && s.reputation >= 70 && (s.livesHelped || 0) >= 5) {
         epitaph = 'The world lost a beacon of light today. ' + name + ' dedicated their life to making others\' lives better. Their name will be spoken with gratitude and reverence for generations to come.';
+    } else if (s.reputation >= 300) {
+        epitaph = name + ' was more than a person — they were a symbol. Their extraordinary compassion and selflessness inspired millions. Statues will be built, songs will be written, and the world they helped create will be their eternal monument.';
+    } else if (s.reputation >= 150) {
+        epitaph = 'A true hero has fallen. ' + name + '\'s name became synonymous with hope and courage. The countless lives they touched will carry their spirit forward. Legends never truly die.';
     } else if (alignment > 60 && s.reputation >= 40) {
         epitaph = 'A good person has left this world. They chose kindness when it would have been easier to look away. The community is poorer for their passing.';
     } else if (alignment < -100 && s.kills >= 5) {

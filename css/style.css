@@ -193,7 +193,7 @@ body.unlocked { cursor: default; }
    REPUTATION CHANGE POPUP
    ================================================================ */
 #repChange {
-    position: absolute; top: 25%; left: 50%; transform: translateX(-50%);
+    position: absolute; top: 55%; left: 50%; transform: translateX(-50%);
     font-size: 20px; font-weight: 800; opacity: 0; transition: opacity 0.3s;
     text-shadow: 0 2px 12px rgba(0,0,0,0.9);
     pointer-events: none; letter-spacing: 1px;
@@ -317,9 +317,15 @@ body.unlocked { cursor: default; }
     border-radius: 2px; transition: width 0.3s;
 }
 #skipHint {
-    position: absolute; top: 138px; left: 50%; transform: translateX(-50%);
-    font-size: 10px; opacity: 0.35; letter-spacing: 0.5px;
+    position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+    font-size: 28px; font-weight: 700; letter-spacing: 2px;
+    opacity: 0; transition: opacity 0.4s;
+    background: rgba(0,0,0,0.6); padding: 8px 18px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.25);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+    pointer-events: none; white-space: nowrap;
 }
+#skipHint.show { opacity: 1; }
 
 /* ================================================================
    NEWS BANNER
@@ -388,7 +394,7 @@ body.unlocked { cursor: default; }
    ================================================================ */
 #popupStack {
     position: absolute; top: 22%; left: 50%; transform: translateX(-50%);
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
     pointer-events: none; z-index: 100;
 }
 #popupStack .popup-item {
@@ -436,16 +442,23 @@ body.unlocked { cursor: default; }
    ================================================================ */
 #controls {
     position: absolute; bottom: 54px; left: 50%; transform: translateX(-50%);
-    font-size: 12px; opacity: 0.55; text-align: center;
+    font-size: 12px; opacity: 1; text-align: center;
     display: flex; flex-wrap: wrap; justify-content: center; gap: 5px 10px;
-    max-width: 700px; line-height: 1;
+    max-width: 720px; line-height: 1;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    padding: 6px 14px; border-radius: 8px;
 }
 #controls .ctrl-key {
-    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35);
     border-radius: 3px; padding: 1px 5px; font-weight: 800; color: #fff;
     font-size: 11px; display: inline-block; min-width: 16px; text-align: center;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
-#controls .ctrl-item { color: rgba(255,255,255,0.7); white-space: nowrap; }
+#controls .ctrl-item {
+    color: rgba(255,255,255,0.9); white-space: nowrap;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+}
 
 /* ================================================================
    NPC HINT
@@ -752,9 +765,13 @@ body.unlocked { cursor: default; }
 /* ================================================================
    QUEST COMPASS ARROW
    ================================================================ */
-#questArrow { position:absolute; top:130px; left:50%; transform:translateX(-50%); display:none; text-align:center; z-index:50; pointer-events:none; }
+#questArrow { position:absolute; top:170px; left:50%; transform:translateX(-50%); display:none; text-align:center; z-index:50; pointer-events:none; }
 .arrowIcon { display:block; margin:0 auto; filter: drop-shadow(0 0 8px rgba(33,150,243,0.8)); }
-.arrowDist { font-size: 11px; color: var(--c-text-faint); display:block; margin-top:2px; }
+.arrowDist {
+    font-size: 11px; color: rgba(255,255,255,0.85); display:block; margin-top:2px;
+    background: rgba(0,0,0,0.55); padding: 2px 8px; border-radius: 4px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
 
 /* ================================================================
    QUEST BANNERS (Skyrim-style)
@@ -949,6 +966,26 @@ body.unlocked { cursor: default; }
 }
 #crosshair::before { width: 12px; height: 1px; left: -14px; top: 2.5px; }
 #crosshair::after  { width: 1px; height: 12px; left: 2.5px; top: -14px; }
+
+/* ================================================================
+   STEALTH EYE CROSSHAIR
+   ================================================================ */
+#stealthEye {
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    width:48px; height:32px;
+    display:none; pointer-events:none; z-index:50;
+}
+#hiddenLabel {
+    position:absolute; top:calc(50% + 22px); left:50%;
+    transform:translateX(-50%);
+    font-size:11px; letter-spacing:3px; color:rgba(150,255,150,0.8);
+    text-transform:uppercase; font-weight:700;
+    display:none; pointer-events:none; z-index:50;
+    text-shadow:0 0 8px rgba(100,255,100,0.4);
+    opacity:0; transition:opacity 0.4s;
+}
+#hiddenLabel.show { opacity:1; }
 
 /* ================================================================
    START SCREEN

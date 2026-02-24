@@ -126,23 +126,41 @@ LIFE.createCharacter = function(height, skinColor, clothesColor, isPlayer, opts)
     var legMat = new THREE.MeshPhongMaterial({ color: legColor });
     ch.legMat = legMat;
 
+    // LEFT LEG — upper thigh + knee joint + lower shin
     var llG = new THREE.Group();
     llG.position.set(-legW * 0.7, legH, 0);
-    var llM = new THREE.Mesh(new THREE.BoxGeometry(legW, legH, legW), legMat);
-    llM.position.y = -legH / 2;
-    llM.castShadow = true;
-    llG.add(llM);
+    var llUpper = new THREE.Mesh(new THREE.BoxGeometry(legW, legH / 2, legW), legMat);
+    llUpper.position.y = -legH / 4;
+    llUpper.castShadow = true;
+    llG.add(llUpper);
+    var llKnee = new THREE.Group();
+    llKnee.position.y = -legH / 2;
+    var llLower = new THREE.Mesh(new THREE.BoxGeometry(legW, legH / 2, legW), legMat);
+    llLower.position.y = -legH / 4;
+    llLower.castShadow = true;
+    llKnee.add(llLower);
+    llG.add(llKnee);
     ch.group.add(llG);
     ch.parts.leftLeg = llG;
+    ch.parts.leftKnee = llKnee;
 
+    // RIGHT LEG — upper thigh + knee joint + lower shin
     var rlG = new THREE.Group();
     rlG.position.set(legW * 0.7, legH, 0);
-    var rlM = new THREE.Mesh(new THREE.BoxGeometry(legW, legH, legW), legMat);
-    rlM.position.y = -legH / 2;
-    rlM.castShadow = true;
-    rlG.add(rlM);
+    var rlUpper = new THREE.Mesh(new THREE.BoxGeometry(legW, legH / 2, legW), legMat);
+    rlUpper.position.y = -legH / 4;
+    rlUpper.castShadow = true;
+    rlG.add(rlUpper);
+    var rlKnee = new THREE.Group();
+    rlKnee.position.y = -legH / 2;
+    var rlLower = new THREE.Mesh(new THREE.BoxGeometry(legW, legH / 2, legW), legMat);
+    rlLower.position.y = -legH / 4;
+    rlLower.castShadow = true;
+    rlKnee.add(rlLower);
+    rlG.add(rlKnee);
     ch.group.add(rlG);
     ch.parts.rightLeg = rlG;
+    ch.parts.rightKnee = rlKnee;
 
     // Arms
     var laG = new THREE.Group();

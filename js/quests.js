@@ -663,7 +663,7 @@ LIFE.quests.complete = function(quest) {
     var s = LIFE.state;
 
     if (reward.money) s.money += reward.money;
-    if (reward.rep) { s.reputation = Math.max(-100, Math.min(100, s.reputation + reward.rep)); LIFE.ui.showRepChange(reward.rep); }
+    if (reward.rep) { s.reputation += reward.rep; LIFE.ui.showRepChange(reward.rep); }
     if (reward.happiness) s.stats.happiness = Math.min(100, s.stats.happiness + reward.happiness);
     if (reward.health) s.stats.health = Math.min(100, s.stats.health + reward.health);
     if (reward.intelligence) s.stats.intelligence = Math.min(100, s.stats.intelligence + reward.intelligence);

@@ -45,6 +45,10 @@ LIFE.enhance.init = function() {
             _origDmgN.apply(LIFE, arguments);
             if (npc && npc.char) LIFE.enhance.hitFlash.trigger(npc);
             LIFE.enhance.shake.add(0.06);
+            // Show floating damage number at NPC position
+            if (npc && amount > 0 && LIFE.enhance.floatNumAtNPC) {
+                LIFE.enhance.floatNumAtNPC(npc, '-' + amount, '#ff1744');
+            }
         };
     }
 
@@ -510,11 +514,42 @@ LIFE.enhance.floatNum = function(text, color) {
     div.className = 'floatNum';
     div.textContent = text;
     div.style.color = color || '#fff';
-    // Position near center-top, with slight random offset
-    var cx = window.innerWidth * 0.5 + (Math.random()-0.5)*80;
-    var cy = window.innerHeight * 0.38 + (Math.random()-0.5)*40;
-    div.style.left = cx + 'px';
-    div.style.top  = cy + 'px';
+
+    // HP loss text → above the health bar (bottom-left)
+    if (text && text.match(/HP/i)) {
+        var hpBar = document.getElementById('playerHpBar');
+        if (hpBar) {
+            var rect = hpBar.getBoundingClientRect();
+            var cx = rect.left + rect.width * 0.5 + (Math.random()-0.5)*40;
+            var cy = rect.top - 10 + (Math.random()-0.5)*10;
+            div.style.left = cx + 'px';
+            div.style.top  = cy + 'px';
+        }
+    } else {
+        // Default: near center-top, with slight random offset
+        var cx = window.innerWidth * 0.5 + (Math.random()-0.5)*80;
+        var cy = window.innerHeight * 0.38 + (Math.random()-0.5)*40;
+        div.style.left = cx + 'px';
+        div.style.top  = cy + 'px';
+    }
+    el.appendChild(div);
+    setTimeout(function() { if (div.parentNode) div.parentNode.removeChild(div); }, 1500);
+};
+
+// Float damage number at an NPC's screen position
+LIFE.enhance.floatNumAtNPC = function(npc, text, color) {
+    var el = document.getElementById('ui');
+    if (!el || !npc || !npc.char || !npc.char.group) return;
+    var pos = npc.char.group.position.clone();
+    pos.y += (npc.char.height || 1.7) + 0.3;
+    var screenPos = LIFE.enhance.projectToScreen(pos);
+    if (!screenPos) return;
+    var div = document.createElement('div');
+    div.className = 'floatNum';
+    div.textContent = text;
+    div.style.color = color || '#ff1744';
+    div.style.left = screenPos.x + (Math.random()-0.5)*30 + 'px';
+    div.style.top  = screenPos.y + 'px';
     el.appendChild(div);
     setTimeout(function() { if (div.parentNode) div.parentNode.removeChild(div); }, 1500);
 };

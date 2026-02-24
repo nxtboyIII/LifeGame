@@ -87,8 +87,8 @@ LIFE.updatePlayerAppearance = function() {
     // Remove old accessory meshes
     if (player._hatMesh) { player.group.remove(player._hatMesh); player._hatMesh = null; }
     if (player._armorMesh) { player.group.remove(player._armorMesh); player._armorMesh = null; }
-    if (player._shoeMeshL && player.parts.leftLeg) { player.parts.leftLeg.remove(player._shoeMeshL); player._shoeMeshL = null; }
-    if (player._shoeMeshR && player.parts.rightLeg) { player.parts.rightLeg.remove(player._shoeMeshR); player._shoeMeshR = null; }
+    if (player._shoeMeshL) { (player.parts.leftKnee || player.parts.leftLeg).remove(player._shoeMeshL); player._shoeMeshL = null; }
+    if (player._shoeMeshR) { (player.parts.rightKnee || player.parts.rightLeg).remove(player._shoeMeshR); player._shoeMeshR = null; }
 
     // Hat
     if (eq.head) {
@@ -132,13 +132,15 @@ LIFE.updatePlayerAppearance = function() {
         var shoeMat = LIFE.getMaterial({ color: shoeColor });
         var legH2 = h * 0.28;
         var legW2 = h * 0.08;
+        var shoeParentL = player.parts.leftKnee || player.parts.leftLeg;
+        var shoeParentR = player.parts.rightKnee || player.parts.rightLeg;
         var shoeL = new THREE.Mesh(new THREE.BoxGeometry(legW2*1.2, legH2*0.2, legW2*1.5), shoeMat);
-        shoeL.position.set(0, -legH2*0.95, legW2*0.2);
-        player.parts.leftLeg.add(shoeL);
+        shoeL.position.set(0, -legH2*0.45, legW2*0.2);
+        shoeParentL.add(shoeL);
         player._shoeMeshL = shoeL;
         var shoeR = new THREE.Mesh(new THREE.BoxGeometry(legW2*1.2, legH2*0.2, legW2*1.5), shoeMat);
-        shoeR.position.set(0, -legH2*0.95, legW2*0.2);
-        player.parts.rightLeg.add(shoeR);
+        shoeR.position.set(0, -legH2*0.45, legW2*0.2);
+        shoeParentR.add(shoeR);
         player._shoeMeshR = shoeR;
     }
 };
@@ -149,7 +151,7 @@ LIFE.updatePlayerAppearance = function() {
 LIFE.damagePlayer = function(amount, source) {
     var state = LIFE.state;
     state.stats.health = Math.max(0, state.stats.health - amount);
-    LIFE.ui.showPopup('-' + amount + ' HP', '#ef5350');
+    if (LIFE.enhance && LIFE.enhance.floatNum) LIFE.enhance.floatNum('-' + amount + ' HP', '#ef5350');
     LIFE.ui.flashDamage();
     if (state.stats.health <= 0 && !state.deathTriggered) {
         // chance to survive via hospital if not in jail/execution and not being chased
@@ -174,8 +176,8 @@ LIFE.damagePlayer = function(amount, source) {
 LIFE.resolveCollisions = function(pos, bodyHeight) {
     var radius = 0.3;
     var bh = bodyHeight || 1.5;
-    var colliders = (LIFE.world.built && !LIFE.world.insideInterior)
-        ? LIFE.world.getActiveColliders()
+    var colliders = (LIFE.world.built && !LIFE.world.insideInterior && LIFE.world.getCollidersNear)
+        ? LIFE.world.getCollidersNear(pos.x, pos.z)
         : LIFE.colliders;
     for (var i = 0; i < colliders.length; i++) {
         var c = colliders[i];
@@ -302,6 +304,9 @@ LIFE.updatePlayer = function(dt) {
         if (LIFE.keys['KeyD'] || LIFE.keys['ArrowRight'])   moveX = -1;
     }
 
+    // crouch speed reduction
+    if (state.crouching && state.age >= 5) speed *= 0.4;
+
     // sprint with shift
     var sprinting = LIFE.keys['ShiftLeft'] && state.age >= 8 && state.stats.health > 10;
     if (sprinting) speed *= 1.5;
@@ -388,6 +393,44 @@ LIFE.updatePlayer = function(dt) {
     // Apply weapon arm pose after walk animation
     if (holdingWeapon && LIFE.updateHeldWeapon) LIFE.updateHeldWeapon();
 
+    // Crouch animation — bend knees, lower body
+    var crouchTarget = (state.crouching && state.age >= 5) ? 1 : 0;
+    LIFE._crouchBlend = LIFE._crouchBlend || 0;
+    LIFE._crouchBlend += (crouchTarget - LIFE._crouchBlend) * 0.15;
+    var cb = LIFE._crouchBlend;
+    // YXZ order so lean rotates in character-local space, not world
+    player.group.rotation.order = 'YXZ';
+    if (cb > 0.01) {
+        // When idle, reset leg base to prevent decay accumulation
+        if (!isMoving) {
+            player.parts.leftLeg.rotation.x = 0;
+            player.parts.rightLeg.rotation.x = 0;
+        }
+        // Thigh forward (neg X), knee bends back (pos X)
+        player.parts.leftLeg.rotation.x -= cb * 0.9;
+        player.parts.rightLeg.rotation.x -= cb * 0.9;
+        if (player.parts.leftKnee) player.parts.leftKnee.rotation.x = cb * 0.7;
+        if (player.parts.rightKnee) player.parts.rightKnee.rotation.x = cb * 0.7;
+        // Forward lean of upper body (local space due to YXZ order)
+        player.group.rotation.x = cb * 0.25;
+        // Lower the body
+        player.group.position.y -= cb * player.height * 0.12;
+    } else {
+        player.group.rotation.x = 0;
+        if (player.parts.leftKnee) player.parts.leftKnee.rotation.x = 0;
+        if (player.parts.rightKnee) player.parts.rightKnee.rotation.x = 0;
+    }
+
+    // Stealth detection update (throttled)
+    LIFE._stealthTimer = (LIFE._stealthTimer || 0) + dt;
+    if (LIFE._stealthTimer > 0.25) {
+        LIFE._stealthTimer = 0;
+        LIFE._playerHidden = LIFE.isPlayerHidden ? LIFE.isPlayerHidden() : false;
+    }
+
+    // Update stealth eye HUD
+    if (LIFE.updateStealthEye) LIFE.updateStealthEye(dt);
+
     if (state.age >= 1 && state.age < 3 && isMoving) player.group.rotation.z = Math.sin(state.walkTime * 2) * 0.12;
     else player.group.rotation.z *= 0.9;
 
@@ -440,10 +483,11 @@ LIFE.updateCamera = function() {
     var tX = player.group.position.x - sinR * camDist + rightX * shoulderOffset;
     var tZ = player.group.position.z - cosR * camDist + rightZ * shoulderOffset;
     var tY;
+    var crouchCamDrop = (LIFE._crouchBlend || 0) * h * 0.2;
     if (inCombatMode) {
-        tY = player.group.position.y + camHeight;
+        tY = player.group.position.y + camHeight - crouchCamDrop;
     } else {
-        tY = player.group.position.y + camHeight * state.cameraPitch;
+        tY = player.group.position.y + camHeight * state.cameraPitch - crouchCamDrop;
     }
 
     // Per-frame lerp camera position
@@ -471,5 +515,94 @@ LIFE.updateCamera = function() {
             player.group.position.y + h * 0.6,
             player.group.position.z + rightZ * shoulderOffset * 0.3
         );
+    }
+};
+
+// ============================================================
+// STEALTH EYE HUD
+// ============================================================
+LIFE.updateStealthEye = function(dt) {
+    var state = LIFE.state;
+    var eyeCanvas = document.getElementById('stealthEye');
+    var crosshair = document.getElementById('crosshair');
+    var hiddenLabel = document.getElementById('hiddenLabel');
+    if (!eyeCanvas || !crosshair) return;
+
+    if (!state.crouching || state.age < 5) {
+        eyeCanvas.style.display = 'none';
+        hiddenLabel.style.display = 'none';
+        if (state.locked) crosshair.style.display = 'block';
+        LIFE._stealthEyeOpen = 1;
+        return;
+    }
+
+    // Crouching: show eye, hide crosshair
+    eyeCanvas.style.display = 'block';
+    hiddenLabel.style.display = 'block';
+    crosshair.style.display = 'none';
+
+    // Determine target: 1 = open (seen), 0 = closed (hidden)
+    var hidden = LIFE._playerHidden;
+    var target = hidden ? 0 : 1;
+    LIFE._stealthEyeOpen = LIFE._stealthEyeOpen !== undefined ? LIFE._stealthEyeOpen : 1;
+    var prev = LIFE._stealthEyeOpen;
+    LIFE._stealthEyeOpen += (target - LIFE._stealthEyeOpen) * 0.08;
+
+    // HIDDEN label: show when transitioning to hidden
+    if (prev > 0.5 && LIFE._stealthEyeOpen <= 0.5) {
+        hiddenLabel.classList.add('show');
+        clearTimeout(LIFE._hiddenLabelTimer);
+        LIFE._hiddenLabelTimer = setTimeout(function() {
+            hiddenLabel.classList.remove('show');
+        }, 1500);
+    }
+
+    // Draw eye on canvas
+    var ctx = eyeCanvas.getContext('2d');
+    var w = 48, h = 32;
+    ctx.clearRect(0, 0, w, h);
+
+    var openness = LIFE._stealthEyeOpen;
+    // Color: white when seen, green when hidden
+    var r = Math.round(100 + 155 * openness);
+    var g = 255;
+    var b = Math.round(100 + 155 * openness);
+    var alpha = 0.7 + openness * 0.3;
+    ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+    ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha * 0.3) + ')';
+    ctx.lineWidth = 1.5;
+
+    var cx = w / 2, cy = h / 2;
+    var eyeW = 18; // half-width of eye
+    var eyeH = 10 * openness; // half-height scales with openness
+
+    // Draw almond eye shape
+    ctx.beginPath();
+    ctx.moveTo(cx - eyeW, cy);
+    ctx.bezierCurveTo(cx - eyeW * 0.5, cy - eyeH, cx + eyeW * 0.5, cy - eyeH, cx + eyeW, cy);
+    ctx.bezierCurveTo(cx + eyeW * 0.5, cy + eyeH, cx - eyeW * 0.5, cy + eyeH, cx - eyeW, cy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Iris + pupil (scale with openness)
+    if (openness > 0.05) {
+        var irisR = 4 * openness;
+        ctx.beginPath();
+        ctx.arc(cx, cy, irisR, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,' + (0.8 * openness) + ')';
+        ctx.fill();
+
+        var pupilR = 1.5 * openness;
+        ctx.beginPath();
+        ctx.arc(cx, cy, pupilR, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(30,30,30,' + (0.9 * openness) + ')';
+        ctx.fill();
+    } else {
+        // Closed: just a horizontal line
+        ctx.beginPath();
+        ctx.moveTo(cx - eyeW, cy);
+        ctx.lineTo(cx + eyeW, cy);
+        ctx.stroke();
     }
 };

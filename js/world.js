@@ -863,6 +863,9 @@ LIFE.world.enterInterior = function(name, door) {
     LIFE.spawnNPCs(name);
     LIFE.world._interiorNPCOffset = null;
 
+    // Spawn pickupable items on surfaces inside the interior
+    if (LIFE.spawnInteriorItems) LIFE.spawnInteriorItems(name);
+
     // Remove zone physics bodies from simulation so they don't block the interior
     // (exterior building shells overlap with interior room space)
     LIFE.physics.disableZoneBodies();
@@ -877,6 +880,16 @@ LIFE.world.enterInterior = function(name, door) {
 
 LIFE.world.exitInterior = function() {
     if (!LIFE.world.insideInterior) return;
+
+    // Remove interior items from scene and worldItems array
+    for (var i = LIFE.worldItems.length - 1; i >= 0; i--) {
+        var wi = LIFE.worldItems[i];
+        if (wi._isInteriorItem) {
+            if (wi.mesh) LIFE.scene.remove(wi.mesh);
+            if (wi.ring) LIFE.scene.remove(wi.ring);
+            LIFE.worldItems.splice(i, 1);
+        }
+    }
 
     // Remove interior NPCs from scene (classroom Teacher, Kids, etc.)
     // Zone NPCs are kept — they're managed by the world system
@@ -1041,6 +1054,7 @@ LIFE.world.updateCulling = function(dt) {
                 if (shouldSleep && !npc._sleeping) {
                     // Go to sleep: move to sleep position and lay down
                     npc._sleeping = true;
+                    npc._savedSpeed = npc.speed; // save BEFORE zeroing
                     npc._preSleepPos = { x: npc.char.group.position.x, z: npc.char.group.position.z };
                     if (npc._sleepPos) {
                         npc.char.group.position.x = npc._sleepPos.x;
@@ -1049,10 +1063,10 @@ LIFE.world.updateCulling = function(dt) {
                     npc.char.group.position.y = npc._homeless ? 0.05 : 0.35; // bed height or ground
                     npc.char.group.rotation.x = -Math.PI / 2; // lay flat
                     npc.speed = 0;
-                    npc._savedSpeed = npc.speed;
                 } else if (!shouldSleep && npc._sleeping) {
                     // Wake up: restore position and stand up
                     npc._sleeping = false;
+                    npc.speed = npc._savedSpeed || 1.0; // restore speed
                     if (npc._preSleepPos) {
                         npc.char.group.position.x = npc._preSleepPos.x;
                         npc.char.group.position.z = npc._preSleepPos.z;
@@ -1490,10 +1504,26 @@ LIFE.world.spawnAllZoneNPCs = function() {
 // ============================================================
 LIFE.world.getActiveColliders = function() {
     if (!LIFE.player) return [];
-    var px = LIFE.player.group.position.x;
-    var pz = LIFE.player.group.position.z;
-    var result = [];
+    return LIFE.world.getCollidersNear(LIFE.player.group.position.x, LIFE.player.group.position.z);
+};
 
+LIFE.world._nearColliderCache = {};
+LIFE.world._nearColliderCacheTime = 0;
+
+LIFE.world.getCollidersNear = function(px, pz) {
+    // Per-zone lookup with short-lived cache (cleared each frame via time check)
+    var now = performance.now();
+    if (now - LIFE.world._nearColliderCacheTime > 16) { // ~1 frame
+        LIFE.world._nearColliderCache = {};
+        LIFE.world._nearColliderCacheTime = now;
+    }
+    // Bucket position to 40-unit grid for cache key
+    var bx = Math.round(px / 40);
+    var bz = Math.round(pz / 40);
+    var key = bx + ',' + bz;
+    if (LIFE.world._nearColliderCache[key]) return LIFE.world._nearColliderCache[key];
+
+    var result = [];
     for (var name in LIFE.world.zones) {
         var zone = LIFE.world.zones[name];
         var dx = px - zone.center.x;
@@ -1505,7 +1535,7 @@ LIFE.world.getActiveColliders = function() {
             }
         }
     }
-
+    LIFE.world._nearColliderCache[key] = result;
     return result;
 };
 
@@ -1679,6 +1709,7 @@ LIFE.enterCar = function() {
     }
 
     state.inCar = true;
+    state.crouching = false;
     LIFE.car.currentSpeed = 0;
     LIFE.car.maxSpeed = state.ownedCar.speed;
 
@@ -1832,7 +1863,7 @@ LIFE.updateCarDriving = function(dt) {
                         LIFE.ui.showPopup(hitLabel, '#ff9800');
                         LIFE.logCrime(npc.isPolice ? 'Vehicular assault on police' : 'Hit and run');
                         LIFE.addWanted(npc.isPolice ? 3 : 1, 'Vehicular assault');
-                        state.reputation = Math.max(-100, state.reputation - (npc.isPolice ? 8 : 3));
+                        state.reputation -= (npc.isPolice ? 8 : 3);
                         LIFE.ui.showRepChange(npc.isPolice ? -8 : -3);
                     } else {
                         // Killed by car - killNPC already handles wanted/rep for police

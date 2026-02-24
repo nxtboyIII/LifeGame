@@ -2,8 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>LIFE - From Womb to Tomb</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=20260224">
 </head>
 <body>
 
@@ -13,6 +16,8 @@
 
 <div id="ui">
     <div id="crosshair"></div>
+    <canvas id="stealthEye" width="48" height="32"></canvas>
+    <div id="hiddenLabel">HIDDEN</div>
     <div id="damageFlash"></div>
 
     <!-- HUD -->
@@ -45,7 +50,7 @@
     <div id="speedDisplay">72x</div>
     <div id="timerWrap"><div id="timerFill"></div></div>
     <div id="dateTime"></div>
-    <div id="skipHint">E: Skip Year | R: Time Skip | T: Talk | Q: Switch Item | F: Info | X: Pickup</div>
+    <div id="skipHint"></div>
 
     <!-- News Banner (Plague Inc style) -->
     <div id="newsBanner">
@@ -77,6 +82,7 @@
         <span class="ctrl-item"><span class="ctrl-key">G</span> Enter/Exit</span>
         <span class="ctrl-item"><span class="ctrl-key">V</span> Drive</span>
         <span class="ctrl-item"><span class="ctrl-key">X</span> Pickup</span>
+        <span class="ctrl-item"><span class="ctrl-key">C</span> Crouch</span>
     </div>
 
     <!-- Pickup hint -->
@@ -242,22 +248,22 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
 
 <!-- Game modules (load order matters) -->
-<script src="js/config.js"></script>
-<script src="js/scene.js"></script>
-<script src="js/physics.js"></script>
-<script src="js/sounds.js"></script>
-<script src="js/characters.js"></script>
-<script src="js/economy.js"></script>
-<script src="js/dialogue.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/npcs.js"></script>
-<script src="js/player.js"></script>
-<script src="js/environments.js"></script>
-<script src="js/world.js"></script>
-<script src="js/actions.js"></script>
-<script src="js/quests.js"></script>
-<script src="js/game.js"></script>
-<script src="js/enhancements.js"></script>
+<script src="js/config.js?v=20260224"></script>
+<script src="js/scene.js?v=20260224"></script>
+<script src="js/physics.js?v=20260224"></script>
+<script src="js/sounds.js?v=20260224"></script>
+<script src="js/characters.js?v=20260224"></script>
+<script src="js/economy.js?v=20260224"></script>
+<script src="js/dialogue.js?v=20260224"></script>
+<script src="js/ui.js?v=20260224"></script>
+<script src="js/npcs.js?v=20260224"></script>
+<script src="js/player.js?v=20260224"></script>
+<script src="js/environments.js?v=20260224"></script>
+<script src="js/world.js?v=20260224"></script>
+<script src="js/actions.js?v=20260224"></script>
+<script src="js/quests.js?v=20260224"></script>
+<script src="js/game.js?v=20260224"></script>
+<script src="js/enhancements.js?v=20260224"></script>
 
 </body>
 </html>

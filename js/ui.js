@@ -91,6 +91,19 @@ LIFE.ui.showStageMessage = function(msg) {
     }
 };
 
+LIFE.ui.showSkipHint = function() {
+    var el = document.getElementById('skipHint');
+    if (!el) return;
+    el.textContent = 'Press E to skip forward 1 year';
+    el.classList.add('show');
+    LIFE.ui._skipHintActive = true;
+};
+LIFE.ui.hideSkipHint = function() {
+    var el = document.getElementById('skipHint');
+    if (el) el.classList.remove('show');
+    LIFE.ui._skipHintActive = false;
+};
+
 LIFE.ui._popups = []; // { el, timer, type }
 
 LIFE.ui._updatePopupOpacities = function() {
@@ -246,14 +259,16 @@ LIFE.ui.updateStats = function() {
 
     var rep = LIFE.state.reputation;
     var repFill = LIFE.ui.$.repFill;
+    // Dynamic scale: bar fills 50% at ±100, logarithmic past that
+    var absRep = Math.abs(rep);
+    var barPct = absRep <= 100 ? (absRep / 2) : (50 + Math.min(48, Math.log10(absRep / 100) * 30));
     if (rep >= 0) {
         repFill.style.left = '50%';
-        repFill.style.width = (rep / 2) + '%';
+        repFill.style.width = barPct + '%';
         repFill.style.background = '#66bb6a';
     } else {
-        var w = Math.abs(rep) / 2;
-        repFill.style.left = (50 - w) + '%';
-        repFill.style.width = w + '%';
+        repFill.style.left = (50 - barPct) + '%';
+        repFill.style.width = barPct + '%';
         repFill.style.background = '#ef5350';
     }
     LIFE.ui.$.repVal.textContent = (rep > 0 ? '+' : '') + Math.floor(rep);
@@ -972,6 +987,25 @@ LIFE.ui.showSentencePopup = function(years, fine, crimes) {
         }
     }
 
+    // Reported by witnesses
+    var witnesses = LIFE.state.crimeWitnesses || [];
+    if (witnesses.length > 0) {
+        var allNPCs = LIFE.getAllNPCs ? LIFE.getAllNPCs() : [];
+        var witNames = [];
+        for (var wi = 0; wi < witnesses.length; wi++) {
+            var wName = witnesses[wi];
+            var isDead = false;
+            for (var ni = 0; ni < allNPCs.length; ni++) {
+                if (allNPCs[ni].name === wName && !allNPCs[ni].alive) { isDead = true; break; }
+            }
+            witNames.push(wName + (isDead ? ' (Deceased)' : ''));
+        }
+        var witLine = document.createElement('div');
+        witLine.style.cssText = 'color:#ef9a9a;font-size:15px;margin-top:12px;font-style:italic;';
+        witLine.textContent = 'Reported by: ' + witNames.join(', ');
+        chargesEl.appendChild(witLine);
+    }
+
     // Fine
     var fineEl = LIFE.ui.$.sentenceFine;
     if (fine > 0) fineEl.textContent = 'FINE: $' + fine.toLocaleString();
@@ -1488,7 +1522,7 @@ LIFE.ui.openArmsDealerShop = function() {
                 if (item.name === 'Shotgun') LIFE.state.hasShotgun = true;
                 if (item.name === 'Body Armor') LIFE.state.hasArmor = true;
             }
-            LIFE.state.reputation = Math.max(-100, (LIFE.state.reputation || 0) - 5);
+            LIFE.state.reputation = (LIFE.state.reputation || 0) - 5;
             LIFE.sounds.money();
             LIFE.ui.showPopup(item.name + ' acquired!', '#ff9800');
             LIFE.state.shopOpen = false;

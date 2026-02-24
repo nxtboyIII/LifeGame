@@ -31,7 +31,9 @@ LIFE.state = {
     swatDispatching: false, swatDispatchTimer: 0, swatDispatched: false,
     criminalRecord: false, timesJailed: 0,
     crimeLog: [], // tracks crimes for jail sentencing display
+    crimeWitnesses: [], // tracks witness names for sentencing display
     bounty: 0, // Skyrim-style persistent bounty
+    crouching: false, // stealth crouch toggle
     // family violence tracking
     familyAbuser: false, familyKiller: false, killedFamily: [],
     // day cycle (school ages)
@@ -328,7 +330,8 @@ LIFE._defaultControls = function() {
     return LIFE._ctrlHtml([
         'WASD','Move', 'Space','Jump', '1-4','Actions', 'E','Skip Year',
         'R','Time Skip', 'T','Talk', 'Q','Switch Item', 'I','Inventory',
-        'J','Quests', 'F','Info', 'G','Enter/Exit', 'V','Drive', 'X','Pickup'
+        'J','Quests', 'F','Info', 'G','Enter/Exit', 'V','Drive', 'X','Pickup',
+        'C','Crouch'
     ]);
 };
 
@@ -390,6 +393,11 @@ LIFE._debugPoliceLog = []; // { time, reason, wanted, caller }
 LIFE.addWanted = function(amount, reason, witness) {
     if (LIFE.state.age < 10) return;
     var state = LIFE.state;
+    // Track witness name for sentencing display
+    if (witness) {
+        if (!state.crimeWitnesses) state.crimeWitnesses = [];
+        if (state.crimeWitnesses.indexOf(witness) < 0) state.crimeWitnesses.push(witness);
+    }
     var old = state.wantedLevel;
     state.wantedLevel = Math.min(10, state.wantedLevel + amount);
     state.bounty += amount * 500;
@@ -413,40 +421,9 @@ LIFE.addWanted = function(amount, reason, witness) {
         if (alreadyPursuing < copsNeeded) {
             state.policeDispatching = true;
             if (old === 0) {
-                // First offense: find a civilian to call police, dispatch AFTER the call finishes
-                var callerNpc = null;
-                var callerName = 'A bystander';
-                if (LIFE.player && LIFE.npcs) {
-                    var px = LIFE.player.group.position.x, pz = LIFE.player.group.position.z;
-                    var bestDist = Infinity;
-                    for (var wi = 0; wi < LIFE.npcs.length; wi++) {
-                        var wn = LIFE.npcs[wi];
-                        if (!wn.alive || wn.isPolice || wn._callingPolice) continue;
-                        // Kids under 12 don't have phones — they flee instead
-                        var wnAge = wn.npcAge !== null ? wn.npcAge : (wn.type === 'Kid' ? 8 : 25);
-                        if (wnAge < 12) continue;
-                        // Low reputation NPCs won't snitch (dealers, shady characters)
-                        var wnRep = wn.npcReputation !== undefined ? wn.npcReputation : 30;
-                        if (wnRep <= -30) continue;
-                        // Skip NPCs recently attacked — they need 15s to recover before calling
-                        if (wn._lastAttackedTime && (Date.now() - wn._lastAttackedTime) < 15000) continue;
-                        var dx = wn.char.group.position.x - px;
-                        var dz = wn.char.group.position.z - pz;
-                        var d2 = dx * dx + dz * dz;
-                        if (d2 < bestDist) { bestDist = d2; callerNpc = wn; callerName = wn.name; }
-                    }
-                }
-                // Phone call takes 4-6 seconds, then dispatch timer starts (3-5 more seconds)
-                // Total: 7-11 seconds from crime to cops arriving
-                if (callerNpc && LIFE.npcStartPhoneCall) {
-                    LIFE.npcStartPhoneCall(callerNpc);
-                    // Dispatch timer = phone call time + response time
-                    state.policeDispatchTimer = 7 + Math.random() * 4;
-                } else {
-                    // No visible caller — shorter delay (e.g. police spotted it directly)
-                    state.policeDispatchTimer = 5 + Math.random() * 3;
-                }
-                LIFE.ui.showPopup(callerName + ' is calling the police!', '#f44336');
+                // First offense: phone call already completed (or police saw directly)
+                // Short response time before cops arrive
+                state.policeDispatchTimer = 3 + Math.random() * 2;
             } else {
                 // Escalation while cops already out: backup arrives faster (radio)
                 state.policeDispatchTimer = 2 + Math.random() * 2;
@@ -874,8 +851,8 @@ LIFE.updatePolice = function(dt) {
                     pcop._losCheckTimer = 0;
                     var invPx = player.group.position.x, invPz = player.group.position.z;
                     var invDistToPlayer = Math.sqrt((invPx - invPos.x) * (invPx - invPos.x) + (invPz - invPos.z) * (invPz - invPos.z));
-                    if (invDistToPlayer < 80 && LIFE.hasLineOfSight(invPos.x, invPos.z, invPx, invPz)) {
-                        // SPOTTED — switch to pursuing
+                    if (state.wantedLevel > 0 && invDistToPlayer < 80 && LIFE.hasLineOfSight(invPos.x, invPos.z, invPx, invPz)) {
+                        // SPOTTED — switch to pursuing (only if player is wanted)
                         pcop.aiState = 'pursuing';
                         pcop.npc.speed = LIFE.getSpeedForAge(state.age) * 1.2;
                         if (LIFE.police.indexOf(pcop.npc) < 0) LIFE.police.push(pcop.npc);
@@ -942,6 +919,7 @@ LIFE.updatePolice = function(dt) {
                     pcop._investigateCenter = null;
                     pcop._investigateTarget = null;
                     pcop._investigatePath = null;
+                    pcop._bodyInvestigation = false;
                     // Remove from LIFE.police array if present
                     var invPidx = LIFE.police.indexOf(pcop.npc);
                     if (invPidx >= 0) LIFE.police.splice(invPidx, 1);
@@ -1454,6 +1432,7 @@ LIFE.arrestPlayer = function() {
         // Big sentencing popup for death penalty
         LIFE.ui.showSentencePopup(99, 0, state.crimeLog || []);
         state.crimeLog = [];
+        state.crimeWitnesses = [];
 
         LIFE.lockCursor();
         LIFE.sounds.arrest();
@@ -1491,7 +1470,7 @@ LIFE.arrestPlayer = function() {
     state.policeDispatching = false;
     state.swatDispatching = false; state.swatDispatched = false;
     state.bounty = 0; // bounty cleared by serving time
-    state.reputation = Math.max(-100, state.reputation - 15);
+    state.reputation -= 15;
     // Crime log is used by jail screen, clear after display
     // (cleared below after showJailScreen call)
     // Display sentence text
@@ -1589,6 +1568,7 @@ LIFE.arrestPlayer = function() {
     LIFE.ui.showJailScreen(years, state.jailFine);
     LIFE.ui.showSentencePopup(years, state.jailFine, crimesCopy);
     state.crimeLog = []; // clear crime log after displaying
+    state.crimeWitnesses = [];
     LIFE.ui.hideGameUI();
     LIFE.ui.$.ageBox.style.display = 'block';
     LIFE.ui.$.playerHpBar.style.display = 'block';
@@ -1949,7 +1929,7 @@ LIFE.updatePickupHint = function() {
             hint.style.color = '#ff9800';
             hint.style.borderColor = 'rgba(255,152,0,0.4)';
         } else {
-            var isSteal = (bestType === 'world');
+            var isSteal = (bestType === 'world' && best.owner);
             hint.textContent = isSteal ? ('Press X to steal ' + best.name) : ('Press X to pick up ' + best.name);
             hint.style.display = 'block';
             hint.style.color = isSteal ? '#f44336' : '#4fc3f7';
@@ -2067,7 +2047,7 @@ LIFE.takeContainerItem = function(index) {
         LIFE.state.money += ci.amount;
         if (isSteal) {
             LIFE.ui.showPopup('Stole $' + ci.amount, '#ff9800');
-            LIFE.state.stats.reputation = Math.max(-100, (LIFE.state.stats.reputation || 0) - 3);
+            LIFE.state.stats.reputation = (LIFE.state.stats.reputation || 0) - 3;
         } else {
             LIFE.ui.showPopup('Took $' + ci.amount, '#4caf50');
         }
@@ -2079,7 +2059,7 @@ LIFE.takeContainerItem = function(index) {
             if (ci.name === 'Human Liver') harvestNpc._liverTaken = true;
         }
         LIFE.logCrime('Organ harvesting');
-        LIFE.state.reputation = Math.max(-100, (LIFE.state.reputation || 0) - 15);
+        LIFE.state.reputation = (LIFE.state.reputation || 0) - 15;
         var organWitness = LIFE.checkWitnesses(harvestNpc);
         if (organWitness && organWitness.witnessed) {
             LIFE.state.wantedLevel = Math.min(5, (LIFE.state.wantedLevel || 0) + 3);
@@ -2090,10 +2070,10 @@ LIFE.takeContainerItem = function(index) {
     } else {
         if (ci.parentOnly) {
             LIFE.ui.showPopup('Took ' + ci.name + ' (parent\'s item!)', '#ff9800');
-            LIFE.state.stats.reputation = Math.max(-100, (LIFE.state.stats.reputation || 0) - 2);
+            LIFE.state.stats.reputation = (LIFE.state.stats.reputation || 0) - 2;
         } else if (!container.ownItem) {
             LIFE.ui.showPopup('Stole ' + ci.name, '#ff9800');
-            LIFE.state.stats.reputation = Math.max(-100, (LIFE.state.stats.reputation || 0) - 3);
+            LIFE.state.stats.reputation = (LIFE.state.stats.reputation || 0) - 3;
             // Chance of adding wanted level for higher-value thefts
             var itemData = LIFE.ITEM_DATA[ci.name] || {};
             if (itemData.value && itemData.value > 40) {
@@ -2169,7 +2149,7 @@ LIFE.lootBodyAsContainer = function(npc) {
     LIFE.logCrime('Looting a body');
     var lootWitness = LIFE.checkWitnesses(npc);
     if (lootWitness && lootWitness.witnessed) {
-        LIFE.state.reputation = Math.max(-100, LIFE.state.reputation - 5);
+        LIFE.state.reputation -= 5;
     }
     LIFE.openContainer(container);
 };
@@ -3220,12 +3200,8 @@ LIFE.spawnWorldItems = function(zoneName) {
             // Create physics body — drop from height, no initial velocity
             var body = LIFE.physics.createItemBody(itemName, x, spawnY, z, null);
 
-            // Assign owner: ~60% of items have an owner (a nearby NPC)
+            // Street items have no owner — free to pick up
             var owner = null;
-            if (zoneNPCs.length > 0 && Math.random() < 0.6) {
-                // Pick a random NPC from the zone as owner
-                owner = zoneNPCs[Math.floor(Math.random() * zoneNPCs.length)];
-            }
 
             var entry = {
                 name: itemName,
@@ -3242,6 +3218,232 @@ LIFE.spawnWorldItems = function(zoneName) {
             LIFE.worldItems.push(entry);
             if (body) LIFE.physics.dynamicBodies.push(entry);
         }
+    }
+};
+
+// ── Interior item spawn definitions ──
+LIFE.INTERIOR_ITEM_SPAWNS = {
+    classroom: {
+        items: ['Textbook', 'Apple', 'Book', 'Energy Drink'],
+        count: 4,
+        surfaces: [
+            {x:-2.5, y:0.6, z:-1}, {x:0, y:0.6, z:-1}, {x:2.5, y:0.6, z:-1},
+            {x:-2.5, y:0.6, z:1}, {x:0, y:0.6, z:1}, {x:2.5, y:0.6, z:1},
+            {x:-2.5, y:0.6, z:3}, {x:0, y:0.6, z:3}, {x:2.5, y:0.6, z:3},
+            {x:0, y:0.85, z:-3.5},
+            {x:5, y:1.5, z:-4.5}
+        ],
+        ownerType: 'Teacher'
+    },
+    hsclassroom: {
+        items: ['Textbook', 'Energy Drink', 'Phone', 'Headphones', 'Book', 'Coffee'],
+        count: 5,
+        surfaces: [
+            {x:-4.5, y:0.65, z:-1.5}, {x:-1.5, y:0.65, z:-1.5}, {x:1.5, y:0.65, z:-1.5}, {x:4.5, y:0.65, z:-1.5},
+            {x:-4.5, y:0.65, z:0.5}, {x:-1.5, y:0.65, z:0.5}, {x:1.5, y:0.65, z:0.5}, {x:4.5, y:0.65, z:0.5},
+            {x:-4.5, y:0.65, z:2.5}, {x:-1.5, y:0.65, z:2.5}, {x:1.5, y:0.65, z:2.5}, {x:4.5, y:0.65, z:2.5},
+            {x:-3, y:0.85, z:-4},
+            {x:6.3, y:1.5, z:3}
+        ],
+        ownerType: 'Teacher'
+    },
+    playerhome: {
+        items: ['Apple', 'Coffee', 'Book', 'Keys', 'Sandwich', 'Phone', 'Sunglasses'],
+        count: 4,
+        surfaces: [
+            {x:-2, y:0.5, z:-2.5},
+            {x:3, y:0.85, z:0},
+            {x:4, y:1.05, z:3},
+            {x:-4.5, y:0.75, z:3.5}
+        ],
+        ownerType: null
+    },
+    hospital: {
+        items: ['Medicine', 'Medkit', 'Coffee', 'Apple', 'Vitamins'],
+        count: 3,
+        surfaces: [
+            {x:-1.2, y:0.55, z:-0.8},
+            {x:4, y:0.85, z:3},
+            {x:4, y:2.05, z:-5.5}
+        ],
+        ownerType: 'Doctor'
+    },
+    police_interior: {
+        items: ['Coffee', 'Phone', 'Sandwich', 'Energy Drink'],
+        count: 2,
+        surfaces: [
+            {x:-4, y:0.85, z:-2}, {x:4, y:0.85, z:-2},
+            {x:-6, y:1.2, z:-4}
+        ],
+        ownerType: 'Police'
+    },
+    workplace_business: {
+        items: ['Coffee', 'Laptop', 'Phone', 'Energy Drink', 'Sandwich'],
+        count: 3,
+        surfaces: [
+            {x:-4, y:0.85, z:-2}, {x:4, y:0.85, z:-2},
+            {x:-6, y:1.2, z:-4}
+        ],
+        ownerType: null
+    },
+    workplace_doctor: {
+        items: ['Medicine', 'Medkit', 'Coffee', 'Vitamins', 'Energy Drink'],
+        count: 3,
+        surfaces: [
+            {x:4, y:0.85, z:3},
+            {x:4, y:2.05, z:-5.5},
+            {x:-3, y:0.85, z:-2}
+        ],
+        ownerType: null
+    },
+    workplace_teacher: {
+        items: ['Textbook', 'Apple', 'Coffee', 'Book', 'Energy Drink'],
+        count: 3,
+        surfaces: [
+            {x:0, y:0.85, z:-4},
+            {x:-2.5, y:0.6, z:-1}, {x:0, y:0.6, z:-1}, {x:2.5, y:0.6, z:-1}
+        ],
+        ownerType: null
+    },
+    workplace_artist: {
+        items: ['Coffee', 'Energy Drink', 'Sandwich', 'Phone', 'Sunglasses'],
+        count: 3,
+        surfaces: [
+            {x:5, y:0.85, z:2},
+            {x:-4, y:0.6, z:-3}, {x:0, y:0.6, z:-3}, {x:4, y:0.6, z:-3}
+        ],
+        ownerType: null
+    },
+    workplace_scientist: {
+        items: ['Energy Drink', 'Coffee', 'Vitamins', 'Laptop', 'Book'],
+        count: 3,
+        surfaces: [
+            {x:-3, y:0.85, z:-3}, {x:3, y:0.85, z:-3},
+            {x:4, y:0.85, z:3},
+            {x:-6, y:1.2, z:3}
+        ],
+        ownerType: null
+    },
+    workplace_worker: {
+        items: ['Coffee', 'Sandwich', 'Energy Drink', 'Phone', 'Apple'],
+        count: 3,
+        surfaces: [
+            {x:0, y:0.85, z:3},
+            {x:-4, y:1.2, z:-4}, {x:0, y:1.2, z:-4}, {x:4, y:1.2, z:-4}
+        ],
+        ownerType: null
+    },
+    workplace_musician: {
+        items: ['Coffee', 'Energy Drink', 'Phone', 'Headphones', 'Sandwich'],
+        count: 2,
+        surfaces: [
+            {x:-5, y:0.6, z:-3}, {x:5, y:0.6, z:-3},
+            {x:-3, y:0.85, z:-2}
+        ],
+        ownerType: null
+    },
+    workplace_athlete: {
+        items: ['Energy Drink', 'Vitamins', 'Phone', 'Headphones'],
+        count: 2,
+        surfaces: [
+            {x:-4, y:0.6, z:-2},
+            {x:3, y:0.6, z:-2},
+            {x:0, y:0.3, z:2}
+        ],
+        ownerType: null
+    },
+    workplace_streamer: {
+        items: ['Energy Drink', 'Coffee', 'Phone', 'Headphones', 'Sandwich'],
+        count: 3,
+        surfaces: [
+            {x:-4, y:0.85, z:-2}, {x:4, y:0.85, z:-2},
+            {x:0, y:0.85, z:0}
+        ],
+        ownerType: null
+    },
+    workplace_actor: {
+        items: ['Coffee', 'Sunglasses', 'Phone', 'Energy Drink'],
+        count: 2,
+        surfaces: [
+            {x:5, y:0.6, z:4},
+            {x:0, y:0.85, z:-2}
+        ],
+        ownerType: null
+    }
+};
+
+LIFE.spawnInteriorItems = function(interiorName) {
+    // Determine config key
+    var key = interiorName;
+    if (interiorName === 'workplace') {
+        key = 'workplace_' + (LIFE.state.career || 'worker');
+    }
+    var def = LIFE.INTERIOR_ITEM_SPAWNS[key];
+    if (!def) return; // no items for this interior (e.g. jail)
+
+    // Get interior world offset
+    var pos = LIFE.world.INTERIOR_POSITIONS[interiorName] || { x: 0, z: 0 };
+
+    // Shuffle surfaces and pick `count` positions
+    var surfaces = def.surfaces.slice();
+    for (var si = surfaces.length - 1; si > 0; si--) {
+        var sj = Math.floor(Math.random() * (si + 1));
+        var tmp = surfaces[si]; surfaces[si] = surfaces[sj]; surfaces[sj] = tmp;
+    }
+    var count = Math.min(def.count, surfaces.length);
+
+    // Find owner NPC by type if applicable
+    var owner = null;
+    if (def.ownerType) {
+        for (var ni = 0; ni < LIFE.npcs.length; ni++) {
+            if (LIFE.npcs[ni].role === def.ownerType || LIFE.npcs[ni].type === def.ownerType) {
+                owner = LIFE.npcs[ni];
+                break;
+            }
+        }
+    }
+
+    for (var i = 0; i < count; i++) {
+        var surf = surfaces[i];
+        var itemName = def.items[Math.floor(Math.random() * def.items.length)];
+
+        // Create mesh
+        var mesh = LIFE.createItemMesh(itemName);
+        mesh.scale.set(2, 2, 2);
+        var wx = surf.x + pos.x;
+        var wy = surf.y;
+        var wz = surf.z + pos.z;
+        mesh.position.set(wx, wy, wz);
+        LIFE.scene.add(mesh);
+
+        // Glow ring beneath
+        var data = LIFE.ITEM_DATA[itemName] || {};
+        var ringColor = data.type === 'valuable' ? 0xffd700
+            : data.type === 'food' ? 0x4caf50
+            : data.type === 'melee' || data.type === 'ranged' ? 0xf44336
+            : 0x4fc3f7;
+        var ringGeo = new THREE.RingGeometry(0.3, 0.5, 16);
+        var ringMat = new THREE.MeshBasicMaterial({
+            color: ringColor, transparent: true, opacity: 0.35, side: THREE.DoubleSide
+        });
+        var ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        ringMesh.rotation.x = -Math.PI / 2;
+        ringMesh.position.set(wx, 0.02 + (pos.y || 0), wz);
+        LIFE.scene.add(ringMesh);
+
+        var entry = {
+            name: itemName,
+            mesh: mesh,
+            ring: ringMesh,
+            ringMat: ringMat,
+            body: null,
+            x: wx, z: wz,
+            _ringTime: Math.random() * 6,
+            _isInteriorItem: true,
+            owner: owner,
+            ownerName: owner ? owner.name : null
+        };
+        LIFE.worldItems.push(entry);
     }
 };
 
@@ -3777,7 +3979,7 @@ LIFE.createWeaponMesh = function(type, playerHeight) {
         group.add(handle);
         // Position at end of arm, pointing down
         group.position.set(0, -armH - h * 0.02, 0);
-        group.rotation.x = -0.3; // slight tilt forward
+        group.rotation.x = -0.3;
     } else if (type === 'Pistol') {
         // Gun body: blocky rectangle
         var body = new THREE.Mesh(
@@ -3882,7 +4084,7 @@ LIFE.createWeaponMesh = function(type, playerHeight) {
         // Generic item held in hand - use createItemMesh
         var itemMesh = LIFE.createItemMesh(type);
         if (itemMesh) {
-            itemMesh.scale.set(0.5, 0.5, 0.5);
+            itemMesh.scale.set(1.4, 1.4, 1.4);
             itemMesh.position.set(0, -armH, 0);
         }
         group.add(itemMesh);
@@ -4601,6 +4803,7 @@ LIFE.skipTime = function(hours) {
     // All ages: 1200 seconds = 1440 minutes (24 hours)
     var secsPerMin = LIFE.DAY_DURATION / 1440; // 0.833
     var secondsToAdd = hours * 60 * secsPerMin;
+    var totalSkipped = secondsToAdd; // save for quest elapsed update
 
     // handle multi-year skips
     while (secondsToAdd > 0) {
@@ -4612,6 +4815,17 @@ LIFE.skipTime = function(hours) {
         } else {
             state.yearTimer += secondsToAdd;
             secondsToAdd = 0;
+        }
+    }
+
+    // Advance quest elapsed timers by the skipped amount
+    if (LIFE.quests && LIFE.quests.active) {
+        for (var qi = LIFE.quests.active.length - 1; qi >= 0; qi--) {
+            var quest = LIFE.quests.active[qi];
+            quest._elapsed += totalSkipped;
+            if (quest._elapsed > quest.timeLimit) {
+                LIFE.quests.fail(quest);
+            }
         }
     }
 
@@ -4693,7 +4907,10 @@ document.addEventListener('keydown', function(e) {
 
     if (state.gamePhase !== 'playing' && state.gamePhase !== 'jail') return;
 
-    if (e.code === 'KeyE' && state.gamePhase === 'playing') LIFE.advanceYear();
+    if (e.code === 'KeyE' && state.gamePhase === 'playing') {
+        if (LIFE.ui._skipHintActive) LIFE.ui.hideSkipHint();
+        LIFE.advanceYear();
+    }
     if (e.code === 'KeyT' && state.nearestNPC && !LIFE.dialogue.active && !state.inCar) {
         LIFE.dialogue.talkToNPC(state.nearestNPC);
     }
@@ -4721,8 +4938,8 @@ document.addEventListener('keydown', function(e) {
         if (e.code === 'KeyJ' && !LIFE.dialogue.active && !state.shopOpen) {
             LIFE.quests.toggleLog();
         }
-        if (e.code === 'KeyC' && !LIFE.dialogue.active && !state.shopOpen) {
-            LIFE.quests.cycleActiveQuest();
+        if (e.code === 'KeyC' && !LIFE.dialogue.active && !state.shopOpen && state.age >= 5) {
+            state.crouching = !state.crouching;
         }
         if (e.code === 'KeyX' && !LIFE.dialogue.active && !state.shopOpen) {
             if (LIFE._containerOpen) { LIFE.closeContainer(); }
@@ -4764,6 +4981,9 @@ document.addEventListener('mousedown', function(e) {
     if (e.button !== 0 || !LIFE.state.locked) return;
     if (LIFE.dialogue.active && LIFE.dialogue.blocking) return;
     if (LIFE.state.shopOpen || LIFE.state.friendsOpen) return;
+    // Prevent click from reaching UI buttons while pointer-locked
+    e.preventDefault();
+    e.stopPropagation();
     // left-click punch in jail
     if (LIFE.state.gamePhase === 'jail') {
         if (!LIFE.dialogue.active && LIFE.state.actionCooldown <= 0) LIFE.performAction(0);
@@ -4772,9 +4992,17 @@ document.addEventListener('mousedown', function(e) {
     if (LIFE.state.gamePhase !== 'playing') return;
     LIFE._mouseHeld = true;
     var eq = LIFE.getEquipped();
-    if (eq !== 'Pistol' && eq !== 'AK-47' && eq !== 'Shotgun') return;
-    if (LIFE.state.shootCooldown > 0) return;
-    LIFE.shootGun();
+    if (eq === 'Pistol' || eq === 'AK-47' || eq === 'Shotgun') {
+        if (LIFE.state.shootCooldown > 0) return;
+        LIFE.shootGun();
+    } else {
+        // Melee attack / punch — find the punch action index
+        if (!LIFE.dialogue.active && LIFE.state.actionCooldown <= 0) {
+            var acts = LIFE.getActionsForAge(LIFE.state.age);
+            var punchIdx = acts.indexOf('punch');
+            if (punchIdx >= 0) LIFE.performAction(punchIdx);
+        }
+    }
 });
 
 document.addEventListener('mouseup', function(e) {
@@ -4796,7 +5024,7 @@ document.addEventListener('pointerlockchange', function() {
     if (!LIFE.state.locked && wasLocked &&
         LIFE.state.gamePhase !== 'start' && LIFE.state.gamePhase !== 'death' &&
         LIFE.state.gamePhase !== 'execution' && !LIFE._suppressPause &&
-        !LIFE.dialogue.active && !LIFE.state.shopOpen && !LIFE.state.friendsOpen && !LIFE.state.timeSkipOpen && !LIFE._invOpen && !LIFE.quests.logOpen && !LIFE._containerOpen) {
+        !LIFE.dialogue.active && !LIFE.state.shopOpen && !LIFE.state.friendsOpen && !LIFE.state.timeSkipOpen && !LIFE._invOpen && !LIFE.quests.logOpen && !LIFE._containerOpen && !LIFE._debugOpen) {
         LIFE.ui.$.start.style.display = 'flex';
         LIFE.ui.$.start.querySelector('h1').textContent = 'PAUSED';
         LIFE.ui.$.start.querySelector('p').textContent = 'Click to Resume';
@@ -4834,6 +5062,7 @@ LIFE.startGame = function() {
 LIFE.advanceYear = function() {
     if (LIFE.state.gamePhase !== 'playing') return;
     if (LIFE.dialogue.active && LIFE.dialogue.blocking) return;
+    if (LIFE.ui._skipHintActive) LIFE.ui.hideSkipHint();
 
     var state = LIFE.state;
 
@@ -5473,6 +5702,7 @@ LIFE.triggerDeath = function(cause) {
     state.deathTriggered = true;
     if (cause) state.deathCause = cause;
     state.gamePhase = 'death';
+    state.crouching = false;
     LIFE.executionData = null;
     // Exit car if driving
     if (state.inCar) {
@@ -5748,7 +5978,14 @@ LIFE.toggleDebugConsole = function() {
     if (!panel) return;
     LIFE._debugOpen = !LIFE._debugOpen;
     panel.style.display = LIFE._debugOpen ? 'flex' : 'none';
-    if (LIFE._debugOpen) LIFE._updateDebugInfo();
+    if (LIFE._debugOpen) {
+        LIFE._updateDebugInfo();
+        LIFE.unlockCursor();
+    } else {
+        if (LIFE.state.gamePhase === 'playing' || LIFE.state.gamePhase === 'jail') {
+            LIFE.lockCursor();
+        }
+    }
 };
 
 LIFE._updateDebugInfo = function() {
@@ -5792,7 +6029,7 @@ LIFE.debugSkipTo25 = function() {
     state.equippedIndex = 0;
     state.hasGun = true;
     state.hasSwitchblade = true;
-    state.yearTimer = 0;
+    state.yearTimer = LIFE.DAY_DURATION * 0.42; // ~10 AM daytime
     state.locked = true;
 
     // Make sure player exists

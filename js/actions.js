@@ -6,6 +6,7 @@ LIFE.performAction = function(idx) {
     if (state.actionCooldown > 0) return;
     if (state.gamePhase !== 'playing' && state.gamePhase !== 'jail') return;
     if (LIFE.dialogue.active || state.shopOpen || state.friendsOpen) return;
+    if (state._birthHospital) return;
 
     // in jail only allow punch (idx 0 = punch)
     if (state.gamePhase === 'jail') {
@@ -14,7 +15,7 @@ LIFE.performAction = function(idx) {
         var jailEquip = LIFE.getEquipped();
         if (jailEquip === 'Switchblade') jailDmg = Math.floor(jailDmg * 2);
         LIFE.sounds.punch();
-        LIFE.ui.showPopup(jailDmg > 0 ? 'POW! (-' + jailDmg + ')' : '*flails weakly*', jailDmg > 0 ? '#ef5350' : '#999');
+        if (jailDmg <= 0) LIFE.ui.showPopup('*flails weakly*', '#999');
         state.actionCooldown = 0.8;
         state.actionAnim = { type: 'punch', timer: 0.6 };
         var allTargets = LIFE.getAllNPCs();
@@ -131,7 +132,7 @@ LIFE.performAction = function(idx) {
     }
 
     if (LIFE.sounds[actName]) LIFE.sounds[actName]();
-    LIFE.ui.showPopup(def.text, def.color);
+    if (actName !== 'punch') LIFE.ui.showPopup(def.text, def.color);
     state.actionCooldown = 0.8;
     state.actionAnim = { type: actName, timer: 0.6 };
 
@@ -157,7 +158,12 @@ LIFE.performAction = function(idx) {
                     dmg = LIFE.getPunchDamage(state.age); // fists scale with age
                 }
 
-                if (dmg <= 0) {
+                // Stealth assassination: crouch + melee weapon + behind NPC
+                var isMeleeWeapon = (equipped === 'Switchblade' || equipped === 'Crowbar' || equipped === 'Baseball Bat');
+                if (state.crouching && isMeleeWeapon && eqData && eqData.damage && LIFE.isBehindNPC && LIFE.isBehindNPC(npc)) {
+                    LIFE.damageNPC(npc, npc.health);
+                    LIFE.ui.showPopup('ASSASSINATION', '#ff1744');
+                } else if (dmg <= 0) {
                     LIFE.ui.showPopup('*flails weakly*', '#999');
                 } else {
                     LIFE.damageNPC(npc, dmg);
@@ -226,7 +232,7 @@ LIFE.performAction = function(idx) {
                 }
                 // Rep loss reduced if nobody saw it (but still some guilt)
                 if (!witnessed && !npc.isPolice) repLoss = Math.ceil(repLoss * 0.3);
-                state.reputation = Math.max(-100, state.reputation + repLoss);
+                state.reputation += repLoss;
                 if (repLoss !== 0) LIFE.ui.showRepChange(repLoss);
                 LIFE.updateRelationship(npc.name, -25);
 
@@ -278,6 +284,55 @@ LIFE.performAction = function(idx) {
 };
 
 // ============================================================
+// STEALTH SYSTEM — facing-aware NPC detection
+// ============================================================
+
+// Check if a specific NPC can see the player (facing direction + distance + LOS)
+LIFE.npcCanSeePlayer = function(npc) {
+    if (!npc.alive || npc._sleeping) return false;
+    var player = LIFE.player;
+    if (!player) return false;
+    var px = player.group.position.x, pz = player.group.position.z;
+    var nx = npc.char.group.position.x, nz = npc.char.group.position.z;
+    var dx = px - nx, dz = pz - nz;
+    var dist = Math.sqrt(dx * dx + dz * dz);
+    // Crouch slightly reduces detection range
+    var maxDist = LIFE.state.crouching ? 14 : 18;
+    if (dist > maxDist) return false;
+    // Facing check: 180° front FOV (90° each side)
+    var npcFacing = npc.char.group.rotation.y;
+    var angleToPlayer = Math.atan2(dx, dz);
+    var diff = angleToPlayer - npcFacing;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    if (Math.abs(diff) > Math.PI / 2) return false;
+    // Wall check
+    return LIFE.hasLineOfSight(nx, nz, px, pz);
+};
+
+// Returns true only when crouching AND no NPC can see player
+LIFE.isPlayerHidden = function() {
+    if (!LIFE.state.crouching) return false;
+    var all = LIFE.getAllNPCs();
+    for (var i = 0; i < all.length; i++) {
+        if (LIFE.npcCanSeePlayer(all[i])) return false;
+    }
+    return true;
+};
+
+// Check if player is behind NPC (within the NPC's back 120° arc)
+LIFE.isBehindNPC = function(npc) {
+    var px = LIFE.player.group.position.x, pz = LIFE.player.group.position.z;
+    var nx = npc.char.group.position.x, nz = npc.char.group.position.z;
+    var dx = px - nx, dz = pz - nz;
+    var angleFromBehind = Math.atan2(dx, dz);
+    var diff = angleFromBehind - npc.char.group.rotation.y;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    return Math.abs(diff) > Math.PI * 2 / 3;
+};
+
+// ============================================================
 // WITNESS SYSTEM (line-of-sight aware)
 // ============================================================
 
@@ -317,17 +372,13 @@ LIFE.hasLineOfSight = function(ax, az, bx, bz) {
 LIFE.checkWitnesses = function(victim) {
     var player = LIFE.player;
     if (!player) return { count: 0, witnessed: false };
-    var px = player.group.position.x, pz = player.group.position.z;
     var witnessCount = 0;
     var phoneCaller = null; // first civilian witness will call police
     var allNPCs = LIFE.getAllNPCs();
     for (var i = 0; i < allNPCs.length; i++) {
         var npc = allNPCs[i];
         if (!npc.alive || npc === victim) continue;
-        var nx = npc.char.group.position.x, nz = npc.char.group.position.z;
-        var dx = nx - px, dz = nz - pz;
-        var dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist < 18 && LIFE.hasLineOfSight(px, pz, nx, nz)) {
+        if (LIFE.npcCanSeePlayer(npc)) {
             witnessCount++;
             var npcRep = npc.npcReputation !== undefined ? npc.npcReputation : 30;
             var npcWAge = npc.npcAge !== null ? npc.npcAge : (npc.type === 'Kid' ? 8 : 25);
@@ -359,6 +410,36 @@ LIFE.checkWitnesses = function(victim) {
         });
     }
     return { count: witnessCount, witnessed: witnessCount > 0, callerName: phoneCaller ? phoneCaller.name : null };
+};
+
+// Find an NPC within audio range who heard a gunshot (larger radius than sight)
+LIFE.findGunshotHearer = function(victim) {
+    var player = LIFE.player;
+    if (!player) return null;
+    var px = player.group.position.x, pz = player.group.position.z;
+    var allNPCs = LIFE.getAllNPCs();
+    var candidates = [];
+    for (var i = 0; i < allNPCs.length; i++) {
+        var npc = allNPCs[i];
+        if (!npc.alive || npc === victim || npc._sleeping) continue;
+        var dx = npc.char.group.position.x - px;
+        var dz = npc.char.group.position.z - pz;
+        var dist = Math.sqrt(dx * dx + dz * dz);
+        // Gunshots audible up to 40 units away (much farther than sight range of 18)
+        if (dist < 40) {
+            var npcAge = npc.npcAge !== null ? npc.npcAge : (npc.type === 'Kid' ? 8 : 25);
+            // Kids under 12 just flee, skip as callers
+            if (npcAge < 12) continue;
+            var npcRep = npc.npcReputation !== undefined ? npc.npcReputation : 30;
+            // Low-rep NPCs don't report
+            if (!npc.isPolice && npcRep <= -30) continue;
+            candidates.push({ npc: npc, dist: dist });
+        }
+    }
+    if (candidates.length === 0) return null;
+    // Sort by distance, pick closest
+    candidates.sort(function(a, b) { return a.dist - b.dist; });
+    return candidates[0].npc;
 };
 
 // Make a victim NPC seek help from another NPC (flee toward nearest NPC)
@@ -548,7 +629,6 @@ LIFE.updateBullets = function(dt) {
 
                     LIFE.createImpactEffect(b.mesh.position);
                     LIFE.sounds.bulletImpact();
-                    LIFE.ui.showPopup('Hit ' + npc.type + '! (-' + Math.floor(dmg) + ')', '#ff1744');
 
                     // Check witnesses with line-of-sight
                     var shotWitness = LIFE.checkWitnesses(npc);
@@ -591,15 +671,24 @@ LIFE.updateBullets = function(dt) {
                             LIFE.logCrime('Shooting a civilian');
                         }
                         repLoss = Math.ceil(repLoss * 0.3); // reduced rep loss if unseen
-                        // Gunshot SOUND can attract attention — 40% chance someone hears
+                        // Gunshot SOUND can attract attention — find nearby NPC who heard it
                         if (Math.random() < 0.4) {
-                            LIFE.addWanted(1, 'Gunshot heard');
-                            LIFE.ui.showPopup('Someone heard the gunshot!', '#ff9800');
+                            var hearer = LIFE.findGunshotHearer(npc);
+                            if (hearer) {
+                                LIFE.ui.showPopup(hearer.name + ' heard the gunshot!', '#ff9800');
+                                if (hearer.isPolice) {
+                                    LIFE.addWanted(2, 'Gunshot heard by police', hearer.name);
+                                } else if (!hearer._callingPolice && !hearer._wantsToCallPolice) {
+                                    LIFE.npcStartPhoneCall(hearer, function() {
+                                        LIFE.addWanted(1, 'Gunshot reported', hearer.name);
+                                    });
+                                }
+                            }
                         }
                         // Victim flees for help if alive
                         if (npc.alive) LIFE.makeVictimSeekHelp(npc);
                     }
-                    LIFE.state.reputation = Math.max(-100, LIFE.state.reputation + repLoss);
+                    LIFE.state.reputation += repLoss;
                     LIFE.ui.showRepChange(repLoss);
                     LIFE.state.enemies++;
                     LIFE.updateRelationship(npc.name, -40);
@@ -696,7 +785,7 @@ LIFE.shootGun = function() {
         }
         if (heardGunshot) LIFE.addWanted(isRifle ? 2 : 1, 'Gunshot heard', gnpc.name);
     }
-    if (state.wantedLevel > 0) state.reputation = Math.max(-100, state.reputation - 3);
+    if (state.wantedLevel > 0) state.reputation -= 3;
 };
 
 // ============================================================
@@ -733,7 +822,7 @@ LIFE.performSteal = function() {
         state.money += loot;
         LIFE.ui.showPopup('Stole $' + loot + '!', '#b71c1c');
         LIFE.sounds.money();
-        state.reputation = Math.max(-100, state.reputation - 3);
+        state.reputation -= 3;
         LIFE.ui.showRepChange(-3);
         LIFE.logCrime('Theft');
         LIFE.updateRelationship(npc.name, -30);
@@ -745,7 +834,7 @@ LIFE.performSteal = function() {
     } else {
         // Caught
         LIFE.ui.showPopup('Caught stealing!', '#f44336');
-        state.reputation = Math.max(-100, state.reputation - 8);
+        state.reputation -= 8;
         LIFE.ui.showRepChange(-8);
         LIFE.logCrime('Attempted theft');
         LIFE.addWanted(1, 'Caught stealing', npc.name);
@@ -786,12 +875,12 @@ LIFE.performPickpocket = function() {
         state.money += loot;
         LIFE.ui.showPopup('Pickpocketed $' + loot + '!', '#d32f2f');
         LIFE.sounds.money();
-        state.reputation = Math.max(-100, state.reputation - 2);
+        state.reputation -= 2;
         LIFE.ui.showRepChange(-2);
         LIFE.logCrime('Pickpocketing');
     } else {
         LIFE.ui.showPopup('Caught! ' + npc.name + ' grabbed your wrist!', '#f44336');
-        state.reputation = Math.max(-100, state.reputation - 10);
+        state.reputation -= 10;
         LIFE.ui.showRepChange(-10);
         LIFE.logCrime('Attempted pickpocketing');
         LIFE.addWanted(1, 'Caught pickpocketing', npc.name);
@@ -825,7 +914,7 @@ LIFE.performIntimidate = function() {
         state.money += extorted;
         LIFE.ui.showPopup(npc.name + ' hands over $' + extorted + ' in fear', '#880e4f');
         LIFE.sounds.money();
-        state.reputation = Math.max(-100, state.reputation - 5);
+        state.reputation -= 5;
         LIFE.ui.showRepChange(-5);
         LIFE.logCrime('Extortion');
         LIFE.updateRelationship(npc.name, -40);
@@ -839,7 +928,7 @@ LIFE.performIntimidate = function() {
             npc.name + " stands their ground."
         ];
         LIFE.ui.showPopup(responses[Math.floor(Math.random() * responses.length)], '#999');
-        state.reputation = Math.max(-100, state.reputation - 2);
+        state.reputation -= 2;
         LIFE.ui.showRepChange(-2);
         LIFE.updateRelationship(npc.name, -20);
         // Might fight back
@@ -873,7 +962,7 @@ LIFE.performPreach = function() {
         var repGain = 2 + nearbyCount;
         // Better speeches with high charisma
         if (state.stats.charisma > 60) repGain += 3;
-        state.reputation = Math.min(100, state.reputation + repGain);
+        state.reputation += repGain;
         state.stats.charisma = Math.min(100, state.stats.charisma + 1);
         LIFE.ui.showPopup('Inspired ' + nearbyCount + ' people! (+' + repGain + ' rep)', '#ffd54f');
         LIFE.ui.showRepChange(repGain);
